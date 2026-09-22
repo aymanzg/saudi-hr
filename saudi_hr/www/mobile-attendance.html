@@ -1,0 +1,1937 @@
+{% extends "templates/web.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block banner %}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block header %}{% endblock %}
+{% block header_actions %}{% endblock %}
+{% block page_footer %}{% endblock %}
+
+{% block head_include %}
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0b5d4b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<style>
+	:root {
+		--app-primary: #0b5d4b;
+		--app-primary-light: #f0f7f4;
+		--app-bg: #f8faf7;
+		--card-bg: #ffffff;
+		--text-main: #1f2937;
+		--text-muted: #6b7280;
+		--border-color: #edf2ee;
+	}
+	body {
+		background-color: var(--app-bg);
+		color: var(--text-main);
+		font-family: "Tajawal", -apple-system, sans-serif;
+		margin: 0;
+		padding: 0;
+		direction: rtl;
+		text-align: right;
+	}
+	body.ltr { direction: ltr; text-align: left; }
+	.page-breadcrumbs, .page-header-wrapper, .page-footer { display: none !important; }
+	.page_content { padding: 0 !important; }
+
+	.saudi-app {
+		max-width: 760px;
+		margin: 0 auto;
+		background-color: var(--app-bg);
+		min-height: 100vh;
+		padding-bottom: 90px;
+		box-sizing: border-box;
+		position: relative;
+	}
+	.saudi-app *, .saudi-app *::before, .saudi-app *::after { box-sizing: border-box; }
+
+	/* Panels */
+	.saudi-panel { display: none; }
+	.saudi-panel--active { display: block; }
+
+	/* Header / Topbar */
+	.saudi-topbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 14px 18px;
+		background: #ffffff;
+		border-bottom: 1px solid var(--border-color);
+		position: sticky;
+		top: 0;
+		z-index: 50;
+	}
+	.saudi-topbar__profile {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.saudi-topbar__avatar {
+		width: 44px;
+		height: 44px;
+		border-radius: 50%;
+		background: #e5e7eb;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #4b5563;
+		font-weight: bold;
+		overflow: hidden;
+	}
+	.saudi-topbar__avatar img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.saudi-topbar__user-info h4 {
+		margin: 0;
+		font-size: 15px;
+		font-weight: 800;
+		color: var(--text-main);
+		display: flex;
+		align-items: center;
+		gap: 4px;
+	}
+	.saudi-topbar__user-info span {
+		font-size: 12px;
+		color: var(--text-muted);
+	}
+	.saudi-topbar__actions {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.saudi-icon-btn {
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		background: #f3f4f6;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		position: relative;
+		cursor: pointer;
+		border: none;
+		transition: background 0.2s;
+		color: #374151;
+	}
+	.saudi-icon-btn:hover { background: #e5e7eb; }
+	.saudi-topbar__badge {
+		position: absolute;
+		top: 2px;
+		right: 2px;
+		background: #ef4444;
+		color: #ffffff;
+		font-size: 10px;
+		font-weight: 800;
+		width: 17px;
+		height: 17px;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: 2px solid #ffffff;
+	}
+
+	/* Hero Banner */
+	.saudi-hero {
+		margin: 16px 18px 18px;
+		padding: 22px 24px;
+		background: linear-gradient(135deg, #f0f7f4 0%, #e3f2ea 100%);
+		border-radius: 20px;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		position: relative;
+		overflow: hidden;
+		border: 1px solid #e1efe7;
+	}
+	.saudi-hero__text h2 {
+		margin: 0 0 6px;
+		font-size: 21px;
+		font-weight: 800;
+		color: #0b5d4b;
+	}
+	.saudi-hero__text p {
+		margin: 0;
+		font-size: 13px;
+		color: #4b5563;
+		line-height: 1.5;
+	}
+
+	/* Quick Action Grid */
+	.saudi-grid-actions {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 12px;
+		padding: 0 18px 18px;
+	}
+	.saudi-action-card {
+		background: #ffffff;
+		border: 1px solid var(--border-color);
+		border-radius: 18px;
+		padding: 16px 8px 14px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		position: relative;
+		box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+		text-decoration: none;
+	}
+	.saudi-action-card:hover {
+		transform: translateY(-3px);
+		box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+		border-color: #cbd5e1;
+	}
+	.saudi-action-card__icon {
+		width: 48px;
+		height: 48px;
+		border-radius: 14px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 10px;
+	}
+	.saudi-action-card__badge {
+		position: absolute;
+		top: -4px;
+		left: -4px;
+		background: #ef4444;
+		color: #ffffff;
+		font-size: 10px;
+		font-weight: 800;
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: 2px solid #ffffff;
+	}
+	.saudi-action-card__title {
+		font-size: 12px;
+		font-weight: 700;
+		color: #374151;
+		text-align: center;
+		margin-bottom: 4px;
+	}
+
+	/* Widget Row */
+	.saudi-widgets-row {
+		display: grid;
+		grid-template-columns: 1.15fr 0.85fr;
+		gap: 14px;
+		padding: 0 18px 18px;
+	}
+	.saudi-widget {
+		background: #ffffff;
+		border: 1px solid var(--border-color);
+		border-radius: 20px;
+		padding: 16px 18px;
+		box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+	}
+	.saudi-widget__header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 14px;
+	}
+	.saudi-widget__title {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 15px;
+		font-weight: 800;
+		color: var(--text-main);
+	}
+	.saudi-widget__link {
+		font-size: 12px;
+		color: #6b7280;
+		text-decoration: none;
+		cursor: pointer;
+		font-weight: 600;
+	}
+	.saudi-widget__link:hover { color: var(--app-primary); }
+
+	/* Donut & Leave List */
+	.saudi-leave-body { display: flex; align-items: center; gap: 16px; }
+	.saudi-donut-chart { position: relative; width: 95px; height: 95px; flex-shrink: 0; }
+	.saudi-donut-chart svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+	.saudi-donut-chart__center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+	.saudi-donut-chart__number { font-size: 22px; font-weight: 900; color: #0b5d4b; line-height: 1; }
+	.saudi-donut-chart__sub { font-size: 9px; color: var(--text-muted); font-weight: 700; margin-top: 3px; }
+	.saudi-leave-list { display: flex; flex-direction: column; gap: 7px; width: 100%; }
+	.saudi-leave-item { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #4b5563; }
+	.saudi-leave-item__label { display: flex; align-items: center; gap: 6px; }
+	.saudi-leave-item__dot { width: 8px; height: 8px; border-radius: 50%; }
+
+	/* Attendance Widget */
+	.saudi-attendance-body { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+	.saudi-status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; background: #dcfce7; color: #15803d; border-radius: 999px; font-size: 12px; font-weight: 800; }
+	.saudi-attendance-time { font-size: 26px; font-weight: 900; color: var(--text-main); margin: 4px 0 2px; }
+	.saudi-attendance-date { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; }
+	.saudi-attendance-btn { margin-top: 6px; width: 100%; padding: 9px; background: #f3f4f6; border: none; border-radius: 12px; color: #4b5563; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; transition: background 0.2s; }
+	.saudi-attendance-btn:hover { background: #e5e7eb; }
+	.saudi-elapsed { width: 100%; display: none; align-items: center; justify-content: center; gap: 8px; margin-top: 2px; padding: 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; color: #1d4ed8; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
+	.saudi-elapsed__num { font-size: 20px; font-weight: 900; }
+	.saudi-summary-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+	.saudi-summary-box { background: #f9fafb; border: 1px solid #f0f2f5; border-radius: 14px; padding: 10px 4px; text-align: center; }
+	.saudi-summary-box__num { font-size: 22px; font-weight: 900; }
+	.saudi-summary-box__label { font-size: 10px; color: var(--text-muted); font-weight: 700; margin-top: 2px; }
+	.saudi-summary-box--present .saudi-summary-box__num { color: #15803d; }
+	.saudi-summary-box--absent .saudi-summary-box__num { color: #b91c1c; }
+	.saudi-summary-box--leave .saudi-summary-box__num { color: #d97706; }
+	.saudi-summary-box--rest .saudi-summary-box__num { color: #6b7280; }
+	.saudi-mlog-row { display: flex; align-items: center; justify-content: space-between; padding: 11px 4px; border-bottom: 1px solid #f3f4f6; }
+	.saudi-mlog-row:last-child { border-bottom: none; }
+	.saudi-mlog-row__date { display: flex; align-items: center; gap: 10px; }
+	.saudi-mlog-row__num { font-size: 13px; font-weight: 800; color: #1f2937; min-width: 34px; }
+	.saudi-mlog-row__day { font-size: 11px; color: #6b7280; min-width: 58px; }
+	.saudi-mlog-row__times { font-size: 11px; color: #6b7280; font-variant-numeric: tabular-nums; }
+	.saudi-mlog-row__badge { font-size: 11px; padding: 3px 10px; border-radius: 999px; font-weight: 800; white-space: nowrap; }
+	.saudi-mlog-row__badge--present { background: #dcfce7; color: #15803d; }
+	.saudi-mlog-row__badge--late { background: #fef9c3; color: #a16207; }
+	.saudi-mlog-row__badge--absent { background: #fee2e2; color: #b91c1c; }
+	.saudi-mlog-row__badge--leave { background: #ffedd5; color: #c2410c; }
+	.saudi-mlog-row__badge--half { background: #fff7ed; color: #9a3412; }
+	.saudi-mlog-row__badge--rest { background: #f3f4f6; color: #6b7280; }
+	.saudi-mlog-row__badge--upcoming { background: #f8fafc; color: #94a3b8; }
+	.saudi-mlog-row__badge--pending { background: #eff6ff; color: #1d4ed8; }
+	.saudi-mlog-row__badge--other { background: #f3f4f6; color: #374151; }
+
+	/* Recent Requests */
+	.saudi-requests-widget { margin: 0 18px 18px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; padding: 16px 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+	.saudi-requests-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+	.saudi-request-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: #f9fafb; border: 1px solid #f0f2f5; border-radius: 14px; cursor: pointer; transition: all 0.2s; }
+	.saudi-request-row:hover { background: #ffffff; border-color: #cbd5e1; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+	.saudi-request-row__right { display: flex; align-items: center; gap: 12px; }
+	.saudi-request-row__icon { width: 40px; height: 40px; border-radius: 12px; background: #e0f2fe; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+	.saudi-request-row__info strong { display: block; font-size: 13px; color: var(--text-main); }
+	.saudi-request-row__info span { font-size: 11px; color: var(--text-muted); }
+	.saudi-badge { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; }
+	.saudi-badge--approved { background: #dcfce7; color: #15803d; }
+	.saudi-badge--pending { background: #fef3c7; color: #b45309; }
+	.saudi-badge--rejected { background: #fee2e2; color: #b91c1c; }
+
+	/* Motivational Banner */
+	.saudi-banner { margin: 0 18px 18px; padding: 14px 18px; background: linear-gradient(135deg, #f3f7f4 0%, #e9f2eb 100%); border: 1px solid #e1efe7; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; }
+	.saudi-banner__content { display: flex; align-items: center; gap: 12px; }
+	.saudi-banner__img { width: 44px; height: 44px; border-radius: 10px; background: #ffffff; display: flex; align-items: center; justify-content: center; color: #0b5d4b; }
+	.saudi-banner__text strong { display: block; font-size: 13px; color: #0b5d4b; }
+	.saudi-banner__text span { font-size: 11px; color: #4b5563; }
+
+	/* Bottom Nav */
+	.saudi-bottom-nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 760px; background: #ffffff; border-top: 1px solid #e5e7eb; display: flex; align-items: center; justify-content: space-around; padding: 8px 0; z-index: 100; box-shadow: 0 -4px 20px rgba(0,0,0,0.05); }
+	.saudi-nav-item { display: flex; flex-direction: column; align-items: center; gap: 3px; color: #6b7280; font-size: 11px; font-weight: 700; text-decoration: none; cursor: pointer; padding: 4px 12px; border-radius: 8px; transition: color 0.2s; border: none; background: none; }
+	.saudi-nav-item--active { color: #0b5d4b; }
+	.saudi-nav-item--active::after { content: ""; display: block; width: 16px; height: 3px; background: #0b5d4b; border-radius: 999px; margin-top: 1px; }
+
+	/* Modal */
+	.saudi-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 200; display: none; align-items: center; justify-content: center; padding: 16px; }
+	.saudi-modal-overlay.active { display: flex; }
+	.saudi-modal-card { background: #ffffff; border-radius: 20px; width: 100%; max-width: 440px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.15); text-align: center; }
+
+	/* Section Header */
+	.saudi-section-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 18px 12px; }
+	.saudi-section-header__title { font-size: 18px; font-weight: 900; color: var(--text-main); }
+	.saudi-section-header__back { cursor: pointer; color: var(--app-primary); font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+	.saudi-new-request-btn {
+		display: flex; align-items: center; justify-content: center; gap: 8px;
+		width: calc(100% - 36px); margin: 0 18px 14px;
+		padding: 13px; border: none; border-radius: 14px;
+		background: linear-gradient(135deg, #0b5d4b, #13795f); color: #ffffff;
+		font-size: 15px; font-weight: 800; font-family: inherit; cursor: pointer;
+		box-shadow: 0 6px 16px rgba(11, 93, 75, 0.28); transition: all 0.2s ease;
+	}
+	.saudi-new-request-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(11, 93, 75, 0.34); }
+	.saudi-new-request-btn:active { transform: translateY(0); }
+	.saudi-request-choice__subtitle { margin: 0 0 14px; color: #6b7280; font-size: 13px; text-align: center; }
+	.saudi-request-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+	.saudi-request-choice__card {
+		background: #ffffff; border: 1px solid var(--border-color); border-radius: 18px;
+		padding: 20px 12px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+		cursor: pointer; transition: all 0.2s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+	}
+	.saudi-request-choice__card:hover { transform: translateY(-3px); border-color: #cbd5e1; box-shadow: 0 8px 20px rgba(0,0,0,0.06); }
+	.saudi-request-choice__icon { width: 56px; height: 56px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 26px; }
+	.saudi-request-choice__title { font-size: 14px; font-weight: 800; color: #374151; }
+	.saudi-request-choice__hint { font-size: 11px; color: #6b7280; text-align: center; line-height: 1.4; }
+
+	/* Tab Bar */
+	.saudi-tab-bar { display: flex; gap: 0; padding: 0 18px; margin-bottom: 14px; border-bottom: 2px solid #edf2ee; }
+	.saudi-tab { padding: 10px 16px; font-size: 13px; font-weight: 700; color: #6b7280; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+	.saudi-tab--active { color: #0b5d4b; border-bottom-color: #0b5d4b; }
+
+	/* Form Fields */
+	.saudi-form { padding: 0 18px 18px; }
+	.saudi-field { margin-bottom: 16px; }
+	.saudi-field label { display: block; font-size: 13px; font-weight: 700; color: var(--text-main); margin-bottom: 6px; }
+	.saudi-field select, .saudi-field input, .saudi-field textarea {
+		width: 100%;
+		padding: 12px 14px;
+		border: 1px solid #d1d5db;
+		border-radius: 12px;
+		font-size: 14px;
+		font-family: "Tajawal", sans-serif;
+		color: var(--text-main);
+		background: #ffffff;
+		transition: border-color 0.2s;
+		outline: none;
+	}
+	.saudi-field select:focus, .saudi-field input:focus, .saudi-field textarea:focus { border-color: #0b5d4b; }
+	.saudi-field textarea { min-height: 80px; resize: vertical; }
+	.saudi-field select { appearance: auto; }
+
+	/* Submit Button */
+	.saudi-submit-btn {
+		width: 100%;
+		padding: 14px;
+		background: #0b5d4b;
+		color: #ffffff;
+		border: none;
+		border-radius: 14px;
+		font-size: 15px;
+		font-weight: 800;
+		font-family: "Tajawal", sans-serif;
+		cursor: pointer;
+		transition: background 0.2s;
+		margin-top: 8px;
+	}
+	.saudi-submit-btn:hover { background: #094d3e; }
+	.saudi-submit-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+
+	/* Request List Cards */
+	.saudi-request-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 16px; padding: 14px 16px; margin: 0 18px 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.02); }
+	.saudi-request-card__top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+	.saudi-request-card__type { font-size: 14px; font-weight: 800; color: var(--text-main); }
+	.saudi-request-card__date { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+	.saudi-request-card__desc { font-size: 12px; color: #4b5563; margin-bottom: 8px; line-height: 1.4; }
+
+	/* Profile Panel */
+	.saudi-profile-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; margin: 0 18px 18px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+	.saudi-profile-avatar { width: 72px; height: 72px; border-radius: 50%; background: #e5e7eb; display: flex; align-items: center; justify-content: center; color: #4b5563; font-size: 28px; font-weight: 800; margin: 0 auto 14px; overflow: hidden; }
+	.saudi-profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+	.saudi-profile-name { text-align: center; font-size: 18px; font-weight: 800; color: var(--text-main); margin-bottom: 4px; }
+	.saudi-profile-role { text-align: center; font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+	.saudi-profile-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #f3f4f6; }
+	.saudi-profile-row:last-child { border-bottom: none; }
+	.saudi-profile-row__label { font-size: 13px; color: var(--text-muted); }
+	.saudi-profile-row__value { font-size: 13px; font-weight: 700; color: var(--text-main); }
+
+	/* Empty State */
+	.saudi-empty { text-align: center; padding: 40px 18px; color: var(--text-muted); }
+	.saudi-empty svg { opacity: 0.4; margin-bottom: 12px; }
+	.saudi-empty p { font-size: 14px; font-weight: 600; }
+
+	/* Attendance Punch Panel */
+	.saudi-punch-card { background: #ffffff; border: 1px solid var(--border-color); border-radius: 20px; margin: 0 18px 18px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); text-align: center; }
+	.saudi-punch-card h3 { margin: 0 0 8px; color: #0b5d4b; font-size: 20px; }
+	.saudi-punch-card p { color: var(--text-muted); font-size: 13px; margin: 0 0 20px; }
+	.saudi-punch-btn { width: 100%; padding: 14px; border: none; border-radius: 14px; font-size: 15px; font-weight: 800; font-family: "Tajawal", sans-serif; cursor: pointer; transition: background 0.2s; margin-bottom: 10px; }
+	.saudi-punch-btn--in { background: #0b5d4b; color: #ffffff; }
+	.saudi-punch-btn--in:hover { background: #094d3e; }
+	.saudi-punch-btn--out { background: #b54432; color: #ffffff; }
+	.saudi-punch-btn--out:hover { background: #9a3828; }
+	.saudi-punch-hint { margin-top: 6px; font-size: 12px; color: var(--text-muted); }
+	.saudi-modal { position: fixed; inset: 0; z-index: 999; display: flex; align-items: flex-end; justify-content: center; }
+	.saudi-modal__overlay { position: absolute; inset: 0; background: rgba(9, 32, 26, 0.5); }
+	.saudi-modal__card { position: relative; background: #ffffff; width: 100%; max-width: 480px; border-radius: 22px 22px 0 0; padding: 20px 20px 26px; box-shadow: 0 -8px 30px rgba(0,0,0,0.2); max-height: 85vh; overflow-y: auto; }
+	.saudi-modal__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+	.saudi-modal__title { color: #0b5d4b; font-size: 18px; font-weight: 800; }
+	.saudi-modal__close { font-size: 24px; line-height: 1; color: var(--text-muted); cursor: pointer; padding: 4px 8px; }
+	.saudi-verify-step { border: 1px solid var(--border-color); border-radius: 14px; padding: 12px; margin-bottom: 10px; background: #fafcfb; }
+	.saudi-verify-step__label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #1f2937; margin-bottom: 8px; }
+	.saudi-verify-step__dot { width: 8px; height: 8px; border-radius: 50%; background: #cbd5e1; }
+	.saudi-verify-step__dot--done { background: #10b981; }
+	.saudi-verify-step__dot--err { background: #ef4444; }
+	.saudi-verify-step__state { font-size: 13px; color: var(--text-muted); }
+	.saudi-verify-step__state.ok { color: #15803d; font-weight: 700; }
+	.saudi-verify-step__state.err { color: #b91c1c; font-weight: 700; }
+	.saudi-camera { width: 100%; aspect-ratio: 4/3; background: #0f172a; border-radius: 12px; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; }
+	.saudi-camera video { width: 100%; height: 100%; object-fit: cover; }
+	.saudi-camera__hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; color: #fff; font-size: 13px; font-weight: 600; background: rgba(15,23,42,0.55); padding: 12px; }
+	.saudi-camera__hint--pulse { animation: saudi-blink 1.2s infinite; }
+	#punch-photo-preview img { width: 76px; height: 76px; object-fit: cover; border-radius: 12px; margin-top: 8px; }
+	.saudi-attachment-chip { display: inline-block; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; margin: 2px 4px 2px 0; }
+	.saudi-voice-challenge { text-align: center; font-size: 34px; font-weight: 800; letter-spacing: 14px; color: #0b5d4b; padding: 10px 0 4px; font-variant-numeric: tabular-nums; }
+	.saudi-voice-record-btn { width: 100%; padding: 12px; border: none; border-radius: 12px; background: #0b5d4b; color: #fff; font-size: 14px; font-weight: 700; font-family: "Tajawal", sans-serif; cursor: pointer; }
+	.saudi-voice-record-btn:disabled { background: #9ca3af; }
+	.saudi-voice-record-btn--rec { background: #b54432; animation: saudi-blink 1s infinite; }
+	@keyframes saudi-blink { 50% { opacity: 0.5; } }
+	.saudi-voice-result { text-align: center; font-size: 14px; font-weight: 700; color: #15803d; padding: 6px 0; min-height: 26px; }
+	.saudi-voice-manual { width: 100%; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 10px; font-size: 14px; font-family: "Tajawal", sans-serif; box-sizing: border-box; }
+
+	/* Toast */
+	.saudi-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #1f2937; color: #ffffff; padding: 12px 24px; border-radius: 12px; font-size: 14px; font-weight: 700; z-index: 300; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+	.saudi-toast.show { opacity: 1; }
+	.saudi-toast--success { background: #0b5d4b; }
+	.saudi-toast--error { background: #b54432; }
+
+	/* Lang Switch */
+	.saudi-lang-btn { font-size: 12px; font-weight: 800; padding: 6px 10px; border-radius: 8px; background: #f3f4f6; border: 1px solid #e5e7eb; cursor: pointer; color: var(--text-main); font-family: "Tajawal", sans-serif; transition: all 0.2s; }
+	.saudi-lang-btn:hover { background: #e5e7eb; }
+
+	/* Loading spinner */
+	.saudi-spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #e5e7eb; border-top-color: #0b5d4b; border-radius: 50%; animation: saudi-spin 0.8s linear infinite; }
+	@keyframes saudi-spin { to { transform: rotate(360deg); } }
+
+	/* Session banner */
+	.saudi-session-banner { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 14px 0; padding: 10px 14px; border-radius: 12px; background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; font-size: 13px; font-weight: 700; line-height: 1.5; }
+	.saudi-session-banner__btn { flex-shrink: 0; padding: 6px 14px; border-radius: 8px; background: #b91c1c; color: #fff !important; font-size: 12px; font-weight: 800; text-decoration: none; }
+	.saudi-session-banner__btn:hover { background: #991b1b; }
+
+	@media (max-width: 650px) {
+		.saudi-widgets-row { grid-template-columns: 1fr; }
+		.saudi-grid-actions { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+		.saudi-action-card { padding: 12px 4px; }
+		.saudi-action-card__icon { width: 42px; height: 42px; }
+		.saudi-action-card__title { font-size: 11px; }
+	}
+</style>
+{% endblock %}
+
+{% block page_content %}
+{% set d = portal_data or {} %}
+{% set emp = d.employee or {} %}
+{% set lb = d.leave_balance or {"remaining_days": 18, "annual": 18, "sick": 5, "marriage": 3, "bereavement": 1, "other": 2} %}
+{% set att = d.attendance_status or {"status_label": "حاضر الآن", "time": "--:--", "date_hijri": ""} %}
+{% set requests = d.recent_requests or [] %}
+
+<div class="saudi-app">
+	<!-- Top Bar -->
+	<header class="saudi-topbar">
+		<div class="saudi-topbar__profile">
+			<div class="saudi-topbar__avatar" id="profile-avatar">
+				{% if emp.image %}
+					<img src="{{ emp.image }}" alt="Profile">
+				{% else %}
+					{{ (emp.employee_name or full_name or 'A')[:1] | upper }}
+				{% endif %}
+			</div>
+			<div class="saudi-topbar__user-info">
+				<h4><span id="user-name">{{ emp.employee_name or full_name or '' }}</span></h4>
+				<span id="user-role">{{ emp.designation or '' }}</span>
+			</div>
+		</div>
+		<div class="saudi-topbar__actions">
+			<button type="button" class="saudi-lang-btn" id="lang-toggle" onclick="toggleLang()">EN</button>
+			<button type="button" class="saudi-icon-btn" onclick="navigate('requests')">
+				<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+				<span class="saudi-topbar__badge" id="ack-count">0</span>
+			</button>
+		</div>
+	</header>
+
+	<div class="saudi-session-banner" id="session-banner" style="display:none;">
+		<span data-i18n-key="session_expired">جلستك انتهت، يرجى إعادة تسجيل الدخول للمتابعة</span>
+		<a href="/login?redirect-to=/mobile-attendance" class="saudi-session-banner__btn" data-i18n-key="login_now">تسجيل الدخول</a>
+	</div>
+
+	<!-- ============ PANEL: HOME ============ -->
+	<section class="saudi-panel saudi-panel--active" id="panel-home">
+		<section class="saudi-hero">
+			<div class="saudi-hero__text">
+				<h2 data-i18n-key="hero_greeting">مرحباً، <span id="hero-user-name">{{ emp.employee_name or full_name or '' }}</span></h2>
+				<p data-i18n-key="hero_subtitle">نتمنى لك يوماً مليئاً بالإنجاز والنجاح</p>
+			</div>
+			<div style="color:#0b5d4b; opacity:0.85;">
+				<svg width="54" height="54" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>
+			</div>
+		</section>
+
+		<button class="saudi-new-request-btn" onclick="openNewRequestModal()">➕ <span data-i18n-key="new_request">تقديم طلب جديد</span></button>
+
+		<section class="saudi-grid-actions" id="quick-actions-grid"></section>
+
+		<section class="saudi-widgets-row">
+			<div class="saudi-widget">
+				<div class="saudi-widget__header">
+					<div class="saudi-widget__title"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0b5d4b" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> <span data-i18n-key="attendance">تسجيل الدوام</span></div>
+				</div>
+				<div class="saudi-attendance-body">
+					<div class="saudi-status-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> <span id="att-status-label">{{ att.status_label }}</span></div>
+					<div class="saudi-attendance-time" id="att-live-time">{{ att.time }}</div>
+					<div class="saudi-attendance-date" id="att-hijri-date"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> <span>{{ att.date_hijri }}</span></div>
+					<div class="saudi-elapsed" id="att-elapsed" style="display:none;"></div>
+					<button class="saudi-punch-btn saudi-punch-btn--in" id="home-punch-btn" onclick="startPunchFlow('IN')" data-i18n-key="punch_in">تسجيل دخول (IN)</button>
+					<button class="saudi-attendance-btn" onclick="navigate('attendance')"><span data-i18n-key="view_details">عرض التفاصيل</span> <span>‹</span></button>
+				</div>
+			</div>
+			<div class="saudi-widget">
+				<div class="saudi-widget__header">
+					<div class="saudi-widget__title"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0b5d4b" stroke-width="2"><path d="M13 8c0-2.76-2.24-5-5-5s-5 2.24-5 5c0 2.4 1.7 4.41 4 4.88V21h2v-8.12c2.3-.47 4-2.48 4-4.88z"/></svg> <span data-i18n-key="leave_balance">رصيد الإجازات</span></div>
+					<a class="saudi-widget__link" onclick="navigate('leave')" data-i18n-key="view_all">عرض الكل</a>
+				</div>
+				<div class="saudi-leave-body">
+					<div class="saudi-donut-chart">
+						<svg viewBox="0 0 100 100">
+							<circle cx="50" cy="50" r="38" fill="transparent" stroke="#e2e8f0" stroke-width="9"/>
+							<circle cx="50" cy="50" r="38" fill="transparent" stroke="#0b5d4b" stroke-width="9" stroke-dasharray="238.76" stroke-dashoffset="95.5" stroke-linecap="round" id="donut-ring"/>
+						</svg>
+						<div class="saudi-donut-chart__center">
+							<div class="saudi-donut-chart__number" id="leave-remaining-num">{{ lb.remaining_days }}</div>
+							<div class="saudi-donut-chart__sub" data-i18n-key="days_remaining">يوم متبقي</div>
+						</div>
+					</div>
+					<div class="saudi-leave-list">
+						<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#10b981;"></span><span data-i18n-key="annual_leave">إجازة سنوية</span></div><span id="leave-ann-num">{{ lb.annual }}</span></div>
+						<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#3b82f6;"></span><span data-i18n-key="sick_leave">إجازة مرضية</span></div><span id="leave-sick-num">{{ lb.sick }}</span></div>
+						<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#a855f7;"></span><span data-i18n-key="marriage_leave">إجازة زواج</span></div><span id="leave-marr-num">{{ lb.marriage }}</span></div>
+						<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#9ca3af;"></span><span data-i18n-key="bereavement_leave">إجازة وفاة</span></div><span id="leave-bere-num">{{ lb.bereavement }}</span></div>
+						<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#cbd5e1;"></span><span data-i18n-key="other_leave">إجازات أخرى</span></div><span id="leave-oth-num">{{ lb.other }}</span></div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section class="saudi-requests-widget">
+			<div class="saudi-widget__header">
+				<div class="saudi-widget__title"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0b5d4b" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg> <span data-i18n-key="recent_requests">طلباتي الأخيرة</span></div>
+				<a class="saudi-widget__link" onclick="navigate('requests')" data-i18n-key="view_all">عرض الكل</a>
+			</div>
+			<div class="saudi-requests-list" id="recent-requests-container">
+				{% for req in requests %}
+					{% set badge_class = 'saudi-badge--approved' if req.status_code == 'approved' else ('saudi-badge--rejected' if req.status_code == 'rejected' else 'saudi-badge--pending') %}
+<div class="saudi-request-row">
+							<div class="saudi-request-row__right">
+								<div class="saudi-request-row__icon">{{ ({'palm':'🌴','firstaid':'🩹','clock':'🕐','wallet':'👛','file':'📄'}).get(req.icon, req.icon or '📋') }}</div>
+							<div class="saudi-request-row__info"><strong>{{ req.title }}</strong><span>{{ req.dates }}</span></div>
+						</div>
+						<div style="display:flex; align-items:center; gap:8px;">
+							<span class="saudi-badge {{ badge_class }}">{{ req.status }}</span>
+						</div>
+					</div>
+				{% endfor %}
+				{% if not requests %}
+				<div class="saudi-empty" id="recent-empty">
+					<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+					<p data-i18n-key="no_recent">لا توجد طلبات حديثة</p>
+				</div>
+				{% endif %}
+			</div>
+		</section>
+
+		<section class="saudi-banner">
+			<div class="saudi-banner__content">
+				<div class="saudi-banner__img"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0b5d4b" stroke-width="2"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg></div>
+				<div class="saudi-banner__text"><strong data-i18n-key="banner_title">معاً نحو بيئة عمل أفضل</strong><br><span data-i18n-key="banner_subtitle">نحن هنا لدعمك في رحلتك المهنية</span></div>
+			</div>
+		</section>
+	</section>
+
+	<!-- ============ PANEL: LEAVE REQUEST ============ -->
+	<section class="saudi-panel" id="panel-leave">
+		<div class="saudi-section-header">
+			<div class="saudi-section-header__title" data-i18n-key="leave_request">طلب إجازة</div>
+			<div class="saudi-section-header__back" onclick="navigate('home')">‹ <span data-i18n-key="back">رجوع</span></div>
+		</div>
+		<div class="saudi-form">
+			<div class="saudi-field">
+				<label data-i18n-key="request_type">نوع الطلب</label>
+				<select id="leave-request-type" onchange="updateLeaveForm(); populateLeaveSubtypes();">
+					<option value="annual" data-i18n-key="leave_annual">إجازة سنوية</option>
+					<option value="sick" data-i18n-key="leave_sick">إجازة مرضية</option>
+					<option value="special" data-i18n-key="leave_special">إجازة خاصة</option>
+					<option value="maternity_paternity" data-i18n-key="leave_maternity">إجازة أمومة وأبوة</option>
+				</select>
+			</div>
+			<div class="saudi-field" id="leave-subtype-field" style="display:none;">
+				<label data-i18n-key="leave_subtype">نوع الإجازة الفرعي</label>
+				<select id="leave-subtype-select"></select>
+			</div>
+			<div class="saudi-field">
+				<label data-i18n-key="from_date">من تاريخ</label>
+				<input type="date" id="leave-start-date">
+			</div>
+			<div class="saudi-field">
+				<label data-i18n-key="to_date">إلى تاريخ</label>
+				<input type="date" id="leave-end-date">
+			</div>
+			<div class="saudi-field">
+				<label data-i18n-key="reason_label">مبرر الطلب</label>
+				<textarea id="leave-reason" placeholder="أضف وصفًا مختصرًا للطلب"></textarea>
+			</div>
+			<div class="saudi-field" id="leave-balance-field" style="display:none;">
+				<label data-i18n-key="annual_balance">رصيد الإجازة السنوية</label>
+				<div class="saudi-card-lite"><strong id="leave-balance">--</strong></div>
+			</div>
+			<div class="saudi-field" id="half-day-field" style="display:none;">
+				<label class="saudi-checkbox"><input type="checkbox" id="leave-half-day"> <span data-i18n-key="half_day">نصف يوم</span></label>
+			</div>
+			<div class="saudi-field">
+				<label data-i18n-key="attachments_label">مرفقات الطلب</label>
+				<input type="file" id="leave-files-input" multiple>
+				<div id="leave-attachment-list" class="saudi-attachment-list"></div>
+			</div>
+			<button class="saudi-submit-btn" onclick="submitMobileLeaveRequest()" id="mobile-leave-submit-btn" data-i18n-key="submit_request">تقديم الطلب</button>
+		</div>
+	</section>
+
+	<!-- ============ PANEL: HR SERVICE FORM ============ -->
+	<section class="saudi-panel" id="panel-service">
+		<div class="saudi-section-header">
+			<div class="saudi-section-header__title" data-i18n-key="service_request">طلب خدمة</div>
+			<div class="saudi-section-header__back" onclick="navigate('home')">‹ <span data-i18n-key="back">رجوع</span></div>
+		</div>
+		<div class="saudi-form">
+			<div class="saudi-field">
+				<label data-i18n-key="request_type">نوع الطلب</label>
+				<select id="hr-service-type-select" onchange="onHrServiceTypeChange()">
+					<option value="">-- <span data-i18n-key="select_type">اختر النوع</span> --</option>
+					<option value="work_permit_issuance">إصدار رخصة عمل</option>
+					<option value="work_permit_renewal">تجديد رخصة عمل</option>
+					<option value="residency_issuance">إصدار إقامة</option>
+					<option value="residency_renewal">تجديد إقامة</option>
+					<option value="service_transfer">نقل خدمات</option>
+					<option value="exit_and_return">خروج وعودة</option>
+					<option value="final_exit">خروج نهائي</option>
+					<option value="profession_modification">تعديل مهنة</option>
+					<option value="employee_data_update">تحديث بيانات الموظف</option>
+					<option value="visa_issuance">إصدار تأشيرة</option>
+					<option value="advance_salary">سلفة</option>
+					<option value="salary_certificate">شهادة تعريف بالراتب</option>
+					<option value="experience_certificate">شهادة خبرة</option>
+					<option value="employee_loan">قرض موظف</option>
+				</select>
+			</div>
+			<div class="saudi-field">
+				<label data-i18n-key="description">السبب / التفاصيل</label>
+				<textarea id="hr-service-desc"></textarea>
+			</div>
+			<div class="saudi-field" id="hr-service-date-fields">
+				<div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+					<div><label data-i18n-key="from_date">من تاريخ</label><input type="date" id="hr-service-from"></div>
+					<div><label data-i18n-key="to_date">إلى تاريخ</label><input type="date" id="hr-service-to"></div>
+				</div>
+			</div>
+			<div class="saudi-field" id="hr-service-amount-field" style="display:none;">
+				<label data-i18n-key="amount">المبلغ</label>
+				<input type="number" id="hr-service-amount" min="0">
+			</div>
+			<div class="saudi-field" id="hr-service-new-value-field" style="display:none;">
+				<label data-i18n-key="new_value">القيمة الجديدة</label>
+				<input type="text" id="hr-service-new-value">
+			</div>
+			<button class="saudi-submit-btn" onclick="submitHrServiceRequest()" id="hr-service-submit-btn" data-i18n-key="submit_request">تقديم الطلب</button>
+		</div>
+	</section>
+
+	<!-- ============ PANEL: MY REQUESTS ============ -->
+	<section class="saudi-panel" id="panel-requests">
+		<div class="saudi-section-header">
+			<div class="saudi-section-header__title" data-i18n-key="my_requests">طلباتي</div>
+			<div class="saudi-section-header__back" onclick="navigate('home')">‹ <span data-i18n-key="back">رجوع</span></div>
+		</div>
+		<button class="saudi-new-request-btn" onclick="openNewRequestModal()">➕ <span data-i18n-key="new_request">تقديم طلب جديد</span></button>
+		<div class="saudi-tab-bar">
+			<div class="saudi-tab saudi-tab--active" onclick="switchRequestTab('all')" data-i18n-key="all">الكل</div>
+			<div class="saudi-tab" onclick="switchRequestTab('pending')" data-i18n-key="pending">قيد المراجعة</div>
+			<div class="saudi-tab" onclick="switchRequestTab('approved')" data-i18n-key="approved">معتمد</div>
+			<div class="saudi-tab" onclick="switchRequestTab('rejected')" data-i18n-key="rejected">مرفوض</div>
+		</div>
+		<div id="requests-list-container">
+			<div class="saudi-empty"><p data-i18n-key="loading">جاري التحميل...</p></div>
+		</div>
+	</section>
+
+	<!-- ============ PANEL: ATTENDANCE ============ -->
+	<section class="saudi-panel" id="panel-attendance">
+		<div class="saudi-section-header">
+			<div class="saudi-section-header__title" data-i18n-key="attendance_checkin">تسجيل الحضور والانصراف</div>
+			<div class="saudi-section-header__back" onclick="navigate('home')">‹ <span data-i18n-key="back">رجوع</span></div>
+		</div>
+		<div class="saudi-punch-card">
+			<h3 data-i18n-key="punch_title">تسجيل الدوام</h3>
+			<p data-i18n-key="punch_subtitle">اضغط على تسجيل الحضور أو الانصراف للتحقق وإتمام التسجيل</p>
+			<button class="saudi-punch-btn saudi-punch-btn--in" id="punch-in-btn" onclick="startPunchFlow('IN')" data-i18n-key="punch_in">تسجيل دخول (IN)</button>
+			<button class="saudi-punch-btn saudi-punch-btn--out" id="punch-out-btn" onclick="startPunchFlow('OUT')" style="display:none;" data-i18n-key="punch_out">تسجيل خروج (OUT)</button>
+			<div class="saudi-punch-hint" id="punch-next-hint"></div>
+		</div>
+
+		<div class="saudi-requests-widget" style="margin: 0 18px 18px;">
+			<div class="saudi-widget__header">
+				<div class="saudi-widget__title" id="monthly-att-label" data-i18n-key="monthly_summary">ملخص الحضور الشهري</div>
+			</div>
+			<div class="saudi-summary-row" id="monthly-summary"></div>
+		</div>
+
+		<div class="saudi-requests-widget" style="margin: 0 18px 18px;">
+			<div class="saudi-widget__header">
+				<div class="saudi-widget__title"><span data-i18n-key="today_log">سجل اليوم</span></div>
+			</div>
+			<div id="today-attendance-log">
+				<div class="saudi-empty"><p data-i18n-key="no_punches">لا توجد تسجيلات اليوم</p></div>
+			</div>
+		</div>
+
+		<div class="saudi-requests-widget" style="margin: 0 18px 18px;">
+			<div class="saudi-widget__header">
+				<div class="saudi-widget__title"><span data-i18n-key="monthly_log">سجل الحضور اليومي</span></div>
+			</div>
+			<div id="monthly-attendance-log">
+				<div class="saudi-empty"><p data-i18n-key="loading">جارٍ التحميل...</p></div>
+			</div>
+		</div>
+	</section>
+
+	<!-- ============ PANEL: PROFILE ============ -->
+	<section class="saudi-panel" id="panel-profile">
+		<div class="saudi-section-header">
+			<div class="saudi-section-header__title" data-i18n-key="profile">الملف الشخصي</div>
+			<div class="saudi-section-header__back" onclick="navigate('home')">‹ <span data-i18n-key="back">رجوع</span></div>
+		</div>
+		<div class="saudi-profile-card">
+			<div class="saudi-profile-avatar" id="profile-avatar-large">
+				{% if emp.image %}
+					<img src="{{ emp.image }}" alt="Profile">
+				{% else %}
+					{{ (emp.employee_name or full_name or 'A')[:1] | upper }}
+				{% endif %}
+			</div>
+			<div class="saudi-profile-name" id="profile-name">{{ emp.employee_name or full_name or '' }}</div>
+			<div class="saudi-profile-role" id="profile-designation">{{ emp.designation or '' }}</div>
+			<div class="saudi-profile-row"><span class="saudi-profile-row__label" data-i18n-key="employee_id">رقم الموظف</span><span class="saudi-profile-row__value" id="profile-employee-id">{{ emp.employee or '' }}</span></div>
+			<div class="saudi-profile-row"><span class="saudi-profile-row__label" data-i18n-key="company">الشركة</span><span class="saudi-profile-row__value" id="profile-company">{{ emp.company_name or emp.company or '' }}</span></div>
+			<div class="saudi-profile-row"><span class="saudi-profile-row__label" data-i18n-key="department">القسم</span><span class="saudi-profile-row__value" id="profile-department">{{ emp.department or '' }}</span></div>
+			<div class="saudi-profile-row"><span class="saudi-profile-row__label" data-i18n-key="branch">الفرع</span><span class="saudi-profile-row__value" id="profile-branch">{{ emp.branch or '' }}</span></div>
+			<div class="saudi-profile-row"><span class="saudi-profile-row__label" data-i18n-key="email">البريد الإلكتروني</span><span class="saudi-profile-row__value" id="profile-email">{{ emp.company_email or '' }}</span></div>
+		</div>
+	</section>
+
+	<!-- ============ NEW REQUEST MODAL (global) ============ -->
+	<div class="saudi-modal" id="new-request-modal" style="display:none;">
+		<div class="saudi-modal__overlay" onclick="closeNewRequestModal()"></div>
+		<div class="saudi-modal__card">
+			<div class="saudi-modal__header">
+				<div class="saudi-modal__title"><span data-i18n-key="new_request">تقديم طلب جديد</span></div>
+				<div class="saudi-modal__close" onclick="closeNewRequestModal()">&times;</div>
+			</div>
+			<div class="saudi-modal__body">
+				<p class="saudi-request-choice__subtitle" data-i18n-key="new_request_subtitle">اختر نوع الطلب الذي تريد تقديمه</p>
+				<div class="saudi-request-choice">
+					<div class="saudi-request-choice__card" onclick="pickNewRequest('leave')">
+						<div class="saudi-request-choice__icon" style="background:#fef3c7; color:#d97706;">🌴</div>
+						<div class="saudi-request-choice__title"><span data-i18n-key="leave_request">طلب إجازة</span></div>
+						<div class="saudi-request-choice__hint">إجازة سنوية، مرضية، خاصة، أمومة</div>
+					</div>
+					<div class="saudi-request-choice__card" onclick="pickNewRequest('service')">
+						<div class="saudi-request-choice__icon" style="background:#e0f2fe; color:#0369a1;">📄</div>
+						<div class="saudi-request-choice__title"><span data-i18n-key="service_request">طلب خدمة</span></div>
+						<div class="saudi-request-choice__hint">سلفة، قرض، شهادات، رخص، إقامات</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- ============ PUNCH MODAL (global) ============ -->
+	<div class="saudi-modal" id="punch-modal" style="display:none;">
+		<div class="saudi-modal__overlay" onclick="closePunchModal()"></div>
+		<div class="saudi-modal__card">
+			<div class="saudi-modal__header">
+				<div class="saudi-modal__title" id="punch-modal-title">تسجيل الحضور</div>
+				<div class="saudi-modal__close" onclick="closePunchModal()">&times;</div>
+			</div>
+			<div class="saudi-modal__body">
+				<div class="saudi-verify-step" id="punch-step-gps" style="display:none;">
+					<div class="saudi-verify-step__label"><span class="saudi-verify-step__dot"></span><span data-i18n-key="step_gps">التحقق من الموقع (GPS)</span></div>
+					<div class="saudi-verify-step__state" id="punch-gps-state"></div>
+				</div>
+				<div class="saudi-verify-step" id="punch-step-photo" style="display:none;">
+					<div class="saudi-verify-step__label"><span class="saudi-verify-step__dot"></span><span data-i18n-key="step_photo">صورة التحقق (كاميرا)</span></div>
+					<div class="saudi-camera">
+						<video id="punch-photo-video" playsinline autoplay muted></video>
+						<div class="saudi-camera__hint" id="punch-photo-hint">📷 <span data-i18n-key="camera_ready">انتظر فتح الكاميرا...</span></div>
+						<canvas id="punch-photo-canvas" style="display:none;"></canvas>
+					</div>
+					<button class="saudi-voice-record-btn" id="punch-photo-capture-btn" onclick="onPunchPhotoButton()" disabled>📷 <span data-i18n-key="capture_btn">التقاط الصورة</span></button>
+					<div id="punch-photo-preview"></div>
+				</div>
+				<div class="saudi-verify-step" id="punch-step-voice" style="display:none;">
+					<div class="saudi-verify-step__label"><span class="saudi-verify-step__dot"></span><span data-i18n-key="step_voice">التحقق الصوتي</span></div>
+					<div class="saudi-voice-challenge" id="punch-voice-challenge">&bull;&bull;&bull;&bull;</div>
+					<button class="saudi-voice-record-btn" id="punch-voice-record-btn" onclick="recordPunchVoice()" data-i18n-key="voice_record">🎙 اقرأ الأرقام بصوت عالٍ</button>
+					<div class="saudi-voice-result" id="punch-voice-result"></div>
+					<input id="punch-voice-manual" class="saudi-voice-manual" data-i18n-key="voice_manual" placeholder="أو أدخل الأرقام يدويًا" oninput="updatePunchReady()">
+				</div>
+				<div style="display:flex;gap:8px;margin-top:16px;">
+					<button class="saudi-punch-btn saudi-punch-btn--in" id="punch-submit-btn" onclick="submitPunch()" style="flex:2;" data-i18n-key="confirm">تأكيد التسجيل</button>
+					<button class="saudi-punch-btn saudi-punch-btn--out" onclick="closePunchModal()" style="flex:1;" data-i18n-key="cancel">إلغاء</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- ============ BOTTOM NAV ============ -->
+	<nav class="saudi-bottom-nav">
+		<button class="saudi-nav-item saudi-nav-item--active" data-panel="home" onclick="navigate('home')">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+			<span data-i18n-key="nav_home">الرئيسية</span>
+		</button>
+		<button class="saudi-nav-item" data-panel="requests" onclick="navigate('requests')">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/></svg>
+			<span data-i18n-key="nav_requests">طلباتي</span>
+		</button>
+		<button class="saudi-nav-item" data-panel="leave" onclick="navigate('leave')">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 8c0-2.76-2.24-5-5-5s-5 2.24-5 5c0 2.4 1.7 4.41 4 4.88V21h2v-8.12c2.3-.47 4-2.48 4-4.88z"/></svg>
+			<span data-i18n-key="nav_leave">الإجازات</span>
+		</button>
+		<button class="saudi-nav-item" data-panel="attendance" onclick="navigate('attendance')">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+			<span data-i18n-key="nav_attendance">الحضور</span>
+		</button>
+		<button class="saudi-nav-item" data-panel="profile" onclick="navigate('profile')">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+			<span data-i18n-key="nav_more">المزيد</span>
+		</button>
+	</nav>
+
+	<!-- Toast -->
+	<div class="saudi-toast" id="saudi-toast"></div>
+</div>
+
+<script>
+var CURRENT_LANG = "ar";
+
+var LABELS = {
+	ar: {
+		hero_greeting: "مرحباً، ",
+		hero_subtitle: "نتمنى لك يوماً مليئاً بالإنجاز والنجاح",
+		leave_balance: "رصيد الإجازات",
+		attendance: "تسجيل الدوام",
+		view_all: "عرض الكل",
+		days_remaining: "يوم متبقي",
+		annual_leave: "إجازة سنوية",
+		sick_leave: "إجازة مرضية",
+		marriage_leave: "إجازة زواج",
+		bereavement_leave: "إجازة وفاة",
+		other_leave: "إجازات أخرى",
+		recent_requests: "طلباتي الأخيرة",
+		no_recent: "لا توجد طلبات حديثة",
+		banner_title: "معاً نحو بيئة عمل أفضل",
+		banner_subtitle: "نحن هنا لدعمك في رحلتك المهنية",
+		leave_request: "طلب إجازة",
+		service_request: "طلب خدمة",
+		my_requests: "طلباتي",
+		attendance_checkin: "تسجيل الحضور والانصراف",
+		profile: "الملف الشخصي",
+		back: "رجوع",
+		normal_leave: "إجازة عادية",
+		mobile_leave: "طلب جوال",
+		leave_type: "نوع الإجازة",
+		leave_subtype: "نوع الإجازة الفرعي",
+		request_type: "نوع الطلب",
+		from_date: "من تاريخ",
+		to_date: "إلى تاريخ",
+		description: "السبب",
+		submit_request: "تقديم الطلب",
+		amount: "المبلغ",
+		new_value: "القيمة الجديدة",
+		all: "الكل",
+		pending: "قيد المراجعة",
+		approved: "معتمد",
+		rejected: "مرفوض",
+		punch_title: "تسجيل الدوام",
+		punch_subtitle: "اضغط على تسجيل الحضور أو الانصراف للتحديث المباشر",
+		punch_in: "تسجيل دخول (IN)",
+		punch_out: "تسجيل خروج (OUT)",
+		today_log: "سجل اليوم",
+		no_punches: "لا توجد تسجيلات اليوم",
+		monthly_summary: "ملخص الحضور الشهري",
+		monthly_log: "سجل الحضور اليومي",
+		loading: "جارٍ التحميل...",
+		summary_present: "حاضر",
+		summary_absent: "غائب",
+		summary_leave: "إجازة",
+		summary_rest: "عطلة",
+		mlog_present: "حاضر",
+		mlog_late: "متأخر",
+		mlog_absent: "غائب",
+		mlog_leave: "إجازة",
+		mlog_half: "نصف يوم",
+		mlog_rest: "عطلة",
+		mlog_upcoming: "قادم",
+		mlog_pending: "معلق",
+		mlog_other: "أخرى",
+		next_in: "التالية: تسجيل حضور",
+		next_out: "التالية: تسجيل انصراف",
+		employee_id: "رقم الموظف",
+		company: "الشركة",
+		department: "القسم",
+		branch: "الفرع",
+		email: "البريد الإلكتروني",
+		nav_home: "الرئيسية",
+		nav_requests: "طلباتي",
+		nav_leave: "الإجازات",
+		nav_attendance: "الحضور",
+		nav_more: "المزيد",
+		submitting: "جاري الإرسال...",
+		submitted_ok: "تم إرسال الطلب بنجاح",
+		submitted_err: "حدث خطأ أثناء الإرسال",
+		punch_ok_in: "تم تسجيل الدخول بنجاح",
+		punch_ok_out: "تم تسجيل الخروج بنجاح",
+		since_checkin: "منذ تسجيل الدخول",
+		step_gps: "التحقق من الموقع (GPS)",
+		locating: "جاري تحديد الموقع...",
+		gps_ok: "تم تحديد الموقع بنجاح ✓",
+		gps_fail: "تعذّر الحصول على الموقع. يرجى السماح بإذن الموقع.",
+		step_photo: "صورة التحقق (كاميرا)",
+		photo_click: "اضغط لالتقاط صورة (مطلوبة)",
+		photo_done: "تم التقاط الصورة ✓",
+		photo_change: "إعادة التقاط الصورة",
+		capture_btn: "التقاط الصورة",
+		camera_ready: "انتظر فتح الكاميرا...",
+		camera_unavailable: "الكاميرا غير متاحة في هذا المتصفح",
+		camera_permission_error: "يُرجى السماح بالوصول إلى الكاميرا",
+		camera_denied: "تعذّر فتح الكاميرا",
+		step_voice: "التحقق الصوتي",
+		voice_record: "🎙 اقرأ الأرقام بصوت عالٍ",
+		voice_listening: "جاري الاستماع... اقرأ الأرقام الآن",
+		voice_detected: "تم التقاط الرقم: ",
+		voice_unavailable: "التحقق الصوتي غير متاح في هذا المتصفح",
+		voice_manual: "أو أدخل الأرقام يدويًا",
+		voice_required_warn: "يرجى إدخال الأرقام أو نطقها قبل التأكيد",
+		confirm: "تأكيد التسجيل",
+		cancel: "إلغاء",
+		leave_annual: "إجازة سنوية",
+		leave_sick: "إجازة مرضية",
+		leave_special: "إجازة خاصة",
+		leave_maternity: "إجازة أمومة وأبوة",
+		reason_label: "مبرر الطلب",
+		annual_balance: "رصيد الإجازة السنوية",
+		half_day: "نصف يوم",
+		attachments_label: "مرفقات الطلب",
+		choose_subtype: "اختر النوع...",
+		subtype_required: "الرجاء اختيار نوع الإجازة",
+		start_date_required: "الرجاء تحديد تاريخ بداية الإجازة",
+		day_unit: "يوم",
+		loading: "جاري التحميل...",
+		view_details: "عرض التفاصيل",
+		select_type: "اختر النوع",
+		home_title: "الرئيسية",
+		session_expired: "جلستك انتهت، يرجى إعادة تسجيل الدخول للمتابعة",
+		login_now: "تسجيل الدخول",
+		leave_tab_normal: "إجازة سنوية",
+		leave_tab_sick: "إجازة مرضية",
+		leave_tab_other: "إجازة أخرى",
+		new_request: "تقديم طلب جديد",
+		new_request_subtitle: "اختر نوع الطلب الذي تريد تقديمه",
+	},
+	en: {
+		hero_greeting: "Hello, ",
+		hero_subtitle: "Wishing you a productive and successful day",
+		leave_balance: "Leave Balance",
+		attendance: "Attendance",
+		view_all: "View All",
+		days_remaining: "days left",
+		annual_leave: "Annual Leave",
+		sick_leave: "Sick Leave",
+		marriage_leave: "Marriage Leave",
+		bereavement_leave: "Bereavement Leave",
+		other_leave: "Other Leave",
+		recent_requests: "Recent Requests",
+		no_recent: "No recent requests",
+		banner_title: "Together towards a better workplace",
+		banner_subtitle: "We are here to support you in your career journey",
+		leave_request: "Leave Request",
+		service_request: "Service Request",
+		my_requests: "My Requests",
+		attendance_checkin: "Attendance Check-in",
+		profile: "Profile",
+		back: "Back",
+		normal_leave: "Normal Leave",
+		mobile_leave: "Mobile Request",
+		leave_type: "Leave Type",
+		leave_subtype: "Leave Subtype",
+		request_type: "Request Type",
+		from_date: "From Date",
+		to_date: "To Date",
+		description: "Reason",
+		submit_request: "Submit Request",
+		amount: "Amount",
+		new_value: "New Value",
+		all: "All",
+		pending: "Pending",
+		approved: "Approved",
+		rejected: "Rejected",
+		punch_title: "Attendance Check-in",
+		punch_subtitle: "Click Check-in or Check-out for live update",
+		punch_in: "Check In (IN)",
+		punch_out: "Check Out (OUT)",
+		today_log: "Today's Log",
+		no_punches: "No punches today",
+		monthly_summary: "Monthly Attendance Summary",
+		monthly_log: "Daily Attendance Log",
+		loading: "Loading...",
+		summary_present: "Present",
+		summary_absent: "Absent",
+		summary_leave: "Leave",
+		summary_rest: "Rest",
+		mlog_present: "Present",
+		mlog_late: "Late",
+		mlog_absent: "Absent",
+		mlog_leave: "Leave",
+		mlog_half: "Half Day",
+		mlog_rest: "Rest",
+		mlog_upcoming: "Upcoming",
+		mlog_pending: "Pending",
+		mlog_other: "Other",
+		next_in: "Next: Check in",
+		next_out: "Next: Check out",
+		employee_id: "Employee ID",
+		company: "Company",
+		department: "Department",
+		branch: "Branch",
+		email: "Email",
+		nav_home: "Home",
+		nav_requests: "Requests",
+		nav_leave: "Leave",
+		nav_attendance: "Attendance",
+		nav_more: "More",
+		submitting: "Submitting...",
+		submitted_ok: "Request submitted successfully",
+		submitted_err: "An error occurred while submitting",
+		punch_ok_in: "Checked in successfully",
+		punch_ok_out: "Checked out successfully",
+		since_checkin: "Since check-in",
+		step_gps: "GPS Location Check",
+		locating: "Locating you...",
+		gps_ok: "Location confirmed ✓",
+		gps_fail: "Could not get location. Please allow location access.",
+		step_photo: "Verification Photo (Camera)",
+		photo_click: "Tap to take a photo (required)",
+		photo_done: "Photo captured ✓",
+		photo_change: "Retake photo",
+		capture_btn: "Capture photo",
+		camera_ready: "Waiting for camera...",
+		camera_unavailable: "Camera not available in this browser",
+		camera_permission_error: "Please allow camera access",
+		camera_denied: "Could not open camera",
+		step_voice: "Voice Verification",
+		voice_record: "🎙 Read the digits aloud",
+		voice_listening: "Listening... read the digits now",
+		voice_detected: "Heard: ",
+		voice_unavailable: "Voice verification not supported in this browser",
+		voice_manual: "Or type the digits manually",
+		voice_required_warn: "Please say or type the digits before confirming",
+		confirm: "Confirm Check-in",
+		cancel: "Cancel",
+		leave_annual: "Annual Leave",
+		leave_sick: "Sick Leave",
+		leave_special: "Special Leave",
+		leave_maternity: "Maternity / Paternity Leave",
+		reason_label: "Reason",
+		annual_balance: "Annual Leave Balance",
+		half_day: "Half Day",
+		attachments_label: "Attachments",
+		choose_subtype: "Choose type...",
+		subtype_required: "Please choose the leave type",
+		start_date_required: "Please choose the leave start date",
+		day_unit: "day",
+		loading: "Loading...",
+		view_details: "View Details",
+		select_type: "Select Type",
+		home_title: "Home",
+		session_expired: "Your session has expired. Please login again",
+		login_now: "Login",
+		leave_tab_normal: "Annual Leave",
+		leave_tab_sick: "Sick Leave",
+		leave_tab_other: "Other Leave",
+		new_request: "New Request",
+		new_request_subtitle: "Choose the type of request you want to submit",
+	}
+};
+
+function t(key) {
+	return (LABELS[CURRENT_LANG] && LABELS[CURRENT_LANG][key]) || key;
+}
+
+function showSessionBanner() {
+	var el = document.getElementById("session-banner");
+	if (el) el.style.display = "flex";
+}
+
+function applyLang() {
+	document.querySelectorAll("[data-i18n-key]").forEach(function(el) {
+		var k = el.getAttribute("data-i18n-key");
+		if (LABELS[CURRENT_LANG] && LABELS[CURRENT_LANG][k]) {
+			el.textContent = LABELS[CURRENT_LANG][k];
+		}
+	});
+	document.getElementById("lang-toggle").textContent = CURRENT_LANG === "ar" ? "EN" : "عربي";
+	document.body.className = CURRENT_LANG === "en" ? "ltr" : "";
+	if (window.myPortalData) {
+		renderQuickActions(window.myPortalData);
+		renderRecentRequests(window.myPortalData);
+	}
+	populateLeaveSubtypes();
+}
+
+function toggleLang() {
+	CURRENT_LANG = CURRENT_LANG === "ar" ? "en" : "ar";
+	try { localStorage.setItem("saudi_hr_lang", CURRENT_LANG); } catch(e) {}
+	applyLang();
+}
+
+/* SPA Routing */
+function navigate(panel) {
+	document.querySelectorAll(".saudi-panel").forEach(function(p) { p.classList.remove("saudi-panel--active"); });
+	var el = document.getElementById("panel-" + panel);
+	if (el) el.classList.add("saudi-panel--active");
+	document.querySelectorAll(".saudi-nav-item").forEach(function(n) { n.classList.remove("saudi-nav-item--active"); });
+	var navBtn = document.querySelector('.saudi-nav-item[data-panel="' + panel + '"]');
+	if (navBtn) navBtn.classList.add("saudi-nav-item--active");
+	try { localStorage.setItem("saudi_hr_panel", panel); } catch(e) {}
+	if (panel === "requests") loadMyRequests();
+	if (panel === "attendance") loadAttendanceLog();
+}
+
+/* New Request Chooser */
+function openNewRequestModal() {
+	var el = document.getElementById("new-request-modal");
+	if (el) el.style.display = "flex";
+}
+function closeNewRequestModal() {
+	var el = document.getElementById("new-request-modal");
+	if (el) el.style.display = "none";
+}
+function pickNewRequest(route) {
+	closeNewRequestModal();
+	navigate(route);
+}
+
+/* Quick Actions Cards */
+function renderQuickActions(portalData) {
+	var container = document.getElementById("quick-actions-grid");
+	if (!container) return;
+	var qa = (portalData && portalData.quick_actions) || [
+		{id: "attendance", label_ar: "الحضور والانصراف", label_en: "Attendance", icon: "🕐", route: "attendance", bg_color: "#f3e8ff", icon_color: "#7e22ce"},
+		{id: "leave_balance", label_ar: "رصيد الإجازات", label_en: "Leave Balance", icon: "🌴", route: "leave", bg_color: "#fef9c3", icon_color: "#a16207"},
+		{id: "leave_request", label_ar: "تقديم طلب إجازة", label_en: "Submit Leave", icon: "📋", route: "leave", bg_color: "#fef3c7", icon_color: "#d97706"},
+		{id: "service_request", label_ar: "طلب خدمة", label_en: "Service Request", icon: "📄", route: "service", bg_color: "#e0f2fe", icon_color: "#0369a1"},
+		{id: "my_requests", label_ar: "طلباتي", label_en: "My Requests", icon: "📑", route: "requests", bg_color: "#dcfce7", icon_color: "#15803d"},
+		{id: "notifications", label_ar: "الإشعارات", label_en: "Notifications", icon: "🔔", route: "requests", bg_color: "#fae8ff", icon_color: "#c026d3"},
+		{id: "documents", label_ar: "المستندات", label_en: "Documents", icon: "📁", route: "profile", bg_color: "#ffe4e6", icon_color: "#e11d48"},
+		{id: "payroll", label_ar: "مسيرات الرواتب", label_en: "Pay Slips", icon: "💰", route: "profile", bg_color: "#ccfbf1", icon_color: "#0d9488"}
+	];
+	var ICON_MAP = {
+		clock: "🕐", palm: "🌴", calendar: "📋", list: "📑", user: "👤",
+		bell: "🔔", file: "📁", wallet: "💰", firstaid: "🩹", paw: "🐾"
+	};
+	var html = "";
+	qa.forEach(function(item) {
+		var panel = (item.route || "").replace("#", "") || "home";
+		var label = CURRENT_LANG === "en" && item.label_en ? item.label_en : item.label_ar;
+		var icon = ICON_MAP[item.icon] || item.icon || "📋";
+		html += '<div class="saudi-action-card" onclick="navigate(\'' + panel + '\')">' +
+			'<div class="saudi-action-card__icon" style="background:' + (item.bg_color || '#f3f4f6') + '; color:' + (item.icon_color || '#374151') + ';">' +
+			'<span style="font-size:24px;">' + icon + '</span>' +
+			'</div><span class="saudi-action-card__title">' + label + '</span></div>';
+	});
+	container.innerHTML = html;
+}
+
+/* Leave Request */
+var leaveAttachments = [];
+var leaveOptionsData = null;
+
+function initLeaveForm() {
+	var input = document.getElementById("leave-files-input");
+	if (input && !input._saudiInit) {
+		input._saudiInit = true;
+		input.onchange = function() {
+			leaveAttachments = [];
+			var files = Array.prototype.slice.call(input.files || []);
+			if (!files.length) { renderLeaveAttachments(); return; }
+			files.forEach(function(file) {
+				var reader = new FileReader();
+				reader.onload = function(e) {
+					leaveAttachments.push({ filename: file.name, content: e.target.result.split(",")[1] || e.target.result });
+					renderLeaveAttachments();
+				};
+				reader.readAsDataURL(file);
+			});
+		};
+	}
+	loadLeaveOptions();
+}
+
+function loadLeaveOptions() {
+	if (leaveOptionsData) { populateLeaveSubtypes(); return; }
+	frappe.call({
+		method: "saudi_hr.saudi_hr.api.get_attendance_status",
+		args: {},
+		callback: function(r) {
+			leaveOptionsData = (r.message && r.message.leave_options) || {};
+			populateLeaveSubtypes();
+		}
+	});
+}
+
+function localizeLabel(v) {
+	var s = String(v || "");
+	var slash = s.indexOf(" / ");
+	if (slash !== -1) {
+		var en = s.slice(0, slash);
+		var ar = s.slice(slash + 3);
+		return CURRENT_LANG === "ar" ? ar : en;
+	}
+	return s;
+}
+
+function populateLeaveSubtypes() {
+	if (!leaveOptionsData) { updateLeaveForm(); return; }
+	var requestType = document.getElementById("leave-request-type").value;
+	var sel = document.getElementById("leave-subtype-select");
+	var options = (leaveOptionsData[requestType] && leaveOptionsData[requestType].options) || [];
+	sel.innerHTML = "";
+	if (options.length) {
+		var empty = document.createElement("option");
+		empty.value = "";
+		empty.textContent = t("choose_subtype");
+		sel.appendChild(empty);
+		options.forEach(function(opt) {
+			var o = document.createElement("option");
+			o.value = opt;
+			o.textContent = localizeLabel(opt);
+			sel.appendChild(o);
+		});
+	}
+	var bal = (leaveOptionsData.annual && leaveOptionsData.annual.balance);
+	var balEl = document.getElementById("leave-balance");
+	if (balEl) balEl.textContent = bal == null ? "—" : Number(bal).toFixed(1) + " " + t("day_unit");
+	updateLeaveForm();
+}
+
+function updateLeaveForm() {
+	var requestType = document.getElementById("leave-request-type").value;
+	var isAnnual = requestType === "annual";
+	var isSick = requestType === "sick";
+	var isSpecial = requestType === "special";
+	var isMaternity = requestType === "maternity_paternity";
+	document.getElementById("leave-subtype-field").style.display = (isSpecial || isMaternity) ? "block" : "none";
+	document.getElementById("leave-balance-field").style.display = isAnnual ? "block" : "none";
+	document.getElementById("half-day-field").style.display = isAnnual ? "block" : "none";
+}
+
+function renderLeaveAttachments() {
+	var el = document.getElementById("leave-attachment-list");
+	el.innerHTML = leaveAttachments.map(function(a) { return '<div class="saudi-attachment-chip">📎 ' + a.filename + '</div>'; }).join("");
+}
+
+function submitMobileLeaveRequest() {
+	var btn = document.getElementById("mobile-leave-submit-btn");
+	var requestType = document.getElementById("leave-request-type").value;
+	var startDate = document.getElementById("leave-start-date").value;
+	if (!startDate) { showToast(t("start_date_required"), "error"); return; }
+	var subtype = document.getElementById("leave-subtype-select").value || null;
+	if ((requestType === "special" || requestType === "maternity_paternity") && !subtype) {
+		showToast(t("subtype_required"), "error");
+		return;
+	}
+	var args = {
+		request_type: requestType,
+		start_date: startDate,
+		end_date: document.getElementById("leave-end-date").value || startDate,
+		reason: document.getElementById("leave-reason").value.trim(),
+		leave_subtype: subtype,
+		half_day: document.getElementById("leave-half-day").checked ? 1 : 0,
+		attachments_json: JSON.stringify(leaveAttachments)
+	};
+	btn.disabled = true;
+	btn.textContent = t("submitting");
+	frappe.call({
+		method: "saudi_hr.saudi_hr.api.submit_mobile_leave_request",
+		args: args,
+		callback: function(r) {
+			btn.disabled = false;
+			btn.textContent = t("submit_request");
+			showToast(t("submitted_ok"), "success");
+			document.getElementById("leave-request-type").selectedIndex = 0;
+			document.getElementById("leave-start-date").value = "";
+			document.getElementById("leave-end-date").value = "";
+			document.getElementById("leave-reason").value = "";
+			document.getElementById("leave-subtype-select").innerHTML = "";
+			document.getElementById("leave-half-day").checked = false;
+			document.getElementById("leave-files-input").value = "";
+			leaveAttachments = [];
+			renderLeaveAttachments();
+			updateLeaveForm();
+		},
+		error: function(err) {
+			btn.disabled = false;
+			btn.textContent = t("submit_request");
+			var msg = t("submitted_err");
+			if (err && err._server_messages && err._server_messages.length) {
+				var raw = (err._server_messages[0] + "").replace(/<[^>]+>/g, "").trim();
+				if (raw) msg = raw;
+			}
+			showToast(msg, "error");
+		}
+	});
+}
+
+function onHrServiceTypeChange() {
+	var val = document.getElementById("hr-service-type-select").value;
+	var dateField = document.getElementById("hr-service-date-fields");
+	var amountField = document.getElementById("hr-service-amount-field");
+	var newValueField = document.getElementById("hr-service-new-value-field");
+	dateField.style.display = ["salary_certificate", "experience_certificate"].indexOf(val) !== -1 ? "none" : "block";
+	amountField.style.display = ["advance_salary", "employee_loan"].indexOf(val) !== -1 ? "block" : "none";
+	newValueField.style.display = ["employee_data_update", "profession_modification"].indexOf(val) !== -1 ? "block" : "none";
+}
+
+/* Submit HR Service Request */
+function submitHrServiceRequest() {
+	var btn = document.getElementById("hr-service-submit-btn");
+	btn.disabled = true;
+	btn.textContent = t("submitting");
+	var args = {
+		request_type: document.getElementById("hr-service-type-select").value,
+		description: document.getElementById("hr-service-desc").value,
+		from_date: document.getElementById("hr-service-from").value || null,
+		to_date: document.getElementById("hr-service-to").value || null,
+		amount: document.getElementById("hr-service-amount").value || null,
+		new_value: document.getElementById("hr-service-new-value").value || null,
+	};
+	frappe.call({
+		method: "saudi_hr.saudi_hr.api.submit_hr_service_request",
+		args: args,
+		callback: function(r) {
+			btn.disabled = false;
+			btn.textContent = t("submit_request");
+			showToast(t("submitted_ok"), "success");
+			document.getElementById("hr-service-type-select").selectedIndex = 0;
+			document.getElementById("hr-service-desc").value = "";
+			document.getElementById("hr-service-from").value = "";
+			document.getElementById("hr-service-to").value = "";
+			document.getElementById("hr-service-amount").value = "";
+			document.getElementById("hr-service-new-value").value = "";
+		},
+		error: function() {
+			btn.disabled = false;
+			btn.textContent = t("submit_request");
+			showToast(t("submitted_err"), "error");
+		}
+	});
+}
+
+/* My Requests */
+function loadMyRequests(filter) {
+	var container = document.getElementById("requests-list-container");
+	container.innerHTML = '<div style="text-align:center;padding:20px;"><span class="saudi-spinner"></span></div>';
+	frappe.call({
+		method: "saudi_hr.saudi_hr.api.get_my_requests",
+		args: { limit: 50, status: filter || "all" },
+		callback: function(r) {
+			var data = r.message || [];
+			if (filter && filter !== "all") {
+				data = data.filter(function(d) { return d.status_code === filter; });
+			}
+			if (!data.length) {
+				container.innerHTML = '<div class="saudi-empty"><p>' + t("no_recent") + '</p></div>';
+				return;
+			}
+			var html = "";
+			data.forEach(function(item) {
+				var badgeClass = item.status_code === "approved" ? "saudi-badge--approved" : (item.status_code === "rejected" ? "saudi-badge--rejected" : "saudi-badge--pending");
+				var category = item.doctype_label || "";
+				html += '<div class="saudi-request-card">' +
+					'<div class="saudi-request-card__top"><div><div class="saudi-request-card__type">' + (item.request_type_label || item.request_type) + '</div>' +
+					'<div class="saudi-request-card__date">' + (category ? category + " · " : "") + (item.creation || "").slice(0, 10) + '</div></div>' +
+					'<span class="saudi-badge ' + badgeClass + '">' + (CURRENT_LANG === "en" ? item.status_code : (item.status_code === "approved" ? "معتمد" : (item.status_code === "rejected" ? "مرفوض" : "قيد المراجعة"))) + '</span></div>' +
+					(item.description ? '<div class="saudi-request-card__desc">' + item.description + '</div>' : '') +
+					'</div>';
+			});
+			container.innerHTML = html;
+		},
+		error: function() {
+			container.innerHTML = '<div class="saudi-empty"><p>' + t("submitted_err") + '</p></div>';
+		}
+	});
+}
+
+function switchRequestTab(tab) {
+	document.querySelectorAll("#panel-requests .saudi-tab").forEach(function(t) { t.classList.remove("saudi-tab--active"); });
+	event.target.classList.add("saudi-tab--active");
+	loadMyRequests(tab);
+}
+
+/* Attendance */
+var punchState = {};
+
+function parseCheckinTime(t) {
+	if (!t) return null;
+	var d = new Date(String(t).replace(" ", "T"));
+	return isNaN(d.getTime()) ? null : d.getTime();
+}
+
+function pad2(n) { return (n < 10 ? "0" : "") + n; }
+
+function updateHomePunch() {
+	var btn = document.getElementById("home-punch-btn");
+	if (!btn) return;
+	var st = window.attStatus || {};
+	var isIN = !st.last_log_type || st.last_log_type !== "IN";
+	btn.classList.toggle("saudi-punch-btn--in", isIN);
+	btn.classList.toggle("saudi-punch-btn--out", !isIN);
+	btn.setAttribute("data-i18n-key", isIN ? "punch_in" : "punch_out");
+	btn.textContent = t(isIN ? "punch_in" : "punch_out");
+	btn.onclick = function() { startPunchFlow(isIN ? "IN" : "OUT"); };
+}
+
+function updateHomeElapsed() {
+	var el = document.getElementById("att-elapsed");
+	if (!el) return;
+	var st = window.attStatus || {};
+	if (st.last_log_type !== "IN" || !window.attCheckinTime) {
+		el.style.display = "none";
+		return;
+	}
+	var ms = Date.now() - window.attCheckinTime;
+	if (ms < 0) ms = 0;
+	var h = Math.floor(ms / 3600000);
+	var m = Math.floor((ms % 3600000) / 60000);
+	el.innerHTML = "⏱ <span data-i18n-key=\"since_checkin\">منذ تسجيل الدخول</span>: <span class=\"saudi-elapsed__num\">" + pad2(h) + ":" + pad2(m) + "</span>";
+	el.style.display = "flex";
+}
+
+function updateLiveClock() {
+	if (!window.attLiveClock) return;
+	var el = document.getElementById("att-live-time");
+	if (!el) return;
+	var d = new Date();
+	var h = d.getHours(), m = d.getMinutes();
+	var am = h < 12, h12 = h % 12; if (h12 === 0) h12 = 12;
+	el.textContent = pad2(h12) + ":" + pad2(m) + " " + (am ? "ص" : "م");
+}
+
+function loadAttendanceLog() {
+	frappe.call({
+		method: "saudi_hr.saudi_hr.api.get_attendance_status",
+		args: {},
+		callback: function(r) {
+			var st = r.message || {};
+			window.attStatus = st;
+			window.attCheckinTime = (st.last_log_type === "IN") ? parseCheckinTime(st.last_checkin_time) : null;
+			updateHomePunch();
+			updateHomeElapsed();
+			loadMonthlyAttendance();
+			var vf = st.verification_features || {};
+			var hint = document.getElementById("punch-next-hint");
+			var isIN = !st.last_log_type || st.last_log_type !== "IN";
+			var inBtn = document.getElementById("punch-in-btn");
+			var outBtn = document.getElementById("punch-out-btn");
+			if (inBtn) inBtn.style.display = isIN ? "" : "none";
+			if (outBtn) outBtn.style.display = isIN ? "none" : "";
+			hint.textContent = (isIN ? t("next_in") : t("next_out")) + (isIN && vf.photo_required ? " · 📷" : "") + (vf.voice_policy === "Required / إلزامي" ? " · 🎙" : "") + (st.location ? " · 📍" : "");
+			var container = document.getElementById("today-attendance-log");
+			var checkins = st.today_checkins || [];
+			if (!checkins.length) {
+				container.innerHTML = '<div class="saudi-empty"><p>' + t("no_punches") + '</p></div>';
+				return;
+			}
+			var html = "";
+			checkins.forEach(function(log) {
+				var timeStr = log.time ? log.time.slice(11, 16) : "";
+				var logType = log.log_type || "?";
+				html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;">' +
+					'<div style="font-size:13px;font-weight:700;color:#1f2937;">' + timeStr + '</div>' +
+					'<div style="font-size:12px;padding:3px 10px;border-radius:999px;font-weight:700;' +
+					(logType === "IN" ? "background:#dcfce7;color:#15803d;" : "background:#fee2e2;color:#b91c1c;") +
+					'">' + logType + '</div></div>';
+			});
+			container.innerHTML = html;
+		},
+		error: function() {
+			showSessionBanner();
+			var container = document.getElementById("today-attendance-log");
+			if (container) container.innerHTML = '<div class="saudi-empty"><p>' + t("submitted_err") + '</p></div>';
+		}
+	});
+}
+
+var MONTHLY_STATUS_LABELS = {
+	present: "present", late: "late", absent: "absent", leave: "leave",
+	half: "half", rest: "rest", upcoming: "upcoming", pending: "pending", other: "other"
+};
+
+function loadMonthlyAttendance() {
+	var sumEl = document.getElementById("monthly-summary");
+	var logEl = document.getElementById("monthly-attendance-log");
+	if (!sumEl && !logEl) return;
+	frappe.call({
+		method: "saudi_hr.saudi_hr.api.get_monthly_attendance",
+		args: {},
+		callback: function(r) {
+			window.monthlyAtt = r.message || {};
+			renderMonthlySummary();
+			renderMonthlyLog();
+		},
+		error: function() {
+			showSessionBanner();
+			var sumEl = document.getElementById("monthly-summary");
+			if (sumEl) sumEl.innerHTML = "";
+			var logEl = document.getElementById("monthly-attendance-log");
+			if (logEl) logEl.innerHTML = '<div class="saudi-empty"><p>' + t("submitted_err") + '</p></div>';
+		}
+	});
+}
+
+function renderMonthlySummary() {
+	var sumEl = document.getElementById("monthly-summary");
+	if (!sumEl) return;
+	var sum = (window.monthlyAtt && window.monthlyAtt.summary) || {};
+	var boxes = [
+		{ key: "present", label: t("summary_present"), cls: "saudi-summary-box--present" },
+		{ key: "absent", label: t("summary_absent"), cls: "saudi-summary-box--absent" },
+		{ key: "leave", label: t("summary_leave"), cls: "saudi-summary-box--leave" },
+		{ key: "rest", label: t("summary_rest"), cls: "saudi-summary-box--rest" }
+	];
+	var html = "";
+	boxes.forEach(function(b) {
+		html += '<div class="saudi-summary-box ' + b.cls + '"><div class="saudi-summary-box__num">' + (sum[b.key] || 0) + '</div><div class="saudi-summary-box__label">' + b.label + '</div></div>';
+	});
+	sumEl.innerHTML = html;
+	var lbl = document.getElementById("monthly-att-label");
+	if (lbl && window.monthlyAtt && window.monthlyAtt.month_label) {
+		lbl.textContent = window.monthlyAtt.month_label + " · " + t("monthly_summary");
+	}
+}
+
+function renderMonthlyLog() {
+	var logEl = document.getElementById("monthly-attendance-log");
+	if (!logEl) return;
+	var days = (window.monthlyAtt && window.monthlyAtt.days) || [];
+	if (!days.length) {
+		logEl.innerHTML = '<div class="saudi-empty"><p>' + t("no_punches") + '</p></div>';
+		return;
+	}
+	var html = "";
+	days.forEach(function(d) {
+		var kind = MONTHLY_STATUS_LABELS[d.status] || "other";
+		var badgeTxt = d.status_label || t("mlog_" + kind);
+		var times = "";
+		if ((kind === "present" || kind === "late" || kind === "half") && (d.in_time || d.out_time)) {
+			times = '<span class="saudi-mlog-row__times"> ↦ ' + (d.in_time || "—") + (d.out_time ? " ← " + d.out_time : "") + '</span>';
+		}
+		html += '<div class="saudi-mlog-row">' +
+			'<div class="saudi-mlog-row__date"><span class="saudi-mlog-row__num">' + d.date.slice(8, 10) + '</span>' +
+			'<span class="saudi-mlog-row__day">' + (d.day_label || "") + '</span></div>' +
+			'<div style="display:flex;align-items:center;gap:8px;">' + times +
+			'<span class="saudi-mlog-row__badge saudi-mlog-row__badge--' + kind + '">' + badgeTxt + '</span></div></div>';
+	});
+	logEl.innerHTML = html;
+}
+
+function startPunchFlow() {
+	var st = window.attStatus || {};
+	var vf = st.verification_features || {};
+	var isIN = !st.last_log_type || st.last_log_type !== "IN";
+	punchState = { vf: vf, isIn: isIN, lat: null, lng: null, photo: null, photoName: null, voiceToken: null, voiceText: null, voiceTranscript: null, submitting: false, locationRequired: !!(st.location) };
+	document.getElementById("punch-modal").style.display = "flex";
+	document.getElementById("punch-modal-title").textContent = isIN ? t("punch_in") : t("punch_out");
+	document.getElementById("punch-step-gps").style.display = punchState.locationRequired ? "block" : "none";
+	document.getElementById("punch-step-photo").style.display = (isIN && vf.photo_required) ? "block" : "none";
+	document.getElementById("punch-step-voice").style.display = (vf.voice_policy === "Required / إلزامي") ? "block" : "none";
+	document.getElementById("punch-submit-btn").disabled = true;
+	/* GPS */
+	if (punchState.locationRequired) { runPunchGps(); } else { document.getElementById("punch-submit-btn").disabled = false; }
+	/* Photo */
+	if (isIN && vf.photo_required) { startPunchCamera(); } else { stopPunchCamera(); document.getElementById("punch-photo-preview").innerHTML = ""; }
+	/* Voice */
+	if (vf.voice_policy === "Required / إلزامي") { initPunchVoice(); }
+}
+
+function closePunchModal() {
+	document.getElementById("punch-modal").style.display = "none";
+	document.getElementById("punch-submit-btn").disabled = false;
+	stopPunchCamera();
+}
+
+function runPunchGps() {
+	var el = document.getElementById("punch-gps-state");
+	el.textContent = t("locating");
+	el.className = "saudi-verify-step__state";
+	var dot = document.querySelector("#punch-step-gps .saudi-verify-step__dot");
+	if (dot) { dot.className = "saudi-verify-step__dot"; }
+	if (!navigator.geolocation) { el.textContent = t("gps_fail"); if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--err"; return; }
+	navigator.geolocation.getCurrentPosition(function(pos) {
+		punchState.lat = pos.coords.latitude;
+		punchState.lng = pos.coords.longitude;
+		el.textContent = t("gps_ok"); el.className = "saudi-verify-step__state ok";
+		if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--done";
+		updatePunchReady();
+	}, function() { el.textContent = t("gps_fail"); if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--err"; }, { enableHighAccuracy: true, timeout: 12000 });
+}
+
+var punchStream = null;
+
+function stopPunchCamera() {
+	if (punchStream) {
+		punchStream.getTracks().forEach(function(tr) { tr.stop(); });
+		punchStream = null;
+	}
+	var video = document.getElementById("punch-photo-video");
+	if (video) video.srcObject = null;
+}
+
+function startPunchCamera() {
+	var btn = document.getElementById("punch-photo-capture-btn");
+	var hint = document.getElementById("punch-photo-hint");
+	btn.disabled = false;
+	btn.innerHTML = "📷 <span data-i18n-key='capture_btn'>التقاط الصورة</span>";
+	if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+		hint.textContent = t("camera_unavailable");
+		btn.disabled = true;
+		return;
+	}
+	hint.textContent = t("camera_ready");
+	navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+		.then(function(stream) {
+			punchStream = stream;
+			var video = document.getElementById("punch-photo-video");
+			video.srcObject = stream;
+			video.play().catch(function() {});
+			hint.style.display = "none";
+			btn.disabled = false;
+		})
+		.catch(function() {
+			hint.style.display = "";
+			hint.textContent = t("camera_permission_error");
+			btn.disabled = true;
+			btn.textContent = t("camera_denied");
+		});
+}
+
+function capturePunchPhoto() {
+	var video = document.getElementById("punch-photo-video");
+	if (!video || !video.videoWidth) return;
+	var canvas = document.getElementById("punch-photo-canvas");
+	var w = video.videoWidth || 640;
+	var h = video.videoHeight || 480;
+	canvas.width = w;
+	canvas.height = h;
+	canvas.getContext("2d").drawImage(video, 0, 0, w, h);
+	var dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+	punchState.photo = dataUrl;
+	punchState.photoName = "checkin-photo.jpg";
+	document.getElementById("punch-photo-preview").innerHTML = '<img src="' + dataUrl + '" alt="">';
+	stopPunchCamera();
+	var cap = document.getElementById("punch-photo-capture-btn");
+	cap.innerHTML = "↺ " + t("photo_change");
+	cap.disabled = false;
+	document.getElementById("punch-photo-hint").style.display = "";
+	document.getElementById("punch-photo-hint").textContent = "✓ " + t("photo_done");
+	var dot = document.querySelector("#punch-step-photo .saudi-verify-step__dot");
+	if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--done";
+	updatePunchReady();
+	setTimeout(function() { document.getElementById("punch-photo-hint").style.display = "none"; }, 2500);
+}
+
+function onPunchPhotoButton() {
+	if (punchStream) { capturePunchPhoto(); }
+	else { startPunchCamera(); }
+}
+
+function initPunchVoice() {
+	frappe.call({
+		method: "saudi_hr.saudi_hr.api.issue_mobile_voice_challenge",
+		callback: function(r) {
+			if (r && r.message) {
+				punchState.voiceToken = r.message.challenge_token;
+				punchState.voiceText = r.message.challenge_text;
+				document.getElementById("punch-voice-challenge").textContent = punchState.voiceText;
+			}
+		}
+	});
+}
+
+function recordPunchVoice() {
+	var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+	if (!SR) { showToast(t("voice_unavailable"), "error"); return; }
+	var btn = document.getElementById("punch-voice-record-btn");
+	btn.classList.add("saudi-voice-record-btn--rec");
+	btn.textContent = t("voice_listening");
+	var rec = new SR();
+	rec.lang = "ar-SA"; rec.interimResults = false; rec.maxAlternatives = 3;
+	rec.onresult = function(e) {
+		var transcript = "";
+		for (var i = 0; i < e.results.length; i++) transcript += e.results[i][0].transcript;
+		var digits = transcript.replace(/[^\d]/g, "");
+		punchState.voiceTranscript = digits || transcript;
+		document.getElementById("punch-voice-result").textContent = digits ? t("voice_detected") + digits : t("voice_detected") + transcript;
+		btn.classList.remove("saudi-voice-record-btn--rec");
+		btn.textContent = t("voice_record");
+		rec.stop();
+		updatePunchReady();
+	};
+	rec.onerror = function() {
+		btn.classList.remove("saudi-voice-record-btn--rec");
+		btn.textContent = t("voice_record");
+		showToast(t("voice_unavailable"), "error");
+	};
+	rec.onend = function() {
+		btn.classList.remove("saudi-voice-record-btn--rec");
+		btn.textContent = t("voice_record");
+	};
+	rec.start();
+}
+
+function updatePunchReady() {
+	var vf = punchState.vf;
+	var ready = true;
+	if (punchState.locationRequired && !punchState.lat) ready = false;
+	if (punchState.isIn && vf.photo_required && !punchState.photo) ready = false;
+	if (vf.voice_policy === "Required / إلزامي" && !punchState.voiceTranscript && !document.getElementById("punch-voice-manual").value.trim()) ready = false;
+	document.getElementById("punch-submit-btn").disabled = !ready;
+}
+
+function submitPunch() {
+	if (punchState.submitting) return;
+	var vf = punchState.vf;
+	if (punchState.locationRequired && (!punchState.lat || !punchState.lng)) { showToast(t("gps_fail"), "error"); return; }
+	if (punchState.isIn && vf.photo_required && !punchState.photo) { showToast(t("photo_click"), "error"); return; }
+	var voiceTranscript = punchState.voiceTranscript || document.getElementById("punch-voice-manual").value.trim();
+	if (vf.voice_policy === "Required / إلزامي" && !voiceTranscript) { showToast(t("voice_required_warn"), "error"); return; }
+	punchState.submitting = true;
+	var btn = document.getElementById("punch-submit-btn");
+	btn.disabled = true;
+	btn.textContent = t("submitting");
+	var args = {
+		latitude: punchState.lat || null,
+		longitude: punchState.lng || null,
+		verification_mode: "gps",
+		verification_note: null,
+		challenge_token: punchState.voiceToken || null,
+		voice_payload_json: voiceTranscript ? JSON.stringify({ transcript: voiceTranscript }) : null,
+		photo: punchState.photo ? punchState.photo.split(",")[1] || punchState.photo : null,
+		photo_filename: punchState.photoName || null
+	};
+	frappe.call({
+		method: "saudi_hr.saudi_hr.api.mobile_attendance_api_checkin",
+		args: args,
+		callback: function(r) {
+			punchState.submitting = false;
+			closePunchModal();
+			var dm = (r.message && r.message.data) || r.message || {};
+			var msg = dm.message || (dm.log_type === "OUT" ? t("punch_ok_out") : t("punch_ok_in"));
+			showToast(msg, "success");
+			loadAttendanceLog();
+		},
+		error: function(err) {
+			punchState.submitting = false;
+			btn.disabled = false;
+			btn.textContent = t("confirm");
+			var msg = t("submitted_err");
+			if (err && err._server_messages && err._server_messages.length) {
+				var raw = err._server_messages[0] + "";
+				raw = raw.replace(/\\?"/g, "").replace(/<[^>]+>/g, "").trim();
+				if (raw) msg = raw;
+			}
+			showToast(msg, "error");
+		}
+	});
+}
+
+function showToast(msg, type) {
+	var el = document.getElementById("saudi-toast");
+	el.textContent = msg;
+	el.className = "saudi-toast saudi-toast--" + (type || "success") + " show";
+	setTimeout(function() { el.className = "saudi-toast"; }, 3000);
+}
+
+function renderRecentRequests(data) {
+	var rc = document.getElementById("recent-requests-container");
+	if (!rc || !data || !data.recent_requests || !data.recent_requests.length) return;
+	var ICON_MAP = {clock: "🕐", palm: "🌴", calendar: "📋", list: "📑", user: "👤", bell: "🔔", file: "📁", wallet: "👛", firstaid: "🩹"};
+	var rhtml = "";
+	data.recent_requests.forEach(function(req) {
+		var bc = req.status_code === "approved" ? "saudi-badge--approved" : (req.status_code === "rejected" ? "saudi-badge--rejected" : "saudi-badge--pending");
+		rhtml += '<div class="saudi-request-row"><div class="saudi-request-row__right"><div class="saudi-request-row__icon">' + (ICON_MAP[req.icon] || req.icon || "📋") + '</div>' +
+			'<div class="saudi-request-row__info"><strong>' + req.title + '</strong><span>' + req.dates + '</span></div></div>' +
+			'<div style="display:flex;align-items:center;gap:8px;"><span class="saudi-badge ' + bc + '">' + req.status + '</span></div></div>';
+	});
+	rc.innerHTML = rhtml;
+}
+
+/* Init */
+document.addEventListener("DOMContentLoaded", function() {
+	try { var saved = localStorage.getItem("saudi_hr_lang"); if (saved === "en") CURRENT_LANG = "en"; } catch(e) {}
+	applyLang();
+	initLeaveForm();
+
+	if (window.frappe) {
+		loadAttendanceLog();
+		setInterval(function() { updateHomeElapsed(); updateLiveClock(); }, 30000);
+	}
+
+	try { var panel = localStorage.getItem("saudi_hr_panel"); if (panel) navigate(panel); } catch(e) {}
+
+	if (window.frappe) {
+		frappe.call({
+			method: "saudi_hr.saudi_hr.enterprise_operations.get_self_service_portal",
+			callback: function(r) {
+				if (!r || !r.message) return;
+				var data = r.message;
+				if (data.employee) {
+					if (data.employee.employee_name) {
+						var n = data.employee.employee_name;
+						document.getElementById("user-name").textContent = n;
+						document.getElementById("hero-user-name").textContent = n;
+						document.getElementById("profile-name").textContent = n;
+					}
+					if (data.employee.designation) {
+						document.getElementById("user-role").textContent = data.employee.designation;
+						document.getElementById("profile-designation").textContent = data.employee.designation;
+					}
+					if (data.employee.image) {
+						var imgHtml = '<img src="' + data.employee.image + '" alt="Profile">';
+						document.getElementById("profile-avatar").innerHTML = imgHtml;
+						document.getElementById("profile-avatar-large").innerHTML = imgHtml;
+					}
+					if (data.employee.employee) document.getElementById("profile-employee-id").textContent = data.employee.employee;
+					if (data.employee.company_name) document.getElementById("profile-company").textContent = data.employee.company_name;
+					if (data.employee.department) document.getElementById("profile-department").textContent = data.employee.department;
+					if (data.employee.branch) document.getElementById("profile-branch").textContent = data.employee.branch;
+					if (data.employee.company_email) document.getElementById("profile-email").textContent = data.employee.company_email;
+				}
+				if (data.leave_balance) {
+					document.getElementById("leave-remaining-num").textContent = data.leave_balance.remaining_days;
+					document.getElementById("leave-ann-num").textContent = data.leave_balance.annual;
+					document.getElementById("leave-sick-num").textContent = data.leave_balance.sick;
+					document.getElementById("leave-marr-num").textContent = data.leave_balance.marriage;
+					document.getElementById("leave-bere-num").textContent = data.leave_balance.bereavement;
+					document.getElementById("leave-oth-num").textContent = data.leave_balance.other;
+				}
+				if (data.attendance_status) {
+					document.getElementById("att-status-label").textContent = data.attendance_status.status_label;
+					document.getElementById("att-live-time").textContent = data.attendance_status.time;
+					window.attLiveClock = !!data.attendance_status.live_clock;
+					updateLiveClock();
+				}
+				if (data.summary && data.summary.pending_acknowledgements) {
+					document.getElementById("ack-count").textContent = data.summary.pending_acknowledgements;
+				}
+				renderQuickActions(data);
+				window.myPortalData = data;
+				renderRecentRequests(data);
+			},
+			error: function() {
+				showSessionBanner();
+				renderQuickActions(null);
+			}
+		});
+	}
+});
+</script>
+{% endblock %}

@@ -1,0 +1,378 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "autoname": "naming_series:",
+ "creation": "2026-03-17 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "employee",
+  "employee_name",
+  "column_break_1",
+  "company",
+  "department",
+  "leave_details_section",
+  "from_date",
+  "to_date",
+  "total_days",
+  "column_break_2",
+  "medical_certificate_no",
+  "hospital_name",
+  "medical_certificate_attached",
+  "cumulative_section",
+  "benefit_cycle_start",
+  "benefit_cycle_end",
+  "sick_days_this_year_before",
+  "sick_days_this_year_after",
+  "column_break_3",
+  "full_pay_days",
+  "partial_pay_days",
+  "unpaid_days",
+  "pay_rate",
+  "pay_label",
+  "daily_salary",
+  "leave_pay_amount",
+  "policy_snapshot_section",
+  "leave_policy",
+  "leave_policy_assignment",
+  "entitlement_source",
+  "column_break_policy",
+  "policy_full_pay_days",
+  "policy_partial_pay_days",
+  "policy_partial_pay_percentage",
+  "entitlement_resolved_on",
+  "alert_section",
+  "alert_30_days",
+  "alert_90_days",
+  "cycle_boundary_review_required",
+  "cycle_boundary_note",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Naming Series",
+   "options": "SAU-SL-.YYYY.-.####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Employee / الموظف",
+   "options": "Employee",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "employee.employee_name",
+   "fieldname": "employee_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Employee Name / اسم الموظف",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "employee.company",
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company / الشركة",
+   "options": "Company",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fetch_from": "employee.department",
+   "fieldname": "department",
+   "fieldtype": "Link",
+   "label": "Department / القسم",
+   "options": "Department",
+   "read_only": 1
+  },
+  {
+   "fieldname": "leave_details_section",
+   "fieldtype": "Section Break",
+   "label": "Leave Details / تفاصيل الإجازة المرضية (م.117)"
+  },
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "From Date / من تاريخ",
+   "reqd": 1
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "To Date / إلى تاريخ",
+   "reqd": 1
+  },
+  {
+   "fieldname": "total_days",
+   "fieldtype": "Int",
+   "label": "Total Days / عدد الأيام",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "medical_certificate_no",
+   "fieldtype": "Data",
+   "label": "Medical Certificate No. / رقم الشهادة الطبية"
+  },
+  {
+   "fieldname": "hospital_name",
+   "fieldtype": "Data",
+   "label": "Hospital / المستشفى"
+  },
+  {
+   "default": "0",
+   "fieldname": "medical_certificate_attached",
+   "fieldtype": "Check",
+   "label": "Medical Certificate Attached / تم إرفاق الشهادة الطبية"
+  },
+  {
+   "fieldname": "cumulative_section",
+   "fieldtype": "Section Break",
+   "label": "Cumulative Sick Days / الأيام التراكمية للمرض"
+  },
+  {
+   "fieldname": "benefit_cycle_start",
+   "fieldtype": "Date",
+   "label": "Benefit Cycle Start / بداية دورة الاستحقاق",
+   "read_only": 1
+  },
+  {
+   "fieldname": "benefit_cycle_end",
+   "fieldtype": "Date",
+   "label": "Benefit Cycle End / نهاية دورة الاستحقاق",
+   "read_only": 1
+  },
+  {
+   "description": "Approved sick days before this leave in the one-year cycle beginning with the first sick leave / الأيام المعتمدة قبل هذه الإجازة ضمن دورة سنة تبدأ من أول إجازة مرضية",
+   "fieldname": "sick_days_this_year_before",
+   "fieldtype": "Int",
+   "label": "Cycle Sick Days (Before) / أيام الدورة (قبل)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "sick_days_this_year_after",
+   "fieldtype": "Int",
+   "label": "Cycle Sick Days (After) / أيام الدورة (بعد)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "full_pay_days",
+   "fieldtype": "Float",
+   "label": "Full-Pay Days / أيام بأجر كامل",
+   "read_only": 1
+  },
+  {
+   "fieldname": "partial_pay_days",
+   "fieldtype": "Float",
+   "label": "75% Pay Days / أيام بأجر 75%",
+   "read_only": 1
+  },
+  {
+   "fieldname": "unpaid_days",
+   "fieldtype": "Float",
+   "label": "Unpaid Days / أيام دون أجر",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pay_rate",
+   "fieldtype": "Percent",
+   "label": "Pay Rate % / نسبة الأجر %",
+   "read_only": 1
+  },
+  {
+   "fieldname": "pay_label",
+   "fieldtype": "Data",
+   "label": "Pay Category / فئة الأجر",
+   "read_only": 1
+  },
+  {
+   "fieldname": "daily_salary",
+   "fieldtype": "Currency",
+   "label": "Daily Salary / الأجر اليومي",
+   "read_only": 1
+  },
+  {
+   "fieldname": "leave_pay_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Leave Pay Amount / أجر الإجازة المرضية",
+   "read_only": 1
+  },
+  {
+   "fieldname": "policy_snapshot_section",
+   "fieldtype": "Section Break",
+   "label": "Applied Leave Policy / سياسة الإجازات المطبقة"
+  },
+  {
+   "fieldname": "leave_policy",
+   "fieldtype": "Link",
+   "label": "Leave Policy / سياسة الإجازات",
+   "options": "Saudi Leave Policy",
+   "read_only": 1
+  },
+  {
+   "fieldname": "leave_policy_assignment",
+   "fieldtype": "Link",
+   "label": "Policy Assignment / تعيين السياسة",
+   "options": "Saudi Leave Policy Assignment",
+   "read_only": 1
+  },
+  {
+   "fieldname": "entitlement_source",
+   "fieldtype": "Data",
+   "label": "Entitlement Source / مصدر الاستحقاق",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_policy",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "30",
+   "fieldname": "policy_full_pay_days",
+   "fieldtype": "Int",
+   "label": "Policy Full-Pay Days / أيام الأجر الكامل في السياسة",
+   "read_only": 1
+  },
+  {
+   "default": "60",
+   "fieldname": "policy_partial_pay_days",
+   "fieldtype": "Int",
+   "label": "Policy Partial-Pay Days / أيام الأجر الجزئي في السياسة",
+   "read_only": 1
+  },
+  {
+   "default": "75",
+   "fieldname": "policy_partial_pay_percentage",
+   "fieldtype": "Percent",
+   "label": "Policy Partial-Pay Percentage / نسبة الأجر الجزئي في السياسة",
+   "read_only": 1
+  },
+  {
+   "fieldname": "entitlement_resolved_on",
+   "fieldtype": "Datetime",
+   "label": "Resolved On / وقت احتساب السياسة",
+   "read_only": 1
+  },
+  {
+   "fieldname": "alert_section",
+   "fieldtype": "Section Break",
+   "label": "Alerts / التنبيهات"
+  },
+  {
+   "fieldname": "alert_30_days",
+   "fieldtype": "Check",
+   "label": "⚠ Exceeded 30 days — now at 75% pay / تجاوز 30 يوم",
+   "read_only": 1
+  },
+  {
+   "fieldname": "alert_90_days",
+   "fieldtype": "Check",
+   "label": "Entered unpaid tier after 90 cumulative days / دخل شريحة دون أجر بعد 90 يوماً",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cycle_boundary_review_required",
+   "fieldtype": "Check",
+   "label": "Cycle-Boundary Review Required / يلزم مراجعة تجاوز نهاية الدورة",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.cycle_boundary_review_required",
+   "fieldname": "cycle_boundary_note",
+   "fieldtype": "Small Text",
+   "label": "Cycle Review Note / ملاحظة مراجعة الدورة",
+   "read_only": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Saudi Sick Leave",
+   "print_hide": 1,
+   "read_only": 1
+  }
+ ],
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-03-17 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Saudi HR",
+ "name": "Saudi Sick Leave",
+ "naming_rule": "By \"Naming Series\" field",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "HR Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "print": 1,
+   "email": 1,
+   "report": 1,
+   "export": 1,
+   "share": 1
+  },
+  {
+   "role": "HR User",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "print": 1,
+   "email": 1,
+   "report": 1,
+   "export": 1,
+   "share": 1,
+   "submit": 1
+  },
+  {
+   "role": "Department Approver",
+   "read": 1,
+   "write": 1,
+   "print": 1,
+   "email": 1,
+   "report": 1
+  },
+  {
+    "role": "Employee",
+    "read": 1,
+    "write": 1,
+    "create": 1,
+    "print": 1
+  },
+  {
+   "role": "Employee Self Service",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "print": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "title_field": "employee_name",
+ "track_changes": 1
+}

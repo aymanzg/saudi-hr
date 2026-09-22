@@ -1,0 +1,1484 @@
+{
+ "charts": [
+  {
+   "chart_name": "Active Contracts by Type",
+   "label": "العقود النشطة حسب النوع"
+  },
+  {
+   "chart_name": "GOSI Monthly Contributions",
+   "label": "اشتراكات GOSI الشهرية"
+  },
+  {
+   "chart_name": "Compliance Actions by Area",
+   "label": "إجراءات الامتثال حسب المجال"
+  },
+  {
+   "chart_name": "Grievances by Type",
+   "label": "التظلمات حسب النوع"
+  },
+  {
+   "chart_name": "Investigations by Case Type",
+   "label": "التحقيقات حسب نوع الحالة"
+  },
+  {
+   "chart_name": "Legal Risk Distribution",
+   "label": "توزيع المخاطر النظامية"
+  },
+  {
+   "chart_name": "Nationality Distribution",
+   "label": "توزيع الجنسيات"
+  }
+ ],
+ "content": "[{\"id\": \"saudi_hr_header\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>الموارد البشرية السعودية</b></span>\", \"col\": 12}}, {\"id\": \"saudi_hr_subtitle\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h6 text-muted\\\">مساحة عمل احترافية لإدارة عمليات اليوم، ودورة الموظف، والحضور، والرواتب، والامتثال السعودي.</span>\", \"col\": 12}}, {\"id\": \"saudi_hr_spacer_top\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"saudi_hr_section_overview\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h5\\\"><b>نظرة تشغيلية</b></span>\", \"col\": 12}}, {\"id\": \"saudi_hr_metric_contracts\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"العقود النشطة\", \"col\": 3}}, {\"id\": \"saudi_hr_metric_iqamas\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"إقامات قريبة الانتهاء\", \"col\": 3}}, {\"id\": \"saudi_hr_metric_overtime\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"إضافي معلق\", \"col\": 3}}, {\"id\": \"saudi_hr_metric_gosi\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"GOSI هذا الشهر\", \"col\": 3}}, {\"id\": \"saudi_hr_spacer_daily\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"saudi_hr_section_daily\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h5\\\"><b>عمليات اليوم</b></span>\", \"col\": 12}}, {\"id\": \"saudi_hr_daily_hub\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"لوحة الموارد البشرية\", \"col\": 3}}, {\"id\": \"saudi_hr_daily_attendance\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"مركز الحضور\", \"col\": 3}}, {\"id\": \"saudi_hr_daily_mobile\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"الحضور عبر الجوال\", \"col\": 3}}, {\"id\": \"saudi_hr_daily_settings\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"إعدادات الموارد البشرية\", \"col\": 3}}, {\"id\": \"saudi_hr_daily_team_review\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"مراجعة حضور الفريق\", \"col\": 3}}, {\"id\": \"saudi_hr_daily_payroll\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"مسير الرواتب\", \"col\": 3}}, {\"id\": \"saudi_hr_daily_wps\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"متابعة WPS\", \"col\": 3}}, {\"id\": \"saudi_hr_daily_org\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"الهيكل التنظيمي\", \"col\": 3}}, {\"id\": \"saudi_hr_spacer_lifecycle\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"saudi_hr_section_lifecycle\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h5\\\"><b>دورة الموظف</b></span>\", \"col\": 12}}, {\"id\": \"saudi_hr_requisition\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"طلب توظيف\", \"col\": 3}}, {\"id\": \"saudi_hr_candidates\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"المرشحون\", \"col\": 3}}, {\"id\": \"saudi_hr_onboarding\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"تهيئة موظف\", \"col\": 3}}, {\"id\": \"saudi_hr_employee\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"ملف الموظف\", \"col\": 3}}, {\"id\": \"saudi_hr_contract\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"العقد السعودي\", \"col\": 3}}, {\"id\": \"saudi_hr_iqama\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"الإقامات والرخص\", \"col\": 3}}, {\"id\": \"saudi_hr_medical\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"الفحص الطبي\", \"col\": 3}}, {\"id\": \"saudi_hr_exit\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"نهاية الخدمة\", \"col\": 3}}, {\"id\": \"saudi_hr_spacer_payroll\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"saudi_hr_section_payroll\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h5\\\"><b>الحضور والرواتب والامتثال</b></span>\", \"col\": 12}}, {\"id\": \"saudi_hr_shift_tool\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"أداة توزيع الورديات\", \"col\": 3}}, {\"id\": \"saudi_hr_leave\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"الإجازات السنوية\", \"col\": 3}}, {\"id\": \"saudi_hr_leave_balance\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"رصيد الإجازات\", \"col\": 3}}, {\"id\": \"saudi_hr_salary_adjustment\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"تسوية راتب\", \"col\": 3}}, {\"id\": \"saudi_hr_wps\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"تقديم WPS\", \"col\": 3}}, {\"id\": \"saudi_hr_gosi\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"اشتراكات GOSI\", \"col\": 3}}, {\"id\": \"saudi_hr_nitaqat\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"نطاقات\", \"col\": 3}}, {\"id\": \"saudi_hr_compliance_log\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"إجراءات الامتثال\", \"col\": 3}}, {\"id\": \"saudi_hr_spacer_cards\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"saudi_hr_section_cards\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h5\\\"><b>الأدلة حسب المجال</b></span>\", \"col\": 12}}, {\"id\": \"saudi_hr_card_setup\", \"type\": \"card\", \"data\": {\"card_name\": \"الإعداد والتأسيس\", \"col\": 4}}, {\"id\": \"saudi_hr_card_hiring\", \"type\": \"card\", \"data\": {\"card_name\": \"التوظيف والعقود\", \"col\": 4}}, {\"id\": \"saudi_hr_card_time\", \"type\": \"card\", \"data\": {\"card_name\": \"الحضور والإجازات\", \"col\": 4}}, {\"id\": \"saudi_hr_card_requests\", \"type\": \"card\", \"data\": {\"card_name\": \"طلبات الموظفين\", \"col\": 4}}, {\"id\": \"saudi_hr_card_payroll\", \"type\": \"card\", \"data\": {\"card_name\": \"الرواتب والتأمينات\", \"col\": 4}}, {\"id\": \"saudi_hr_card_performance\", \"type\": \"card\", \"data\": {\"card_name\": \"الأداء والتطوير\", \"col\": 4}}, {\"id\": \"saudi_hr_card_relations\", \"type\": \"card\", \"data\": {\"card_name\": \"علاقات الموظفين\", \"col\": 4}}, {\"id\": \"saudi_hr_card_compliance\", \"type\": \"card\", \"data\": {\"card_name\": \"الامتثال والشؤون القانونية\", \"col\": 4}}, {\"id\": \"saudi_hr_card_exit\", \"type\": \"card\", \"data\": {\"card_name\": \"إنهاء الخدمة\", \"col\": 4}}, {\"id\": \"saudi_hr_card_reports\", \"type\": \"card\", \"data\": {\"card_name\": \"التقارير والتحليلات\", \"col\": 4}}, {\"id\": \"saudi_hr_spacer_governance\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"saudi_hr_section_governance\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h5\\\"><b>مؤشرات الحوكمة والتحليلات</b></span>\", \"col\": 12}}, {\"id\": \"saudi_hr_card_site_and_occupation\", \"type\": \"card\", \"data\": {\"card_name\": \"مواقع العمل والمهن المقصورة\", \"col\": 4}}, {\"id\": \"saudi_hr_card_regulation_records\", \"type\": \"card\", \"data\": {\"card_name\": \"لوائح وسجلات الامتثال\", \"col\": 4}}, {\"id\": \"saudi_hr_card_employee_evidence\", \"type\": \"card\", \"data\": {\"card_name\": \"إثباتات الموظفين والعقود\", \"col\": 4}}, {\"id\": \"saudi_hr_card_recruitment_providers\", \"type\": \"card\", \"data\": {\"card_name\": \"مكاتب التوظيف والاستقدام\", \"col\": 4}}, {\"id\": \"saudi_hr_card_working_controls\", \"type\": \"card\", \"data\": {\"card_name\": \"أنماط وساعات العمل\", \"col\": 4}}, {\"id\": \"saudi_hr_card_safety_inspection\", \"type\": \"card\", \"data\": {\"card_name\": \"السلامة والتفتيش والغرامات\", \"col\": 4}}, {\"id\": \"saudi_hr_metric_policies\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"السياسات المعتمدة\", \"col\": 3}}, {\"id\": \"saudi_hr_metric_compliance\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"إجراءات امتثال جارية\", \"col\": 3}}, {\"id\": \"saudi_hr_metric_grievances\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"تظلمات قيد المراجعة\", \"col\": 3}}, {\"id\": \"saudi_hr_metric_investigations\", \"type\": \"number_card\", \"data\": {\"number_card_name\": \"تحقيقات جارية\", \"col\": 3}}, {\"id\": \"saudi_hr_chart_contracts\", \"type\": \"chart\", \"data\": {\"chart_name\": \"العقود النشطة حسب النوع\", \"col\": 4}}, {\"id\": \"saudi_hr_chart_gosi\", \"type\": \"chart\", \"data\": {\"chart_name\": \"اشتراكات GOSI الشهرية\", \"col\": 4}}, {\"id\": \"saudi_hr_chart_compliance\", \"type\": \"chart\", \"data\": {\"chart_name\": \"إجراءات الامتثال حسب المجال\", \"col\": 4}}, {\"id\": \"saudi_hr_chart_legal_risk\", \"type\": \"chart\", \"data\": {\"chart_name\": \"توزيع المخاطر النظامية\", \"col\": 4}}, {\"id\": \"saudi_hr_chart_nationality\", \"type\": \"chart\", \"data\": {\"chart_name\": \"توزيع الجنسيات\", \"col\": 4}}]",
+ "creation": "2026-07-22 10:23:32.817012",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "users",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "Saudi HR",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "الإعداد والتأسيس",
+   "link_count": 6,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "إعدادات الموارد البشرية",
+   "link_count": 0,
+   "link_to": "Saudi HR Settings",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "مواقع الحضور",
+   "link_count": 0,
+   "link_to": "Attendance Location",
+   "link_type": "DocType",
+   "onboard": 1,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "أنواع الورديات",
+   "link_count": 0,
+   "link_to": "Saudi Shift Type",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "توزيع الورديات",
+   "link_count": 0,
+   "link_to": "Saudi Shift Assignment",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "السياسات",
+   "link_count": 0,
+   "link_to": "HR Policy Document",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "مصفوفة المراجع النظامية",
+   "link_count": 0,
+   "link_to": "Legal Reference Matrix",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "التوظيف والعقود",
+   "link_count": 7,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "طلب توظيف",
+   "link_count": 0,
+   "link_to": "Hiring Requisition",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "المرشحون",
+   "link_count": 0,
+   "link_to": "Candidate Profile",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "تهيئة موظف",
+   "link_count": 0,
+   "link_to": "Employee Onboarding",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "ملف الموظف",
+   "link_count": 0,
+   "link_to": "Employee",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "العقد السعودي",
+   "link_count": 0,
+   "link_to": "Saudi Employment Contract",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "الفحص الطبي",
+   "link_count": 0,
+   "link_to": "Medical Examination",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "الإقامات والرخص",
+   "link_count": 0,
+   "link_to": "Work Permit Iqama",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "الحضور والإجازات",
+   "link_count": 13,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "مركز الحضور",
+   "link_count": 0,
+   "link_to": "attendance-action-hub",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "الحضور عبر الجوال",
+   "link_count": 0,
+   "link_to": "mobile-attendance",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "سجلات الحضور",
+   "link_count": 0,
+   "link_to": "Saudi Employee Checkin",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "الحضور اليومي",
+   "link_count": 0,
+   "link_to": "Saudi Daily Attendance",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "سجل الحضور الشهري",
+   "link_count": 0,
+   "link_to": "Monthly Attendance Record",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "الإجازات السنوية",
+   "link_count": 0,
+   "link_to": "Saudi Annual Leave",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "الإجازات المرضية",
+   "link_count": 0,
+   "link_to": "Saudi Sick Leave",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "إجازة الأمومة/الأبوة",
+   "link_count": 0,
+   "link_to": "Maternity Paternity Leave",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "إجازة خاصة",
+   "link_count": 0,
+   "link_to": "Special Leave",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "سياسة استحقاق الإجازات",
+   "link_count": 0,
+   "link_to": "Saudi Leave Policy",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "إسناد سياسة الإجازات",
+   "link_count": 0,
+   "link_to": "Saudi Leave Policy Assignment",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "رصيد الإجازات",
+   "link_count": 0,
+   "link_to": "Saudi Leave Balance Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "بصمة الصوت",
+   "link_count": 0,
+   "link_to": "Saudi Employee Voice Profile",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "طلبات الموظفين",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "طلبات الخدمة",
+   "link_count": 0,
+   "link_to": "HR Service Request",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "إجازات الجوال",
+   "link_count": 0,
+   "link_to": "Mobile Leave Request",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "الرواتب والتأمينات",
+   "link_count": 9,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "مسير الرواتب",
+   "link_count": 0,
+   "link_to": "Saudi Monthly Payroll",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "تسوية راتب",
+   "link_count": 0,
+   "link_to": "Salary Adjustment",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "طلب عمل إضافي",
+   "link_count": 0,
+   "link_to": "Overtime Request",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "سلف الموظفين",
+   "link_count": 0,
+   "link_to": "Employee Loan",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "اشتراكات GOSI",
+   "link_count": 0,
+   "link_to": "GOSI Contribution",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "تقديم WPS",
+   "link_count": 0,
+   "link_to": "WPS Submission",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "تصدير WPS",
+   "link_count": 0,
+   "link_to": "WPS Export Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "متابعة WPS",
+   "link_count": 0,
+   "link_to": "WPS Submission Tracker",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "نطاقات",
+   "link_count": 0,
+   "link_to": "Nitaqat Record",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "الأداء والتطوير",
+   "link_count": 5,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "تقييم الأداء",
+   "link_count": 0,
+   "link_to": "Performance Review",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "ترقية/نقل",
+   "link_count": 0,
+   "link_to": "Promotion Transfer",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "تدريب",
+   "link_count": 0,
+   "link_to": "Training Record",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "الهيكل التنظيمي",
+   "link_count": 0,
+   "link_to": "employee-org-tree",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "مراجعة حضور الفريق",
+   "link_count": 0,
+   "link_to": "Team Attendance Review",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "علاقات الموظفين",
+   "link_count": 5,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "التظلمات",
+   "link_count": 0,
+   "link_to": "Employee Grievance",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "التحقيقات",
+   "link_count": 0,
+   "link_to": "Investigation Record",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "إنذارات الموظفين",
+   "link_count": 0,
+   "link_to": "Employee Warning Notice",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "حالات الغياب",
+   "link_count": 0,
+   "link_to": "Absence Case",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "إصابات العمل",
+   "link_count": 0,
+   "link_to": "Work Injury",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "الامتثال والشؤون القانونية",
+   "link_count": 8,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "مهام تنظيمية سعودية",
+   "link_count": 0,
+   "link_to": "Saudi Regulatory Task",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "إقرار السياسات",
+   "link_count": 0,
+   "link_to": "Policy Acknowledgement",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "إجراء تأديبي",
+   "link_count": 0,
+   "link_to": "Disciplinary Procedure",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "سجل القرارات التأديبية",
+   "link_count": 0,
+   "link_to": "Disciplinary Decision Log",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "استئناف تأديبي",
+   "link_count": 0,
+   "link_to": "Disciplinary Appeal",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "نزاع عمالي",
+   "link_count": 0,
+   "link_to": "Labor Dispute",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "تفتيش عمالي",
+   "link_count": 0,
+   "link_to": "Labor Inspection",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "سجل إجراءات الامتثال",
+   "link_count": 0,
+   "link_to": "HR Compliance Action Log",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "إنهاء الخدمة",
+   "link_count": 6,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "إشعار إنهاء الخدمة",
+   "link_count": 0,
+   "link_to": "Termination Notice",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Final Settlement SLA",
+   "link_count": 0,
+   "link_to": "Final Settlement SLA",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "إخلاء طرف",
+   "link_count": 0,
+   "link_to": "Exit Clearance",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "مقابلة خروج",
+   "link_count": 0,
+   "link_to": "Exit Interview",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "مكافأة نهاية الخدمة",
+   "link_count": 0,
+   "link_to": "End of Service Benefit",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "صرف الإجازة السنوية",
+   "link_count": 0,
+   "link_to": "Annual Leave Disbursement",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "لوائح وسجلات الامتثال",
+   "link_count": 7,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Saudi HR Command Center",
+   "link_count": 0,
+   "link_to": "saudi-compliance-command-center",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Work Regulation",
+   "link_count": 0,
+   "link_to": "Work Regulation",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Disciplinary Violation Catalog",
+   "link_count": 0,
+   "link_to": "Disciplinary Violation Catalog",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Disability Accommodation Catalog",
+   "link_count": 0,
+   "link_to": "Disability Accommodation Catalog",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Statutory HR Records Register",
+   "link_count": 0,
+   "link_to": "Statutory HR Records Register",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Ministry Filing Tracker",
+   "link_count": 0,
+   "link_to": "Ministry Filing Tracker",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Training Disclosure Register",
+   "link_count": 0,
+   "link_to": "Training Disclosure Register",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "إثباتات الموظفين والعقود",
+   "link_count": 5,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Employee Document Custody Log",
+   "link_count": 0,
+   "link_to": "Employee Document Custody Log",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Contract Portal Evidence",
+   "link_count": 0,
+   "link_to": "Contract Portal Evidence",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Training Agreement",
+   "link_count": 0,
+   "link_to": "Training Agreement",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Disability Employment Compliance",
+   "link_count": 0,
+   "link_to": "Disability Employment Compliance",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Expat Work Authorization Control",
+   "link_count": 0,
+   "link_to": "Expat Work Authorization Control",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "مكاتب التوظيف والاستقدام",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Recruitment Service Provider Compliance",
+   "link_count": 0,
+   "link_to": "Recruitment Service Provider Compliance",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Recruitment Provider Complaint",
+   "link_count": 0,
+   "link_to": "Recruitment Provider Complaint",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "أنماط وساعات العمل",
+   "link_count": 5,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Work Arrangement Control",
+   "link_count": 0,
+   "link_to": "Work Arrangement Control",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Working Time Compliance Check",
+   "link_count": 0,
+   "link_to": "Working Time Compliance Check",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Holiday Leave Overlap Rule",
+   "link_count": 0,
+   "link_to": "Holiday Leave Overlap Rule",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Special Employment Category Control",
+   "link_count": 0,
+   "link_to": "Special Employment Category Control",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Juvenile Prohibited Work",
+   "link_count": 0,
+   "link_to": "Juvenile Prohibited Work",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "السلامة والتفتيش والغرامات",
+   "link_count": 5,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Safety Inspection and Risk Control",
+   "link_count": 0,
+   "link_to": "Safety Inspection and Risk Control",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "First Aid Cabinet Register",
+   "link_count": 0,
+   "link_to": "First Aid Cabinet Register",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Inspection Fine SLA",
+   "link_count": 0,
+   "link_to": "Inspection Fine SLA",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Labor Inspection",
+   "link_count": 0,
+   "link_to": "Labor Inspection",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Work Injury",
+   "link_count": 0,
+   "link_to": "Work Injury",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "مواقع العمل والمهن المقصورة",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Remote Work Site Compliance",
+   "link_count": 0,
+   "link_to": "Remote Work Site Compliance",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Saudi Only Profession",
+   "link_count": 0,
+   "link_to": "Saudi Only Profession",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "التقارير والتحليلات",
+   "link_count": 17,
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "مصفوفة تغطية نظام العمل",
+   "link_count": 0,
+   "link_to": "Saudi Labor Coverage Matrix",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Saudi Compliance Obligation Backlog",
+   "link_count": 0,
+   "link_to": "Saudi Compliance Obligation Backlog",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Saudi Legal Review Queue",
+   "link_count": 0,
+   "link_to": "Saudi Legal Review Queue",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "سجل الالتزام بالسياسات",
+   "link_count": 0,
+   "link_to": "Policy Compliance Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "متابعة قضايا الامتثال",
+   "link_count": 0,
+   "link_to": "Compliance Case Tracker",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "متابعة التفتيش العمالي",
+   "link_count": 0,
+   "link_to": "Labor Inspection Tracker",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "تقرير GOSI الشهري",
+   "link_count": 0,
+   "link_to": "GOSI Monthly Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "تقرير مكافأة نهاية الخدمة",
+   "link_count": 0,
+   "link_to": "EOSB Calculation Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "تقرير انتهاء العقود",
+   "link_count": 0,
+   "link_to": "Contract Expiry Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "تقرير انتهاء رخص العمل",
+   "link_count": 0,
+   "link_to": "Work Permit Expiry Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "تقرير نطاقات",
+   "link_count": 0,
+   "link_to": "Nitaqat Compliance Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "رصيد الإجازات",
+   "link_count": 0,
+   "link_to": "Saudi Leave Balance Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "السلف القائمة",
+   "link_count": 0,
+   "link_to": "Outstanding Employee Loans",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "سجل خصومات السلف",
+   "link_count": 0,
+   "link_to": "Loan Deduction Register",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "ملخص استرداد السلف",
+   "link_count": 0,
+   "link_to": "Monthly Loan Recovery Summary",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "تصدير WPS",
+   "link_count": 0,
+   "link_to": "WPS Export Report",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "متابعة WPS",
+   "link_count": 0,
+   "link_to": "WPS Submission Tracker",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-09-17 12:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Saudi HR",
+ "name": "Saudi HR",
+ "number_cards": [
+  {
+   "label": "العقود النشطة",
+   "number_card_name": "Total Active Contracts"
+  },
+  {
+   "label": "إقامات قريبة الانتهاء",
+   "number_card_name": "Expiring Iqamas"
+  },
+  {
+   "label": "إضافي معلق",
+   "number_card_name": "Pending Overtime"
+  },
+  {
+   "label": "GOSI هذا الشهر",
+   "number_card_name": "Total GOSI This Month"
+  },
+  {
+   "label": "السياسات المعتمدة",
+   "number_card_name": "Approved HR Policies"
+  },
+  {
+   "label": "إجراءات امتثال جارية",
+   "number_card_name": "Compliance Actions In Progress"
+  },
+  {
+   "label": "تظلمات قيد المراجعة",
+   "number_card_name": "Grievances Under Review"
+  },
+  {
+   "label": "تحقيقات جارية",
+   "number_card_name": "Investigations In Progress"
+  },
+  {
+   "label": "إجراءات امتثال مكتملة",
+   "number_card_name": "Completed Compliance Actions"
+  },
+  {
+   "label": "تظلمات محلولة",
+   "number_card_name": "Resolved Grievances"
+  },
+  {
+   "label": "استئنافات قيد المراجعة",
+   "number_card_name": "Appeals Under Review"
+  },
+  {
+   "label": "مراجع نظامية عالية المخاطر",
+   "number_card_name": "High Risk Legal References"
+  }
+ ],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 29.0,
+ "shortcuts": [
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "label": "مركز العمليات المؤسسي",
+   "link_to": "saudi-enterprise-center",
+   "type": "Page"
+  },
+  {
+   "color": "Teal",
+   "doc_view": "List",
+   "label": "بوابة الموظف والمدير",
+   "link_to": "saudi-self-service",
+   "type": "Page"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "الدليل النظامي العربي",
+   "link_to": "saudi-hr-legal-guide",
+   "type": "Page"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "label": "لوحة الموارد البشرية",
+   "link_to": "professional-hr-hub",
+   "type": "Page"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "label": "مركز الحضور",
+   "link_to": "attendance-action-hub",
+   "type": "Page"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "الحضور عبر الجوال",
+   "link_to": "mobile-attendance",
+   "type": "Page"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "إعدادات الموارد البشرية",
+   "link_to": "Saudi HR Settings",
+   "type": "DocType"
+  },
+  {
+   "color": "Cyan",
+   "doc_view": "List",
+   "label": "مراجعة حضور الفريق",
+   "link_to": "Team Attendance Review",
+   "report_ref_doctype": "Employee",
+   "type": "Report"
+  },
+  {
+   "color": "Red",
+   "doc_view": "List",
+   "label": "مسير الرواتب",
+   "link_to": "Saudi Monthly Payroll",
+   "type": "DocType"
+  },
+  {
+   "color": "Cyan",
+   "doc_view": "List",
+   "label": "متابعة WPS",
+   "link_to": "WPS Submission Tracker",
+   "report_ref_doctype": "WPS Submission",
+   "type": "Report"
+  },
+  {
+   "color": "Teal",
+   "doc_view": "List",
+   "label": "الهيكل التنظيمي",
+   "link_to": "employee-org-tree",
+   "type": "Page"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "طلب توظيف",
+   "link_to": "Hiring Requisition",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "label": "المرشحون",
+   "link_to": "Candidate Profile",
+   "type": "DocType"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "List",
+   "label": "تهيئة موظف",
+   "link_to": "Employee Onboarding",
+   "type": "DocType"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "ملف الموظف",
+   "link_to": "Employee",
+   "type": "DocType"
+  },
+  {
+   "color": "Purple",
+   "doc_view": "List",
+   "label": "العقد السعودي",
+   "link_to": "Saudi Employment Contract",
+   "type": "DocType"
+  },
+  {
+   "color": "Yellow",
+   "doc_view": "List",
+   "label": "الإقامات والرخص",
+   "link_to": "Work Permit Iqama",
+   "type": "DocType"
+  },
+  {
+   "color": "Cyan",
+   "doc_view": "List",
+   "label": "الفحص الطبي",
+   "link_to": "Medical Examination",
+   "type": "DocType"
+  },
+  {
+   "color": "Red",
+   "doc_view": "List",
+   "label": "نهاية الخدمة",
+   "link_to": "Exit Clearance",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "label": "أداة توزيع الورديات",
+   "link_to": "Saudi Shift Assignment Tool",
+   "type": "DocType"
+  },
+  {
+   "color": "Yellow",
+   "doc_view": "List",
+   "label": "الإجازات السنوية",
+   "link_to": "Saudi Annual Leave",
+   "type": "DocType"
+  },
+  {
+   "color": "Cyan",
+   "doc_view": "List",
+   "label": "رصيد الإجازات",
+   "link_to": "Saudi Leave Balance Report",
+   "report_ref_doctype": "Employee",
+   "type": "Report"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "List",
+   "label": "تسوية راتب",
+   "link_to": "Salary Adjustment",
+   "type": "DocType"
+  },
+  {
+   "color": "Red",
+   "doc_view": "List",
+   "label": "تقديم WPS",
+   "link_to": "WPS Submission",
+   "type": "DocType"
+  },
+  {
+   "color": "Purple",
+   "doc_view": "List",
+   "label": "اشتراكات GOSI",
+   "link_to": "GOSI Contribution",
+   "type": "DocType"
+  },
+  {
+   "color": "Green",
+   "doc_view": "List",
+   "label": "نطاقات",
+   "link_to": "Nitaqat Record",
+   "type": "DocType"
+  },
+  {
+   "color": "Blue",
+   "doc_view": "List",
+   "label": "إجراءات الامتثال",
+   "link_to": "HR Compliance Action Log",
+   "type": "DocType"
+  }
+ ],
+ "title": "Saudi HR"
+}

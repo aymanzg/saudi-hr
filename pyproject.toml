@@ -1,0 +1,54 @@
+[project]
+name = "saudi_hr"
+authors = [
+    { name = "IdeaOrbit", email = "info@ideaorbit.net"}
+]
+description = "Saudi HR Management System — نظام إدارة شؤون الموظفين وفق نظام العمل السعودي"
+requires-python = ">=3.10"
+readme = "README.md"
+dynamic = ["version"]
+dependencies = [
+    # Managed by bench
+    "openpyxl>=3.1.0",
+    "openlocationcode>=1.0.1",
+]
+
+[project.optional-dependencies]
+voice-full = [
+    "numpy<2",
+    "torch>=2.2.0",
+    "torchaudio>=2.2.0",
+    "speechbrain>=1.1.0",
+    "faster-whisper>=1.2.1",
+]
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.bench.dev-dependencies]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "I", "UP"]
+ignore = [
+    "E101",  # indentation contains mixed spaces and tabs
+    "W191",  # indentation contains tabs
+]
+
+[tool.ruff.format]
+indent-style = "tab"
+
+[tool.pytest.ini_options]
+# Standalone unit tests that run without a live Frappe site.
+# The FrappeTestCase-based tests in test_saudi_monthly_payroll.py require
+# `bench run-tests`; they are excluded here to avoid setup errors.
+testpaths = [
+    "saudi_hr/saudi_hr/doctype/saudi_monthly_payroll",
+]
+python_files = ["test_payroll_employee_fetch.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

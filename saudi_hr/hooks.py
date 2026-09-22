@@ -1,0 +1,217 @@
+
+
+app_name = "saudi_hr"
+app_title = "Saudi HR"
+app_publisher = "IdeaOrbit"
+app_description = "Saudi HR Management System per Saudi Labor Law (Royal Decree M/51)"
+app_email = "info@ideaorbit.net"
+app_license = "GPL-3.0"
+required_apps = ["frappe/erpnext"]
+
+# Apps Screen
+add_to_apps_screen = [
+	{
+		"name": "saudi_hr",
+		"logo": "/assets/saudi_hr/images/logo.svg",
+		"title": "Saudi HR",
+		"route": "/desk/saudi-hr",
+	},
+	{
+		"name": "saudi_hr_mobile",
+		"logo": "/assets/saudi_hr/images/logo.svg",
+		"title": "Mobile Attendance",
+		"route": "/mobile-attendance",
+	},
+]
+
+# ─── Web Routes ──────────────────────────────────────────────────────────────────
+website_route_rules = [
+	{"from_route": "/mobile-attendance", "to_route": "mobile-attendance"},
+]
+
+# ─── Scheduled Tasks ───────────────────────────────────────────────────────────
+# Runs every day at midnight to send expiry alerts
+scheduler_events = {
+	"daily": [
+		"saudi_hr.saudi_hr.tasks.sync_contract_statuses",
+		"saudi_hr.saudi_hr.tasks.send_iqama_expiry_alerts",
+		"saudi_hr.saudi_hr.tasks.send_contract_expiry_alerts",
+		"saudi_hr.saudi_hr.tasks.send_work_permit_expiry_alerts",
+		"saudi_hr.saudi_hr.tasks.send_sick_leave_threshold_alerts",
+		"saudi_hr.saudi_hr.tasks.send_probation_end_alerts",
+		"saudi_hr.saudi_hr.tasks.send_ministry_filing_due_alerts",
+		"saudi_hr.saudi_hr.tasks.send_final_settlement_sla_alerts",
+		"saudi_hr.saudi_hr.tasks.send_employee_document_custody_alerts",
+		"saudi_hr.saudi_hr.tasks.send_inspection_fine_sla_alerts",
+		"saudi_hr.saudi_hr.tasks.send_wps_correction_due_alerts",
+		"saudi_hr.saudi_hr.tasks.send_work_regulation_review_alerts",
+		"saudi_hr.saudi_hr.tasks.send_expat_authorization_due_alerts",
+		"saudi_hr.saudi_hr.tasks.send_training_disclosure_due_alerts",
+	],
+	"monthly": [
+		"saudi_hr.saudi_hr.tasks.send_gosi_due_alerts",
+	],
+	"weekly": [
+		"saudi_hr.saudi_hr.tasks.send_iqama_expiry_alerts",
+	],
+}
+
+# ─── Document Events ────────────────────────────────────────────────────────────
+doc_events = {
+	"Overtime Request": {
+		"on_submit": "saudi_hr.saudi_hr.doctype.overtime_request.overtime_request.create_overtime_journal_entry",
+	},
+	"GOSI Contribution": {
+		"on_submit": "saudi_hr.saudi_hr.doctype.gosi_contribution.gosi_contribution.create_payroll_entries",
+	},
+	"Policy Acknowledgement": {
+		"after_insert": "saudi_hr.saudi_hr.doctype.policy_acknowledgement.policy_acknowledgement.update_policy_acknowledgement_summary",
+		"on_update": "saudi_hr.saudi_hr.doctype.policy_acknowledgement.policy_acknowledgement.update_policy_acknowledgement_summary",
+		"on_trash": "saudi_hr.saudi_hr.doctype.policy_acknowledgement.policy_acknowledgement.update_policy_acknowledgement_summary",
+	},
+	"Termination Notice": {
+		"on_submit": "saudi_hr.saudi_hr.compliance_controls.create_final_settlement_from_termination",
+	},
+	"Work Regulation": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Statutory HR Records Register": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Ministry Filing Tracker": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Disability Employment Compliance": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Final Settlement SLA": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Work Arrangement Control": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Working Time Compliance Check": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Inspection Fine SLA": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Special Employment Category Control": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Holiday Leave Overlap Rule": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Expat Work Authorization Control": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Training Disclosure Register": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"First Aid Cabinet Register": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Remote Work Site Compliance": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Disciplinary Procedure": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Recruitment Service Provider Compliance": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Recruitment Provider Complaint": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+	"Training Agreement": {
+		"validate": "saudi_hr.saudi_hr.compliance_controls.validate_compliance_doc",
+	},
+}
+
+doctype_js = {
+	"Employee": "public/js/employee.js",
+}
+
+override_doctype_dashboards = {
+	"Employee": "saudi_hr.saudi_hr.employee_dashboard.get_data",
+}
+
+app_include_css = [
+	"/assets/saudi_hr/css/employee_profile.css?v=20260729-3",
+]
+
+app_include_js = [
+	"/assets/saudi_hr/js/desk_shortcuts.js?v=20260729-1",
+	"/assets/saudi_hr/js/desk_polish_20260722.js?v=20260722-2",
+]
+
+# ─── Custom Fields on Employee ──────────────────────────────────────────────────
+# Added via install.py to avoid modifying ERPNext directly
+# custom_fields = {}
+
+# ─── Jinja ──────────────────────────────────────────────────────────────────────
+jinja = {
+	"methods": [
+		"saudi_hr.saudi_hr.utils.get_eosb_amount",
+		"saudi_hr.saudi_hr.utils.get_annual_leave_entitlement",
+		"saudi_hr.saudi_hr.utils.get_gosi_rates",
+		"saudi_hr.saudi_hr.utils.get_active_contract",
+		"saudi_hr.saudi_hr.utils.assert_employee_salary_access",
+		"saudi_hr.saudi_hr.utils.assert_complete_employee_file_access",
+	]
+}
+
+# ─── Override Whitelisted Methods ───────────────────────────────────────────────
+override_whitelisted_methods = {}
+
+permission_query_conditions = {
+	"Saudi Employee Checkin": "saudi_hr.saudi_hr.permissions.get_saudi_employee_checkin_query",
+	"Saudi Daily Attendance": "saudi_hr.saudi_hr.permissions.get_saudi_daily_attendance_query",
+	"Monthly Attendance Record": "saudi_hr.saudi_hr.permissions.get_monthly_attendance_record_query",
+	"Saudi Annual Leave": "saudi_hr.saudi_hr.permissions.get_saudi_annual_leave_query",
+	"Saudi Sick Leave": "saudi_hr.saudi_hr.permissions.get_saudi_sick_leave_query",
+	"Overtime Request": "saudi_hr.saudi_hr.permissions.get_overtime_request_query",
+	"Salary Adjustment": "saudi_hr.saudi_hr.permissions.get_salary_adjustment_query",
+	"Maternity Paternity Leave": "saudi_hr.saudi_hr.permissions.get_maternity_paternity_leave_query",
+	"Special Leave": "saudi_hr.saudi_hr.permissions.get_special_leave_query",
+	"Attendance Location": "saudi_hr.saudi_hr.permissions.get_attendance_location_query",
+	"Policy Acknowledgement": "saudi_hr.saudi_hr.permissions.get_policy_acknowledgement_query",
+	"Employee Grievance": "saudi_hr.saudi_hr.permissions.get_employee_grievance_query",
+}
+
+has_permission = {
+	"Saudi Employee Checkin": "saudi_hr.saudi_hr.permissions.has_saudi_employee_checkin_permission",
+	"Saudi Daily Attendance": "saudi_hr.saudi_hr.permissions.has_saudi_daily_attendance_permission",
+	"Monthly Attendance Record": "saudi_hr.saudi_hr.permissions.has_monthly_attendance_record_permission",
+	"Saudi Annual Leave": "saudi_hr.saudi_hr.permissions.has_saudi_annual_leave_permission",
+	"Saudi Sick Leave": "saudi_hr.saudi_hr.permissions.has_saudi_sick_leave_permission",
+	"Overtime Request": "saudi_hr.saudi_hr.permissions.has_overtime_request_permission",
+	"Salary Adjustment": "saudi_hr.saudi_hr.permissions.has_salary_adjustment_permission",
+	"Maternity Paternity Leave": "saudi_hr.saudi_hr.permissions.has_maternity_paternity_leave_permission",
+	"Special Leave": "saudi_hr.saudi_hr.permissions.has_special_leave_permission",
+	"Attendance Location": "saudi_hr.saudi_hr.permissions.has_attendance_location_permission",
+	"Policy Acknowledgement": "saudi_hr.saudi_hr.permissions.has_policy_acknowledgement_permission",
+	"Employee Grievance": "saudi_hr.saudi_hr.permissions.has_employee_grievance_permission",
+}
+
+after_install = "saudi_hr.install.after_install"
+
+# ─── Fixtures ───────────────────────────────────────────────────────────────────
+fixtures = [
+	{
+		"doctype": "Custom Field",
+		"filters": [["module", "=", "Saudi HR"]],
+	},
+	{
+		"doctype": "Property Setter",
+		"filters": [["module", "=", "Saudi HR"]],
+	},
+	{
+		"doctype": "Workflow",
+		"filters": [["module", "=", "Saudi HR"]],
+	},
+	"Attendance Location",
+]
+
+# ─── Migration Hooks ───────────────────────────────────────────────────────
+after_migrate = ["saudi_hr.install.after_migrate"]
