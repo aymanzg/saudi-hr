@@ -1754,6 +1754,15 @@ MOBILE_LEAVE_REQUEST_LABELS = {
 }
 
 
+def _leave_status_code(status, docstatus=None):
+	status = status or ""
+	if (docstatus or 0) == 1 or "معتمد" in status or "Approved" in status:
+		return "approved"
+	if (docstatus or 0) == 2 or "مرفوض" in status or "Rejected" in status:
+		return "rejected"
+	return "pending"
+
+
 @frappe.whitelist()
 def get_my_requests(limit=30, status=None):
 	employee, _profile = _require_employee_context()
@@ -1804,6 +1813,40 @@ def get_my_requests(limit=30, status=None):
 			"to_date": str(row.to_date) if row.to_date else None,
 			"amount": row.amount,
 		})
+
+	for doctype, category, start_field, end_field, days_field, subtype_field, status_field in [
+		("Saudi Annual Leave", "Annual Leave / إجازة سنوية", "leave_start_date", "leave_end_date", "total_leave_days", None, "status"),
+		("Saudi Sick Leave", "Sick Leave / إجازة مرضية", "from_date", "to_date", "total_days", None, None),
+		("Overtime Request", "Overtime / عمل إضافي", "date", "date", "overtime_hours", None, "approval_status"),
+		("Special Leave", "Special Leave / إجازة خاصة", "leave_start_date", "leave_end_date", "actual_days", "leave_type", "status"),
+		("Maternity Paternity Leave", "Maternity / Paternity / أمومة وأبوة", "leave_start_date", "leave_end_date", "entitled_days", "leave_type", None),
+	]:
+		fields = ["name", start_field, end_field, days_field, "docstatus", "creation"]
+		if subtype_field:
+			fields.append(subtype_field)
+		if status_field:
+			fields.append(status_field)
+
+		for row in frappe.get_all(doctype, filters={"employee": employee}, fields=fields, order_by="creation desc", limit=limit):
+			subtype = getattr(row, subtype_field, None) if subtype_field else None
+			st_code = (
+				_leave_status_code(getattr(row, status_field, None), row.docstatus)
+				if status_field
+				else _leave_status_code(None, row.docstatus)
+			)
+			rows.append({
+				"name": row.name,
+				"doctype_label": category,
+				"request_type": subtype or doctype,
+				"request_type_label": subtype or category,
+				"workflow_state": getattr(row, status_field, None),
+				"status_code": st_code,
+				"creation": str(row.creation),
+				"description": None,
+				"from_date": str(getattr(row, start_field, None)) if getattr(row, start_field, None) else None,
+				"to_date": str(getattr(row, end_field, None)) if getattr(row, end_field, None) else None,
+				"amount": getattr(row, days_field, None),
+			})
 
 	rows.sort(key=lambda item: item["creation"], reverse=True)
 	if status and status != "all":
