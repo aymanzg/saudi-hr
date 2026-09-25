@@ -1645,7 +1645,8 @@ function startPunchFlow() {
 	document.getElementById("punch-step-voice").style.display = (vf.voice_policy === "Required / إلزامي") ? "block" : "none";
 	document.getElementById("punch-submit-btn").disabled = true;
 	/* GPS */
-	if (punchState.locationRequired) { runPunchGps(); } else { document.getElementById("punch-submit-btn").disabled = false; }
+	runPunchGps();
+	if (!punchState.locationRequired) { document.getElementById("punch-submit-btn").disabled = false; }
 	/* Photo */
 	if (isIN && vf.photo_required) { startPunchCamera(); } else { stopPunchCamera(); document.getElementById("punch-photo-preview").innerHTML = ""; }
 	/* Voice */
@@ -1660,18 +1661,27 @@ function closePunchModal() {
 
 function runPunchGps() {
 	var el = document.getElementById("punch-gps-state");
-	el.textContent = t("locating");
-	el.className = "saudi-verify-step__state";
 	var dot = document.querySelector("#punch-step-gps .saudi-verify-step__dot");
-	if (dot) { dot.className = "saudi-verify-step__dot"; }
-	if (!navigator.geolocation) { el.textContent = t("gps_fail"); if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--err"; return; }
+	var optional = !punchState.locationRequired;
+	if (!optional) {
+		el.textContent = t("locating");
+		el.className = "saudi-verify-step__state";
+		if (dot) { dot.className = "saudi-verify-step__dot"; }
+	}
+	if (!navigator.geolocation) {
+		if (!optional) { el.textContent = t("gps_fail"); if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--err"; }
+		updatePunchReady();
+		return;
+	}
 	navigator.geolocation.getCurrentPosition(function(pos) {
 		punchState.lat = pos.coords.latitude;
 		punchState.lng = pos.coords.longitude;
-		el.textContent = t("gps_ok"); el.className = "saudi-verify-step__state ok";
-		if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--done";
+		if (!optional) { el.textContent = t("gps_ok"); el.className = "saudi-verify-step__state ok"; if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--done"; }
 		updatePunchReady();
-	}, function() { el.textContent = t("gps_fail"); if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--err"; }, { enableHighAccuracy: true, timeout: 12000 });
+	}, function() {
+		if (!optional) { el.textContent = t("gps_fail"); if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--err"; }
+		updatePunchReady();
+	}, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
 }
 
 var punchStream = null;
