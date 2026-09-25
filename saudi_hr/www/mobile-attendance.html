@@ -658,7 +658,7 @@
 			</div>
 			<div class="saudi-field">
 				<label data-i18n-key="reason_label">مبرر الطلب</label>
-				<textarea id="leave-reason" placeholder="أضف وصفًا مختصرًا للطلب"></textarea>
+				<textarea id="leave-reason" data-i18n-key="leave_reason_placeholder" placeholder="أضف وصفًا مختصرًا للطلب"></textarea>
 			</div>
 			<div class="saudi-field" id="leave-balance-field" style="display:none;">
 				<label data-i18n-key="annual_balance">رصيد الإجازة السنوية</label>
@@ -687,20 +687,20 @@
 				<label data-i18n-key="request_type">نوع الطلب</label>
 				<select id="hr-service-type-select" onchange="onHrServiceTypeChange()">
 					<option value="">-- <span data-i18n-key="select_type">اختر النوع</span> --</option>
-					<option value="work_permit_issuance">إصدار رخصة عمل</option>
-					<option value="work_permit_renewal">تجديد رخصة عمل</option>
-					<option value="residency_issuance">إصدار إقامة</option>
-					<option value="residency_renewal">تجديد إقامة</option>
-					<option value="service_transfer">نقل خدمات</option>
-					<option value="exit_and_return">خروج وعودة</option>
-					<option value="final_exit">خروج نهائي</option>
-					<option value="profession_modification">تعديل مهنة</option>
-					<option value="employee_data_update">تحديث بيانات الموظف</option>
-					<option value="visa_issuance">إصدار تأشيرة</option>
-					<option value="advance_salary">سلفة</option>
-					<option value="salary_certificate">شهادة تعريف بالراتب</option>
-					<option value="experience_certificate">شهادة خبرة</option>
-					<option value="employee_loan">قرض موظف</option>
+					<option value="work_permit_issuance" data-i18n-key="srv_work_permit_issuance">إصدار رخصة عمل</option>
+					<option value="work_permit_renewal" data-i18n-key="srv_work_permit_renewal">تجديد رخصة عمل</option>
+					<option value="residency_issuance" data-i18n-key="srv_residency_issuance">إصدار إقامة</option>
+					<option value="residency_renewal" data-i18n-key="srv_residency_renewal">تجديد إقامة</option>
+					<option value="service_transfer" data-i18n-key="srv_service_transfer">نقل خدمات</option>
+					<option value="exit_and_return" data-i18n-key="srv_exit_and_return">خروج وعودة</option>
+					<option value="final_exit" data-i18n-key="srv_final_exit">خروج نهائي</option>
+					<option value="profession_modification" data-i18n-key="srv_profession_modification">تعديل مهنة</option>
+					<option value="employee_data_update" data-i18n-key="srv_employee_data_update">تحديث بيانات الموظف</option>
+					<option value="visa_issuance" data-i18n-key="srv_visa_issuance">إصدار تأشيرة</option>
+					<option value="advance_salary" data-i18n-key="srv_advance_salary">سلفة</option>
+					<option value="salary_certificate" data-i18n-key="srv_salary_certificate">شهادة تعريف بالراتب</option>
+					<option value="experience_certificate" data-i18n-key="srv_experience_certificate">شهادة خبرة</option>
+					<option value="employee_loan" data-i18n-key="srv_employee_loan">قرض موظف</option>
 				</select>
 			</div>
 			<div class="saudi-field">
@@ -821,12 +821,12 @@
 					<div class="saudi-request-choice__card" onclick="pickNewRequest('leave')">
 						<div class="saudi-request-choice__icon" style="background:#fef3c7; color:#d97706;">🌴</div>
 						<div class="saudi-request-choice__title"><span data-i18n-key="leave_request">طلب إجازة</span></div>
-						<div class="saudi-request-choice__hint">إجازة سنوية، مرضية، خاصة، أمومة</div>
+						<div class="saudi-request-choice__hint" data-i18n-key="new_req_leave_hint">إجازة سنوية، مرضية، خاصة، أمومة</div>
 					</div>
 					<div class="saudi-request-choice__card" onclick="pickNewRequest('service')">
 						<div class="saudi-request-choice__icon" style="background:#e0f2fe; color:#0369a1;">📄</div>
 						<div class="saudi-request-choice__title"><span data-i18n-key="service_request">طلب خدمة</span></div>
-						<div class="saudi-request-choice__hint">سلفة، قرض، شهادات، رخص، إقامات</div>
+						<div class="saudi-request-choice__hint" data-i18n-key="new_req_service_hint">سلفة، قرض، شهادات، رخص، إقامات</div>
 					</div>
 				</div>
 			</div>
@@ -838,7 +838,7 @@
 		<div class="saudi-modal__overlay" onclick="closePunchModal()"></div>
 		<div class="saudi-modal__card">
 			<div class="saudi-modal__header">
-				<div class="saudi-modal__title" id="punch-modal-title">تسجيل الحضور</div>
+				<div class="saudi-modal__title" id="punch-modal-title" data-i18n-key="punch_title">تسجيل الحضور</div>
 				<div class="saudi-modal__close" onclick="closePunchModal()">&times;</div>
 			</div>
 			<div class="saudi-modal__body">
@@ -930,6 +930,24 @@ var LABELS = {
 		leave_type: "نوع الإجازة",
 		leave_subtype: "نوع الإجازة الفرعي",
 		request_type: "نوع الطلب",
+		srv_work_permit_issuance: "إصدار رخصة عمل",
+		srv_work_permit_renewal: "تجديد رخصة عمل",
+		srv_residency_issuance: "إصدار إقامة",
+		srv_residency_renewal: "تجديد إقامة",
+		srv_service_transfer: "نقل خدمات",
+		srv_exit_and_return: "خروج وعودة",
+		srv_final_exit: "خروج نهائي",
+		srv_profession_modification: "تعديل مهنة",
+		srv_employee_data_update: "تحديث بيانات الموظف",
+		srv_visa_issuance: "إصدار تأشيرة",
+		srv_advance_salary: "سلفة",
+		srv_salary_certificate: "شهادة تعريف بالراتب",
+		srv_experience_certificate: "شهادة خبرة",
+		srv_employee_loan: "قرض موظف",
+		new_req_leave_hint: "إجازة سنوية، مرضية، خاصة، أمومة",
+		new_req_service_hint: "سلفة، قرض، شهادات، رخص، إقامات",
+		punch_title: "تسجيل الحضور",
+		leave_reason_placeholder: "أضف وصفًا مختصرًا للطلب",
 		from_date: "من تاريخ",
 		to_date: "إلى تاريخ",
 		description: "السبب",
@@ -1053,6 +1071,24 @@ var LABELS = {
 		leave_type: "Leave Type",
 		leave_subtype: "Leave Subtype",
 		request_type: "Request Type",
+		srv_work_permit_issuance: "Work Permit Issuance",
+		srv_work_permit_renewal: "Work Permit Renewal",
+		srv_residency_issuance: "Residency Issuance",
+		srv_residency_renewal: "Residency Renewal",
+		srv_service_transfer: "Service Transfer",
+		srv_exit_and_return: "Exit and Return",
+		srv_final_exit: "Final Exit",
+		srv_profession_modification: "Profession Modification",
+		srv_employee_data_update: "Employee Data Update",
+		srv_visa_issuance: "Visa Issuance",
+		srv_advance_salary: "Salary Advance",
+		srv_salary_certificate: "Salary Certificate",
+		srv_experience_certificate: "Experience Certificate",
+		srv_employee_loan: "Employee Loan",
+		new_req_leave_hint: "Annual, sick, special, maternity leave",
+		new_req_service_hint: "Advances, loans, certificates, permits, residencies",
+		punch_title: "Attendance Check-in",
+		leave_reason_placeholder: "Add a short description of your request",
 		from_date: "From Date",
 		to_date: "To Date",
 		description: "Reason",
@@ -1163,8 +1199,12 @@ function showSessionBanner() {
 function applyLang() {
 	document.querySelectorAll("[data-i18n-key]").forEach(function(el) {
 		var k = el.getAttribute("data-i18n-key");
-		if (LABELS[CURRENT_LANG] && LABELS[CURRENT_LANG][k]) {
-			el.textContent = LABELS[CURRENT_LANG][k];
+		var v = LABELS[CURRENT_LANG] && LABELS[CURRENT_LANG][k];
+		if (!v) return;
+		if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+			el.placeholder = v;
+		} else {
+			el.textContent = v;
 		}
 	});
 	document.getElementById("lang-toggle").textContent = CURRENT_LANG === "ar" ? "EN" : "عربي";
@@ -1448,7 +1488,7 @@ function loadMyRequests(filter) {
 				html += '<div class="saudi-request-card">' +
 					'<div class="saudi-request-card__top"><div><div class="saudi-request-card__type">' + (item.request_type_label || item.request_type) + '</div>' +
 					'<div class="saudi-request-card__date">' + (category ? category + " · " : "") + (item.creation || "").slice(0, 10) + '</div></div>' +
-					'<span class="saudi-badge ' + badgeClass + '">' + (CURRENT_LANG === "en" ? item.status_code : (item.status_code === "approved" ? "معتمد" : (item.status_code === "rejected" ? "مرفوض" : "قيد المراجعة"))) + '</span></div>' +
+					'<span class="saudi-badge ' + badgeClass + '">' + t(item.status_code === "approved" ? "approved" : (item.status_code === "rejected" ? "rejected" : "pending")) + '</span></div>' +
 					(item.description ? '<div class="saudi-request-card__desc">' + item.description + '</div>' : '') +
 					'</div>';
 			});
