@@ -196,6 +196,7 @@ def get_annual_leave_days_taken(employee: str, leave_year: int, exclude_name: st
 		"Saudi Annual Leave",
 		filters=filters,
 		fields=["leave_start_date", "leave_end_date", "total_leave_days", "half_day"],
+		ignore_permissions=True,
 	)
 	year_start = f"{leave_year}-01-01"
 	year_end = f"{leave_year}-12-31"
@@ -442,14 +443,27 @@ def get_annual_leave_entitlement_details(employee: str, date: str | None = None)
 	}
 
 
+def get_leave_balance_adjustment(employee: str, leave_year: int) -> float:
+	"""Sum of submitted Leave Balance Adjustment days for the employee and leave year."""
+	rows = frappe.get_all(
+		"Leave Balance Adjustment",
+		filters={"employee": employee, "leave_year": leave_year, "docstatus": 1},
+		fields=["adjustment_days"],
+		ignore_permissions=True,
+	)
+	return round(sum(flt(r.adjustment_days or 0) for r in rows), 2)
+
+
 def get_annual_leave_balance(employee: str, reference_date: str | None = None, exclude_name: str | None = None) -> dict:
 	reference = getdate(reference_date) if reference_date else getdate()
 	details = get_annual_leave_entitlement_details(employee, reference)
 	taken = get_annual_leave_days_taken(employee, reference.year, exclude_name=exclude_name)
+	adjustment = get_leave_balance_adjustment(employee, reference.year)
 	return {
 		**details,
 		"taken": taken,
-		"balance": flt(details["entitled"]) - flt(taken),
+		"adjustment": adjustment,
+		"balance": flt(details["entitled"]) - flt(taken) + flt(adjustment),
 		"year": reference.year,
 	}
 

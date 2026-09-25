@@ -798,15 +798,18 @@ def get_self_service_portal():
 		_bal = get_annual_leave_balance(emp)
 		annual_entitled = cint(_bal.get("entitled") or 0)
 		annual_taken = flt(_bal.get("taken") or 0)
+		annual_adjustment = flt(_bal.get("adjustment") or 0)
 	except Exception:
 		annual_entitled = 0
 		annual_taken = 0
-	annual_remaining = max(0, annual_entitled - annual_taken)
+		annual_adjustment = 0
+	annual_remaining = max(0, flt(annual_entitled) - flt(annual_taken) + flt(annual_adjustment))
 	leave_balance = {
 		"remaining_days": annual_remaining,
 		"annual": annual_remaining,
 		"entitled": annual_entitled,
 		"taken": round(annual_taken, 1),
+		"adjustment": round(annual_adjustment, 1),
 		"sick": 5,
 		"marriage": 3,
 		"bereavement": 1,

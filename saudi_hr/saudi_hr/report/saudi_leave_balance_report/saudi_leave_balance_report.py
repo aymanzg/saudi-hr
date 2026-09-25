@@ -25,6 +25,7 @@ def get_columns():
 		{"fieldname": "entitlement", "label": _("Entitlement / الاستحقاق"), "fieldtype": "Int", "width": 120},
 		{"fieldname": "leave_allocated", "label": _("Allocated / المُخصص"), "fieldtype": "Float", "precision": 1, "width": 120},
 		{"fieldname": "leave_taken", "label": _("Taken / المأخوذ"), "fieldtype": "Float", "precision": 1, "width": 110},
+		{"fieldname": "adjustment", "label": _("Adjustment / التعديل"), "fieldtype": "Float", "precision": 1, "width": 110},
 		{"fieldname": "leave_balance", "label": _("Balance / الرصيد"), "fieldtype": "Float", "precision": 1, "width": 110},
 		{"fieldname": "leave_policy", "label": _("Leave Policy / سياسة الإجازة"), "fieldtype": "Link", "options": "Saudi Leave Policy", "width": 170},
 		{"fieldname": "policy_name", "label": _("Policy Name / اسم السياسة"), "fieldtype": "Data", "width": 190},
@@ -70,6 +71,7 @@ def get_data(filters):
 		entitlement = leave_balance["entitled"]
 		allocated = float(entitlement)
 		taken = float(leave_balance["taken"])
+		adjustment = float(leave_balance.get("adjustment") or 0)
 		balance = float(leave_balance["balance"])
 
 		result.append({
@@ -81,6 +83,7 @@ def get_data(filters):
 			"entitlement": entitlement,
 			"leave_allocated": allocated,
 			"leave_taken": taken,
+			"adjustment": adjustment,
 			"leave_balance": balance,
 			"leave_policy": leave_balance.get("policy"),
 			"policy_name": leave_balance.get("policy_name"),
