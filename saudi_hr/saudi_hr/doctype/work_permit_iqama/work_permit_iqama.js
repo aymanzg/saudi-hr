@@ -15,7 +15,6 @@ frappe.ui.form.on('Work Permit Iqama', {
                 frm.set_value('company', emp.company);
                 frm.set_value('nationality', emp.nationality || '');
                 frm.set_value('iqama_number', emp.iqama_number || '');
-                frm.set_value('passport_number', emp.passport_number || '');
             }
         });
     },
