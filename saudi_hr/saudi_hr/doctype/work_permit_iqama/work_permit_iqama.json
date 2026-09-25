@@ -82,6 +82,11 @@
    "label": "Nationality / الجنسية"
   },
   {
+   "fieldname": "passport_number",
+   "fieldtype": "Data",
+   "label": "Passport Number / رقم جواز السفر"
+  },
+  {
    "fieldname": "profession",
    "fieldtype": "Data",
    "label": "Profession on Iqama / المهنة في الإقامة"
