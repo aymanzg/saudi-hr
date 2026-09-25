@@ -16,13 +16,14 @@ from decimal import Decimal
 
 import frappe
 from frappe import _
-from frappe.utils import cint, cstr, getdate, now_datetime, nowdate
+from frappe.utils import cint, cstr, flt, getdate, now_datetime, nowdate
 
 from saudi_hr.saudi_hr.doctype.saudi_government_integration.saudi_government_integration import (
 	FILE_MODE,
 	safe_profile_dict,
 )
 from saudi_hr.saudi_hr.legal_rule_catalog import CATALOG_VERSION, LEGAL_RULES, SOURCE_DOCUMENT
+from saudi_hr.saudi_hr.utils import get_annual_leave_balance
 
 
 ENTERPRISE_ROLES = {"System Manager", "HR Manager", "HR User", "Accounts Manager"}
@@ -792,12 +793,20 @@ def get_self_service_portal():
 		"sick_leave": _count("Saudi Sick Leave", {"employee": ["in", team_ids], "docstatus": 0}) if team_ids else 0,
 		"overtime": _count("Overtime Request", {"employee": ["in", team_ids], "approval_status": "Pending / معلق"}) if team_ids else 0,
 	}
-	# Leave balance summary
-	annual_taken = sum(cint(l.total_leave_days) for l in leaves if l.docstatus == 1 or l.workflow_state == "Approved")
-	annual_remaining = max(0, 30 - annual_taken) if annual_taken else 18
+	# Leave balance summary (real entitlement from labor policy/statutory)
+	try:
+		_bal = get_annual_leave_balance(emp)
+		annual_entitled = cint(_bal.get("entitled") or 0)
+		annual_taken = flt(_bal.get("taken") or 0)
+	except Exception:
+		annual_entitled = 0
+		annual_taken = 0
+	annual_remaining = max(0, annual_entitled - annual_taken)
 	leave_balance = {
 		"remaining_days": annual_remaining,
 		"annual": annual_remaining,
+		"entitled": annual_entitled,
+		"taken": round(annual_taken, 1),
 		"sick": 5,
 		"marriage": 3,
 		"bereavement": 1,

@@ -502,7 +502,7 @@
 {% block page_content %}
 {% set d = portal_data or {} %}
 {% set emp = d.employee or {} %}
-{% set lb = d.leave_balance or {"remaining_days": 18, "annual": 18, "sick": 5, "marriage": 3, "bereavement": 1, "other": 2} %}
+{% set lb = d.leave_balance or {"remaining_days": 0, "annual": 0, "entitled": 0, "taken": 0, "sick": 0, "marriage": 0, "bereavement": 0, "other": 0} %}
 {% set att = d.attendance_status or {"status_label": "حاضر الآن", "time": "--:--", "date_hijri": ""} %}
 {% set requests = d.recent_requests or [] %}
 
