@@ -707,7 +707,7 @@
 				<label data-i18n-key="description">السبب / التفاصيل</label>
 				<textarea id="hr-service-desc"></textarea>
 			</div>
-			<div class="saudi-field" id="hr-service-date-fields">
+			<div class="saudi-field" id="hr-service-date-fields" style="display:none;">
 				<div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
 					<div><label data-i18n-key="from_date">من تاريخ</label><input type="date" id="hr-service-from"></div>
 					<div><label data-i18n-key="to_date">إلى تاريخ</label><input type="date" id="hr-service-to"></div>
@@ -1385,7 +1385,7 @@ function onHrServiceTypeChange() {
 	var dateField = document.getElementById("hr-service-date-fields");
 	var amountField = document.getElementById("hr-service-amount-field");
 	var newValueField = document.getElementById("hr-service-new-value-field");
-	dateField.style.display = ["salary_certificate", "experience_certificate"].indexOf(val) !== -1 ? "none" : "block";
+	dateField.style.display = val === "exit_and_return" ? "block" : "none";
 	amountField.style.display = ["advance_salary", "employee_loan"].indexOf(val) !== -1 ? "block" : "none";
 	newValueField.style.display = ["employee_data_update", "profession_modification"].indexOf(val) !== -1 ? "block" : "none";
 }
