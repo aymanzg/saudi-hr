@@ -1850,7 +1850,7 @@ def get_my_requests(limit=30, status=None):
 				"doctype_label": category,
 				"request_type": subtype or doctype,
 				"request_type_label": subtype or category,
-				"workflow_state": getattr(row, status_field, None),
+				"workflow_state": getattr(row, status_field, None) if status_field else None,
 				"status_code": st_code,
 				"creation": str(row.creation),
 				"description": None,

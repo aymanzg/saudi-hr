@@ -80,7 +80,8 @@ def configure_administrator_arabic():
 def make_qa_employee(company: str, prefix: str = "employee") -> str:
 	email = f"saudi.qa.{prefix}.{frappe.generate_hash(length=10).lower()}@example.com"
 	ensure_test_user(email, "Employee")
-	employee = make_employee(email, company=company)
+	# employee_number keeps the name valid once Employee autoname uses that field
+	employee = make_employee(email, company=company, employee_number=f"QA-{frappe.generate_hash(length=10).upper()}")
 	if frappe.get_meta("Employee").has_field("ctc"):
 		frappe.db.set_value("Employee", employee, "ctc", 12000)
 	return employee
