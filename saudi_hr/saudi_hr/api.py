@@ -48,13 +48,24 @@ ORG_TREE_UNASSIGNED_DEPARTMENT = "__unassigned_department__"
 MAX_MOBILE_ATTACHMENTS = 3
 MAX_MOBILE_ATTACHMENT_SIZE = 5 * 1024 * 1024
 
-def _attendance_photo_required():
-	"""True when mobile check-in/check-out must include a camera photo."""
+def _attendance_photo_required(employee=None):
+	"""True when a mobile check-in must include a camera photo.
+
+	Per-employee flag (default False) enables photo capture for that employee;
+	falls back to the global Saudi HR Settings toggle otherwise.
+	"""
+	if employee:
+		try:
+			emp_value = frappe.db.get_value("Employee", employee, "require_attendance_photo")
+			if emp_value is not None and cint(emp_value) == 1:
+				return True
+		except Exception:
+			pass
 	try:
 		value = frappe.db.get_single_value("Saudi HR Settings", "require_attendance_photo")
 		return cint(value or 0) == 1
 	except Exception:
-		return True
+		return False
 
 MOBILE_ATTENDANCE_API_ENDPOINTS = (
 	{
@@ -1258,7 +1269,7 @@ def get_attendance_status():
 		"verification_features": {
 			"max_attachment_count": MAX_MOBILE_ATTACHMENTS,
 			"max_attachment_size_mb": int(MAX_MOBILE_ATTACHMENT_SIZE / (1024 * 1024)),
-			"photo_required": _attendance_photo_required(),
+			"photo_required": _attendance_photo_required(employee),
 			"voice_policy": schedule.get("voice_policy"),
 			"voice_challenge_ttl_seconds": schedule.get("voice_challenge_ttl_seconds"),
 			"voice_max_duration_seconds": schedule.get("voice_max_duration_seconds"),
@@ -1445,7 +1456,7 @@ def do_mobile_checkin(
 	today_checkins = _get_todays_checkins(employee)
 	last_log = today_checkins[-1] if today_checkins else None
 	log_type = "OUT" if (last_log and last_log.log_type == "IN") else "IN"
-	if log_type == "IN" and _attendance_photo_required() and not photo_data:
+	if log_type == "IN" and _attendance_photo_required(employee) and not photo_data:
 		frappe.throw(_("يجب التقاط صورة من الكاميرا قبل تسجيل الدخول (الحضور) من الجوال."), frappe.PermissionError)
 	voice_runtime = get_voice_runtime_status()
 	voice_profile = get_employee_voice_profile_status(employee)
