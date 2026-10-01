@@ -1,3 +1,4 @@
 saudi_hr.patches.reload_annual_leave_workflow
 saudi_hr.patches.update_gosi_rates_2024_social_insurance_law
 saudi_hr.patches.add_employee_attendance_photo_requirement
+saudi_hr.patches.rename_employees_to_employee_number

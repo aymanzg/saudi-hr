@@ -45,8 +45,9 @@ import re
 import frappe
 from frappe.model.rename_doc import rename_doc
 
-# matches a real employee document id, but not the bare naming series "HR-EMP-"
-STALE_PATTERN = "^HR-EMP-[0-9]+$"
+# matches a real employee document id, but not the bare naming series "HR-EMP-";
+# the actual pattern is discovered per site by stale_pattern()
+SERIES_NAME = "HR-EMP-"
 
 # doctypes whose document name IS the employee name (autoname: field:employee),
 # so they have to follow the employee rename as well
@@ -79,6 +80,23 @@ IGNORED_COLUMNS = (
 	("__GlobalSearch", "name"),
 	("__GlobalSearch", "doctype"),
 )
+
+# plan buckets for employees that are deliberately left alone
+SKIP_BUCKETS = (
+	"skip_no_number",
+	"skip_duplicate",
+	"skip_invalid",
+	"skip_conflict",
+	"skip_already",
+)
+
+SKIP_TITLES = {
+	"skip_no_number": "no employee_number",
+	"skip_duplicate": "duplicate employee_number",
+	"skip_invalid": "employee_number is not a usable name",
+	"skip_conflict": "employee_number belongs to another employee",
+	"skip_already": "name already equals employee_number",
+}
 
 
 def is_valid_name(value):
@@ -139,7 +157,7 @@ def count_manual_references(doctype, fieldname, column, values):
 	if not frappe.db.table_exists(doctype):
 		return "n/a"
 	sql = "SELECT COUNT(*) AS `c` FROM `tab%s` WHERE `%s` REGEXP %%s" % (doctype, fieldname)
-	params = [STALE_PATTERN]
+	params = [stale_pattern()]
 	if column:
 		placeholders = ", ".join(["%s"] * len(values))
 		sql += " AND `%s` IN (%s)" % (column, placeholders)
@@ -161,16 +179,10 @@ def print_plan(plan, total):
 	for row, number in plan["rename"]:
 		print("   %-14s -> %-12s %s" % (row.name, number, row.employee_name or ""))
 
-	for key, title in (
-		("skip_no_number", "no employee_number - left unchanged"),
-		("skip_duplicate", "duplicate employee_number - left unchanged"),
-		("skip_invalid", "employee_number is not a usable name"),
-		("skip_conflict", "employee_number is already another employee's id"),
-		("skip_already", "name already equals employee_number"),
-	):
+	for key in SKIP_BUCKETS:
 		items = plan[key]
 		print("")
-		print("-- %s (%s) %s" % (title, len(items), "-" * 20))
+		print("-- %s (%s) %s" % (SKIP_TITLES[key], len(items), "-" * 20))
 		for item in items:
 			row = item[0] if isinstance(item, tuple) else item
 			extra = ""
@@ -215,12 +227,30 @@ def rename_named_after_employee(old, new):
 	return followed
 
 
-def apply_renames(limit=None):
+def apply_renames(limit=None, commit_each=True, only=None):
+	"""Rename every planned employee.
+
+	`commit_each` is for the CLI: committing after each employee means an
+	interrupted run resumes where it stopped.  Patches pass False because they
+	run inside the migration transaction, and tests pass False so the fixture
+	rolls back with the test.
+
+	`only` restricts the work to the named employees, so a test (or a targeted
+	fix) never sweeps in unrelated site data.
+	"""
 	plan, _total = build_plan()
 	queue = plan["rename"][:limit] if limit else plan["rename"]
+	if only:
+		wanted = set(only)
+		queue = [item for item in queue if item[0].name in wanted]
 	if not queue:
 		print("Nothing to rename.")
-		return []
+		return {
+			"renamed": [],
+			"failed": [],
+			"followed": [],
+			"skipped": {key: plan[key] for key in SKIP_BUCKETS},
+		}
 
 	mapping = {row.name: number for row, number in queue}
 	print("Renaming %s employee(s)..." % len(mapping))
@@ -240,7 +270,10 @@ def apply_renames(limit=None):
 			)
 			frappe.db.set_value("Employee", new, "employee", new, update_modified=False)
 			followed.extend(rename_named_after_employee(old, new))
-			frappe.db.commit()
+			# the CLI commits per employee so an interrupted run resumes; a patch
+			# runs inside the migration transaction and must not commit early
+			if commit_each:
+				frappe.db.commit()
 			done.append((old, new))
 			print("   ok   %-14s -> %s" % (old, new))
 		except Exception as exc:
@@ -249,9 +282,17 @@ def apply_renames(limit=None):
 			print("   FAIL %-14s -> %-12s %s" % (old, new, exc))
 
 	# only the employees that were actually renamed
-	fix_manual_references({old: new for old, new in done})
-	rebuild_search()
+	fix_manual_references({old: new for old, new in done}, commit=commit_each)
+	# `bench migrate` rebuilds the search index on its own, so only the CLI does it
+	if commit_each:
+		rebuild_search()
 
+	result = {
+		"renamed": done,
+		"failed": failed,
+		"followed": followed,
+		"skipped": {key: plan[key] for key in SKIP_BUCKETS},
+	}
 	print("")
 	print("renamed: %s   failed: %s" % (len(done), len(failed)))
 	if followed:
@@ -259,11 +300,12 @@ def apply_renames(limit=None):
 	if failed:
 		for old, new, error in failed:
 			print("   %s -> %s : %s" % (old, new, error))
-	print("Run again with {'verify': True} to confirm the result.")
-	return done
+	if commit_each:
+		print("Run again with {'verify': True} to confirm the result.")
+	return result
 
 
-def fix_manual_references(mapping):
+def fix_manual_references(mapping, commit=True):
 	"""Rewrite the references frappe's rename_doc() leaves behind."""
 	if not mapping:
 		return
@@ -281,7 +323,8 @@ def fix_manual_references(mapping):
 				"UPDATE `tab%s` SET `%s` = %%s WHERE %s" % (doctype, fieldname, where),
 				(new, old) + params_extra,
 			)
-	frappe.db.commit()
+	if commit:
+		frappe.db.commit()
 	print("Fixed User Permission / Comment / Version references for %s employee(s)." % len(mapping))
 
 
@@ -308,6 +351,44 @@ def rename_trail():
 		if len(names) >= 2:
 			trail[names[0]] = row.reference_name
 	return trail
+
+
+def employee_series_prefixes():
+	"""Naming-series prefixes that Employee documents are known to use.
+
+	Discovered rather than hardcoded, because the prefix depends on the site:
+	`HR-EMP-` on this one, but ERPNext's own test helper creates `EMP-`, and a
+	production site may have been imported under yet another series. A prefix
+	only counts if it is either the configured Employee series or the prefix of
+	a name that really is (or really was) an Employee id, so unrelated series
+	like `SAU-CHK-` are never scanned.
+	"""
+	prefixes = set()
+
+	field = frappe.get_meta("Employee").get_field("naming_series")
+	if field:
+		for source in (field.default, field.options):
+			for value in (source or "").split("\n"):
+				value = value.strip()
+				if value and value.endswith("-"):
+					prefixes.add(value)
+
+	for name in list(rename_trail().keys()) + frappe.get_all("Employee", pluck="name"):
+		# the whole alphabetic part of "HR-EMP-00042" is the prefix, not just "HR"
+		match = re.match(r"^([A-Za-z][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)*)-[0-9]+$", name or "")
+		if match:
+			prefixes.add(match.group(1) + "-")
+
+	return sorted(prefixes)
+
+
+def stale_pattern():
+	"""Regex matching an old-style employee id, for any series in use."""
+	prefixes = employee_series_prefixes()
+	if not prefixes:
+		prefixes = ["HR-EMP-"]
+	alternatives = "|".join(re.escape(prefix) for prefix in prefixes)
+	return r"^(?:%s)[0-9]+$" % alternatives
 
 
 def scan_references():
@@ -347,7 +428,7 @@ def scan_references():
 				FROM `{table}` WHERE `{name}` REGEXP %s
 				GROUP BY `{name}`
 				""",
-				(STALE_PATTERN,),
+				(stale_pattern(),),
 				as_dict=True,
 			)
 		except Exception:
