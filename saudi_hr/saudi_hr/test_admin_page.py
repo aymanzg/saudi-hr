@@ -27,7 +27,7 @@ def render_page(user="Administrator", context=None):
 	"""Render the real template through the real context controller."""
 	import importlib
 
-	module = importlib.import_module("saudi_hr.www.saudi-admin")
+	module = importlib.import_module("saudi_hr.www.saudi_admin")
 	ctx = frappe._dict()
 	ctx._context_dict = ctx
 	module.get_context(ctx)
@@ -46,6 +46,17 @@ def page_source():
 
 def template_path():
 	return os.path.join(frappe.get_app_path("saudi_hr"), "www", "saudi-admin.html")
+
+
+def pymodule_path():
+	"""Where Frappe looks for the page's python module.
+
+	TemplatePage.set_pymodule keeps the directory as it is and replaces hyphens
+	with underscores in the file name only, so this must not touch the app path.
+	"""
+	template = template_path()
+	directory, filename = os.path.split(template)
+	return os.path.join(directory, os.path.splitext(filename)[0].replace("-", "_") + ".py")
 
 
 def page_js(html=None):
@@ -87,7 +98,7 @@ class TestAdminPageRender(FrappeTestCase):
 		frappe.set_user(self._user_with("Employee"))
 		import importlib
 
-		module = importlib.import_module("saudi_hr.www.saudi-admin")
+		module = importlib.import_module("saudi_hr.www.saudi_admin")
 		ctx = frappe._dict()
 		ctx._context_dict = ctx
 		with self.assertRaises(frappe.Redirect):
@@ -98,7 +109,7 @@ class TestAdminPageRender(FrappeTestCase):
 		frappe.set_user("Guest")
 		import importlib
 
-		module = importlib.import_module("saudi_hr.www.saudi-admin")
+		module = importlib.import_module("saudi_hr.www.saudi_admin")
 		ctx = frappe._dict()
 		ctx._context_dict = ctx
 		with self.assertRaises(frappe.Redirect):
@@ -121,7 +132,7 @@ class TestAdminPageRender(FrappeTestCase):
 
 		from saudi_hr.saudi_hr import admin_api
 
-		module = importlib.import_module("saudi_hr.www.saudi-admin")
+		module = importlib.import_module("saudi_hr.www.saudi_admin")
 		frappe.set_user("Administrator")
 		ctx = frappe._dict()
 		ctx._context_dict = ctx
@@ -263,7 +274,7 @@ class TestAdminPageSafety(FrappeTestCase):
 
 		from frappe.utils.jinja import get_jenv
 
-		module = importlib.import_module("saudi_hr.www.saudi-admin")
+		module = importlib.import_module("saudi_hr.www.saudi_admin")
 		frappe.set_user("Administrator")
 		ctx = frappe._dict()
 		ctx._context_dict = ctx
@@ -624,14 +635,53 @@ class TestAdminPageRoute(FrappeTestCase):
 		# the employee portal must survive alongside it
 		self.assertIn("/mobile-attendance", routes)
 
-	def test_page_file_is_named_to_match_its_route(self):
-		self.assertTrue(os.path.exists(template_path()))
-		self.assertTrue(os.path.exists(template_path().replace(".html", ".py")))
+	def test_the_python_module_has_the_name_the_renderer_looks_for(self):
+		"""Frappe looks for saudi_admin.py, not saudi-admin.py.
+
+		TemplatePage.set_pymodule replaces hyphens with underscores in the file
+		name before it looks for the module next to the template. A hyphenated
+		name is never loaded, so get_context never runs and the page renders
+		with every context value undefined.
+		"""
+		expected = pymodule_path()
+		self.assertTrue(
+			os.path.exists(expected),
+			f"the renderer looks for {os.path.basename(expected)}",
+		)
+		self.assertEqual(os.path.basename(expected), "saudi_admin.py")
+		self.assertFalse(
+			os.path.exists(os.path.splitext(template_path())[0] + ".py"),
+			"a hyphenated module is dead code",
+		)
+
+	def test_the_rendered_page_gets_its_context_from_the_real_renderer(self):
+		"""Render through Frappe's own page renderer, not a hand-built context.
+
+		This is the test that catches a module the framework cannot find: the
+		template renders, but with every context value undefined.
+		"""
+		from frappe.website.page_renderers.template_page import TemplatePage
+
+		page = TemplatePage("saudi-admin", http_status_code=200)
+		self.assertTrue(page.can_render(), "the route should resolve to the template")
+		html = page.get_html()
+		self.assertNotIn("Error", html[:200])
+		# values only get_context can supply
+		self.assertIn("can_manage_employees: true", html)
+		self.assertIn("var seeded = {", html)
+		self.assertIn('id="headcount-stats"', html)
+		self.assertNotIn("{{", html)
+
+	def test_the_rendered_page_has_no_python_values_in_its_javascript(self):
+		"""true/false are the JS literals; True/False are a parse error."""
+		html, _ctx = render_page()
+		block = [b for b in re.findall(r"<script>(.*?)</script>", html, re.S) if "SAUDI_PANEL_LOADERS" in b][0]
+		self.assertNotRegex(block, r"\{\{|\{%")
 
 	def test_page_is_uncached(self):
 		"""Caching the shell would cache a role gate decision."""
 		import importlib
 
-		module = importlib.import_module("saudi_hr.www.saudi-admin")
+		module = importlib.import_module("saudi_hr.www.saudi_admin")
 		self.assertEqual(getattr(module, "no_cache", 0), 1)
 		self.assertEqual(getattr(module, "login_required", 0), 1)
