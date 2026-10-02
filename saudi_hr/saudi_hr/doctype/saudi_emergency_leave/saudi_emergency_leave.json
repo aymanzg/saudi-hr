@@ -1,0 +1,272 @@
+{
+	"actions": [],
+	"allow_rename": 1,
+	"creation": "2026-10-02 00:00:00.000000",
+	"doctype": "DocType",
+	"editable_grid": 1,
+	"engine": "InnoDB",
+	"field_order": [
+		"naming_series",
+		"employee",
+		"employee_name",
+		"company",
+		"department",
+		"leave_section",
+		"from_date",
+		"to_date",
+		"column_break_days",
+		"total_days",
+		"reason",
+		"entitlement_section",
+		"entitlement_days",
+		"column_break_entitlement",
+		"used_days_before",
+		"available_days",
+		"annual_leave_balance_snapshot",
+		"annual_leave_available",
+		"workflow_state",
+		"amended_from"
+	],
+	"fields": [
+		{
+			"fieldname": "naming_series",
+			"fieldtype": "Select",
+			"label": "Series",
+			"options": "SAU-EMG-.YYYY.-",
+			"reqd": 1,
+			"hidden": 1
+		},
+		{
+			"fieldname": "employee",
+			"fieldtype": "Link",
+			"in_list_view": 1,
+			"label": "Employee / الموظف",
+			"options": "Employee",
+			"reqd": 1
+		},
+		{
+			"fetch_from": "employee.employee_name",
+			"fieldname": "employee_name",
+			"fieldtype": "Data",
+			"in_list_view": 1,
+			"label": "Employee Name / الاسم",
+			"read_only": 1
+		},
+		{
+			"fetch_from": "employee.company",
+			"fieldname": "company",
+			"fieldtype": "Link",
+			"label": "Company / الشركة",
+			"options": "Company",
+			"read_only": 1,
+			"reqd": 1
+		},
+		{
+			"fetch_from": "employee.department",
+			"fieldname": "department",
+			"fieldtype": "Link",
+			"label": "Department / القسم",
+			"options": "Department",
+			"read_only": 1
+		},
+		{
+			"fieldname": "leave_section",
+			"fieldtype": "Section Break",
+			"label": "Emergency Leave Details / تفاصيل الإجازة الطارئة"
+		},
+		{
+			"fieldname": "from_date",
+			"fieldtype": "Date",
+			"in_list_view": 1,
+			"label": "From Date / من تاريخ",
+			"reqd": 1
+		},
+		{
+			"fetch_from": "from_date",
+			"fetch_if_empty": 1,
+			"fieldname": "to_date",
+			"fieldtype": "Date",
+			"in_list_view": 1,
+			"label": "To Date / إلى تاريخ",
+			"reqd": 1
+		},
+		{
+			"fieldname": "column_break_days",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "total_days",
+			"fieldtype": "Float",
+			"label": "Total Days / إجمالي الأيام",
+			"read_only": 1
+		},
+		{
+			"fieldname": "reason",
+			"fieldtype": "Small Text",
+			"label": "Reason / سبب الإجازة الطارئة",
+			"reqd": 1
+		},
+		{
+			"fieldname": "entitlement_section",
+			"fieldtype": "Section Break",
+			"label": "Entitlement / الاستحقاق"
+		},
+		{
+			"fieldname": "entitlement_days",
+			"fieldtype": "Float",
+			"label": "Annual Entitlement /(days) / الاستحقاق السنوي (أيام)",
+			"read_only": 1
+		},
+		{
+			"fieldname": "column_break_entitlement",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "used_days_before",
+			"fieldtype": "Float",
+			"label": "Used Before This Request / المستخدَم قبل هذا الطلب",
+			"read_only": 1
+		},
+		{
+			"fieldname": "available_days",
+			"fieldtype": "Float",
+			"label": "Available / المتاح",
+			"read_only": 1
+		},
+		{
+			"fieldname": "annual_leave_balance_snapshot",
+			"fieldtype": "Float",
+			"label": "Annual Leave Balance Snapshot / رصيد الإجازة السنوية وقت الطلب",
+			"read_only": 1
+		},
+		{
+			"fieldname": "annual_leave_available",
+			"fieldtype": "Check",
+			"label": "Annual Leave Available / تتوفر رصيد سنوي",
+			"read_only": 1
+		},
+		{
+			"fieldname": "workflow_state",
+			"fieldtype": "Link",
+			"label": "Workflow State / حالة سير العمل",
+			"options": "Workflow State",
+			"read_only": 1,
+			"in_list_view": 1
+		},
+		{
+			"fieldname": "amended_from",
+			"fieldtype": "Link",
+			"label": "Amended From",
+			"no_copy": 1,
+			"options": "Saudi Emergency Leave",
+			"print_hide": 1,
+			"read_only": 1
+		}
+	],
+	"index_web_pages_for_search": 1,
+	"links": [],
+	"modified": "2026-10-02 00:00:00.000000",
+	"modified_by": "Administrator",
+	"module": "Saudi HR",
+	"name": "Saudi Emergency Leave",
+	"owner": "Administrator",
+	"permissions": [
+		{
+			"role": "HR Manager",
+			"read": 1,
+			"write": 1,
+			"create": 1,
+			"delete": 1,
+			"submit": 1,
+			"cancel": 1,
+			"amend": 1,
+			"print": 1,
+			"email": 1,
+			"report": 1,
+			"export": 1,
+			"share": 1
+		},
+		{
+			"role": "HR User",
+			"read": 1,
+			"write": 1,
+			"create": 1,
+			"submit": 1,
+			"print": 1,
+			"email": 1,
+			"report": 1,
+			"export": 1,
+			"share": 1
+		},
+		{
+			"role": "Department Approver",
+			"read": 1,
+			"write": 1,
+			"print": 1,
+			"email": 1,
+			"report": 1,
+			"submit": 1,
+			"amend": 1
+		},
+		{
+			"role": "Accounts Manager",
+			"read": 1,
+			"write": 1,
+			"print": 1,
+			"email": 1,
+			"report": 1
+		},
+		{
+			"role": "Employee",
+			"read": 1,
+			"write": 1,
+			"create": 1,
+			"print": 1,
+			"submit": 1,
+			"amend": 1,
+			"report": 1,
+			"email": 1
+		},
+		{
+			"role": "Employee Self Service",
+			"read": 1,
+			"write": 1,
+			"create": 1,
+			"print": 1,
+			"submit": 1,
+			"amend": 1,
+			"report": 1,
+			"email": 1
+		},
+		{
+			"role": "Leave Approver",
+			"read": 1,
+			"write": 1,
+			"print": 1,
+			"email": 1,
+			"report": 1,
+			"submit": 1,
+			"amend": 1
+		},
+		{
+			"role": "System Manager",
+			"read": 1,
+			"write": 1,
+			"create": 1,
+			"delete": 1,
+			"submit": 1,
+			"cancel": 1,
+			"amend": 1,
+			"print": 1,
+			"email": 1,
+			"report": 1,
+			"export": 1,
+			"share": 1
+		}
+	],
+	"sort_field": "modified",
+	"sort_order": "DESC",
+	"states": [],
+	"track_changes": 1,
+	"title_field": "employee_name"
+}

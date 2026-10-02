@@ -10,7 +10,19 @@ from pathlib import Path
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, get_datetime, get_first_day, get_last_day, get_url, getdate, now_datetime, nowdate, time_diff_in_hours
+from frappe.utils import (
+	cint,
+	cstr,
+	flt,
+	get_datetime,
+	get_first_day,
+	get_last_day,
+	get_url,
+	getdate,
+	now_datetime,
+	nowdate,
+	time_diff_in_hours,
+)
 from frappe.utils.file_manager import save_file
 
 from saudi_hr.saudi_hr.attendance_policy import (
@@ -21,7 +33,11 @@ from saudi_hr.saudi_hr.attendance_policy import (
 )
 from saudi_hr.saudi_hr.doctype.maternity_paternity_leave.maternity_paternity_leave import LEAVE_DAYS
 from saudi_hr.saudi_hr.location_utils import resolve_location_reference
-from saudi_hr.saudi_hr.utils import assert_doctype_permissions, get_annual_leave_balance
+from saudi_hr.saudi_hr.utils import (
+	assert_doctype_permissions,
+	get_annual_leave_balance,
+	get_emergency_leave_balance,
+)
 from saudi_hr.saudi_hr.voice_verification import (
 	VOICE_VERIFICATION_STATUS_NOT_REQUIRED,
 	VOICE_VERIFICATION_STATUS_PASSED,
@@ -841,6 +857,22 @@ def _get_attendance_insights(employee, month=None, year=None):
 	}
 
 
+def _get_emergency_leave_summary(employee, as_of_date):
+	"""Both quotas behind the emergency-leave gate, for the mobile warning."""
+	emergency = get_emergency_leave_balance(employee, as_of_date)
+	annual = get_annual_leave_balance(employee, as_of_date)
+	annual_balance = flt(annual.get("balance"))
+	return {
+		"entitled": emergency.get("entitled"),
+		"taken": emergency.get("taken"),
+		"available": emergency.get("available"),
+		"annual_leave_balance": annual_balance,
+		"annual_leave_available": int(annual_balance > 0),
+		"blocked_by_annual_leave": int(annual_balance > 0),
+		"year": emergency.get("year"),
+	}
+
+
 def _get_leave_options(employee):
 	as_of_date = nowdate()
 	annual_balance = get_annual_leave_balance(employee, as_of_date)
@@ -877,7 +909,14 @@ def _get_leave_options(employee):
 		},
 		"emergency_leave": {
 			"label": "Emergency Leave / إجازة طارئة",
-			"doctype": "Mobile Leave Request",
+			"doctype": "Saudi Emergency Leave",
+			# the client shows these as a warning before it will let the request be
+			# submitted; the doctype re-checks both on save, so this is not the gate
+			"emergency": _get_emergency_leave_summary(employee, as_of_date),
+		},
+		"punch_correction": {
+			"label": "Punch Correction / تصحيح البصمة",
+			"doctype": "Saudi Punch Correction",
 		},
 		"leave_without_pay": {
 			"label": "Leave Without Pay / إجازة بدون راتب",
@@ -959,7 +998,37 @@ def _build_mobile_leave_doc(employee, profile, request_type, attachments, payloa
 			}
 		)
 
-	if request_type in ("emergency_leave", "leave_without_pay", "exit_permission", "late_early"):
+	if request_type == "emergency_leave":
+		return frappe.get_doc(
+			{
+				"doctype": "Saudi Emergency Leave",
+				**base_fields,
+				"from_date": payload["start_date"],
+				"to_date": payload["end_date"] or payload["start_date"],
+				"reason": payload.get("reason") or "",
+			}
+		)
+
+	if request_type == "punch_correction":
+		# A Time field is pre-filled with the current clock on a new document, so
+		# a request with no time would quietly become "check in at right now".
+		if not cstr(payload.get("corrected_time") or "").strip():
+			frappe.throw(
+				_("Please choose the corrected check-in time.<br>الرجاء تحديد وقت الحضور الصحيح."),
+				title=_("Corrected Time Required / وقت الحضور الصحيح مطلوب"),
+			)
+
+		return frappe.get_doc(
+			{
+				"doctype": "Saudi Punch Correction",
+				**base_fields,
+				"attendance_date": payload["start_date"],
+				"corrected_in_time": payload.get("corrected_time"),
+				"correction_reason": payload.get("reason") or "",
+			}
+		)
+
+	if request_type in ("leave_without_pay", "exit_permission", "late_early"):
 		return frappe.get_doc(
 			{
 				"doctype": "Mobile Leave Request",
@@ -1613,6 +1682,7 @@ def submit_mobile_leave_request(
 	expected_delivery_date=None,
 	actual_delivery_date=None,
 	half_day=0,
+	corrected_time=None,
 	attachments_json=None,
 ):
 	employee, profile = _require_employee_context()
@@ -1634,6 +1704,7 @@ def submit_mobile_leave_request(
 			"expected_delivery_date": expected_delivery_date,
 			"actual_delivery_date": actual_delivery_date,
 			"half_day": half_day,
+			"corrected_time": corrected_time,
 		},
 	)
 
@@ -1858,6 +1929,49 @@ def get_my_requests(limit=30, status=None):
 				"to_date": str(getattr(row, end_field, None)) if getattr(row, end_field, None) else None,
 				"amount": getattr(row, days_field, None),
 			})
+
+	for row in frappe.get_all(
+		"Saudi Emergency Leave",
+		filters={"employee": employee},
+		fields=["name", "from_date", "to_date", "total_days", "reason", "workflow_state", "docstatus", "creation"],
+		order_by="creation desc",
+		limit=limit,
+	):
+		rows.append({
+			"name": row.name,
+			"doctype_label": "Emergency Leave / إجازة طارئة",
+			"request_type": "emergency_leave",
+			"request_type_label": "Emergency Leave / إجازة طارئة",
+			"workflow_state": row.workflow_state,
+			"status_code": _workflow_state_to_status_code(row.workflow_state) if row.workflow_state else _leave_status_code(None, row.docstatus),
+			"creation": str(row.creation),
+			"description": row.reason,
+			"from_date": str(row.from_date) if row.from_date else None,
+			"to_date": str(row.to_date) if row.to_date else None,
+			"amount": row.total_days,
+		})
+
+	for row in frappe.get_all(
+		"Saudi Punch Correction",
+		filters={"employee": employee},
+		fields=["name", "attendance_date", "corrected_in_time", "original_in_time", "correction_reason", "workflow_state", "docstatus", "creation"],
+		order_by="creation desc",
+		limit=limit,
+	):
+		rows.append({
+			"name": row.name,
+			"doctype_label": "Punch Correction / تصحيح البصمة",
+			"request_type": "punch_correction",
+			"request_type_label": "Punch Correction / تصحيح البصمة",
+			"workflow_state": row.workflow_state,
+			"status_code": _workflow_state_to_status_code(row.workflow_state) if row.workflow_state else _leave_status_code(None, row.docstatus),
+			"creation": str(row.creation),
+			"description": row.correction_reason,
+			# a correction lands on one day, so the range is that single day
+			"from_date": str(row.attendance_date) if row.attendance_date else None,
+			"to_date": str(row.attendance_date) if row.attendance_date else None,
+			"amount": row.corrected_in_time,
+		})
 
 	rows.sort(key=lambda item: item["creation"], reverse=True)
 	if status and status != "all":

@@ -31,8 +31,14 @@ from saudi_hr.saudi_hr.admin_api import (
 	list_leave_requests,
 	submit_leave_request,
 )
+from saudi_hr.saudi_hr.test_support import make_qa_employee
 
-WORKFLOW_DOCTYPES = ("Saudi Annual Leave", "Saudi Sick Leave", "Mobile Leave Request")
+WORKFLOW_DOCTYPES = (
+	"Saudi Annual Leave",
+	"Saudi Sick Leave",
+	"Mobile Leave Request",
+	"Saudi Emergency Leave",
+)
 PLAIN_DOCTYPES = ("Special Leave", "Maternity Paternity Leave")
 
 
@@ -47,6 +53,10 @@ class _ApiTestBase(FrappeTestCase):
 		super().setUp()
 		frappe.set_user("Administrator")
 		self.company = frappe.get_all("Company", pluck="name", limit_page_length=1)[0]
+		# this suite's own employee, so its leave requests are never measured
+		# against somebody's real balance that another test happened to spend
+		self.employee = make_qa_employee(self.company, f"admin-{frappe.generate_hash(length=6)}")
+		frappe.db.set_value("Employee", self.employee, "date_of_joining", "2020-01-01")
 
 	def _make_user(self, roles):
 		suffix = frappe.generate_hash(length=8).lower()
@@ -64,7 +74,7 @@ class _ApiTestBase(FrappeTestCase):
 		return email
 
 	def _plain_draft(self, doctype):
-		employee = frappe.get_all("Employee", pluck="name", limit_page_length=1)[0]
+		employee = self.employee
 		doc = {"doctype": doctype, "employee": employee, "company": self.company}
 		if doctype == "Special Leave":
 			doc.update(
@@ -87,7 +97,7 @@ class _ApiTestBase(FrappeTestCase):
 
 	def _make_leave_request(self, doctype):
 		"""A draft request owned by Administrator, so self-approval never blocks."""
-		employee = frappe.get_all("Employee", pluck="name", limit_page_length=1)[0]
+		employee = self.employee
 		doc = {"doctype": doctype, "employee": employee, "company": self.company}
 		if doctype == "Saudi Annual Leave":
 			doc.update({"leave_start_date": "2026-11-01", "leave_end_date": "2026-11-03"})
@@ -228,7 +238,7 @@ class TestAdminApiLeaveActions(_ApiTestBase):
 	"""Approval actions are the security boundary, so they are tested hardest."""
 
 	def _draft(self, doctype="Saudi Annual Leave"):
-		employee = frappe.get_all("Employee", pluck="name", limit_page_length=1)[0]
+		employee = self.employee
 		doc = {
 			"doctype": doctype,
 			"employee": employee,
@@ -329,7 +339,7 @@ class TestAdminApiLeaveActions(_ApiTestBase):
 	def test_maternity_without_a_certificate_is_refused_by_the_doctype(self):
 		"""The portal does not police this itself; the doctype's own validation
 		must still run, so this proves submit is not bypassing it."""
-		employee = frappe.get_all("Employee", pluck="name", limit_page_length=1)[0]
+		employee = self.employee
 		request = frappe.get_doc(
 			{
 				"doctype": "Maternity Paternity Leave",
@@ -361,7 +371,7 @@ class TestAdminApiLeaveActions(_ApiTestBase):
 
 
 class TestAdminApiLeaveInbox(_ApiTestBase):
-	"""The inbox merges five doctypes with different fields into one shape."""
+	"""The inbox merges doctypes with different fields into one shape."""
 
 	def test_registry_matches_this_site(self):
 		"""Each entry's fields must exist, or the inbox silently shows blanks."""
@@ -372,7 +382,7 @@ class TestAdminApiLeaveInbox(_ApiTestBase):
 				if field:
 					self.assertIn(field, present, f"{doctype}.{field}")
 
-	def test_registry_covers_the_five_saudi_leave_doctypes(self):
+	def test_registry_covers_every_saudi_leave_doctype(self):
 		self.assertEqual(
 			[entry[0] for entry in LEAVE_REGISTRY],
 			[*WORKFLOW_DOCTYPES, *PLAIN_DOCTYPES],

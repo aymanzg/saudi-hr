@@ -472,6 +472,51 @@ def get_annual_leave_entitlement(employee: str, date: str = None) -> int:
 	return get_annual_leave_entitlement_details(employee, date)["entitled"]
 
 
+EMERGENCY_LEAVE_ANNUAL_DAYS = 3
+
+
+def get_emergency_leave_days_taken(
+	employee: str, leave_year: int, exclude_name: str | None = None
+) -> float:
+	"""Emergency days already taken this calendar year, counting each overlapping day once."""
+	filters = {"employee": employee, "docstatus": 1}
+	if exclude_name:
+		filters["name"] = ["!=", exclude_name]
+
+	rows = frappe.get_all(
+		"Saudi Emergency Leave",
+		filters=filters,
+		fields=["from_date", "to_date"],
+		ignore_permissions=True,
+	)
+	year_start = f"{leave_year}-01-01"
+	year_end = f"{leave_year}-12-31"
+	total = 0.0
+	for row in rows:
+		total += max(0, get_overlap_days(row.from_date, row.to_date, year_start, year_end))
+	return round(total, 2)
+
+
+def get_emergency_leave_balance(
+	employee: str, reference_date: str | None = None, exclude_name: str | None = None
+) -> dict:
+	"""Three emergency days per calendar year, minus what this employee already used.
+
+	Unlike annual and sick leave there is no policy document behind this quota: the
+	three days are a fixed company allowance, so the number lives here rather than
+	in a policy doctype.
+	"""
+	reference = getdate(reference_date) if reference_date else getdate()
+	entitled = float(EMERGENCY_LEAVE_ANNUAL_DAYS)
+	taken = get_emergency_leave_days_taken(employee, reference.year, exclude_name=exclude_name)
+	return {
+		"entitled": entitled,
+		"taken": taken,
+		"available": round(max(0.0, entitled - taken), 2),
+		"year": reference.year,
+	}
+
+
 def get_eosb_amount(employee: str, termination_reason: str, termination_date: str = None) -> dict:
 	"""
 	حساب مكافأة نهاية الخدمة وفق المادة 84 من نظام العمل السعودي.

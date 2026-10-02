@@ -1,0 +1,256 @@
+{
+	"actions": [],
+	"allow_rename": 1,
+	"creation": "2026-10-02 00:00:00.000000",
+	"doctype": "DocType",
+	"editable_grid": 1,
+	"engine": "InnoDB",
+	"field_order": [
+		"naming_series",
+		"employee",
+		"employee_name",
+		"company",
+		"department",
+		"punch_section",
+		"attendance_date",
+		"corrected_in_time",
+		"column_break_punch",
+		"original_in_time",
+		"punch",
+		"daily_attendance",
+		"correction_reason",
+		"workflow_state",
+		"applied",
+		"applied_on",
+		"amended_from"
+	],
+	"fields": [
+		{
+			"fieldname": "naming_series",
+			"fieldtype": "Select",
+			"label": "Series",
+			"options": "SAU-PCR-.YYYY.-",
+			"reqd": 1,
+			"hidden": 1
+		},
+		{
+			"fieldname": "employee",
+			"fieldtype": "Link",
+			"in_list_view": 1,
+			"label": "Employee / الموظف",
+			"options": "Employee",
+			"reqd": 1
+		},
+		{
+			"fetch_from": "employee.employee_name",
+			"fieldname": "employee_name",
+			"fieldtype": "Data",
+			"in_list_view": 1,
+			"label": "Employee Name / الاسم",
+			"read_only": 1
+		},
+		{
+			"fetch_from": "employee.company",
+			"fieldname": "company",
+			"fieldtype": "Link",
+			"label": "Company / الشركة",
+			"options": "Company",
+			"read_only": 1,
+			"reqd": 1
+		},
+		{
+			"fetch_from": "employee.department",
+			"fieldname": "department",
+			"fieldtype": "Link",
+			"label": "Department / القسم",
+			"options": "Department",
+			"read_only": 1
+		},
+		{
+			"fieldname": "punch_section",
+			"fieldtype": "Section Break",
+			"label": "Correction Details / تفاصيل التصحيح"
+		},
+		{
+			"fieldname": "attendance_date",
+			"fieldtype": "Date",
+			"in_list_view": 1,
+			"label": "Attendance Date / تاريخ الحضور",
+			"reqd": 1
+		},
+		{
+			"fieldname": "corrected_in_time",
+			"fieldtype": "Time",
+			"in_list_view": 1,
+			"label": "Corrected Check-in Time / وقت الحضور المصحح",
+			"reqd": 1
+		},
+		{
+			"fieldname": "column_break_punch",
+			"fieldtype": "Column Break"
+		},
+		{
+			"fieldname": "original_in_time",
+			"fieldtype": "Time",
+			"label": "Original Check-in Time / وقت الحضور الأصلي",
+			"read_only": 1
+		},
+		{
+			"fieldname": "punch",
+			"fieldtype": "Link",
+			"label": "Punch Log / سجل البصمة",
+			"options": "Saudi Employee Checkin",
+			"read_only": 1
+		},
+		{
+			"fieldname": "daily_attendance",
+			"fieldtype": "Link",
+			"label": "Daily Attendance / سجل الحضور اليومي",
+			"options": "Saudi Daily Attendance",
+			"read_only": 1
+		},
+		{
+			"fieldname": "correction_reason",
+			"fieldtype": "Small Text",
+			"label": "Reason for Correction / سبب التصحيح",
+			"reqd": 1
+		},
+		{
+			"fieldname": "workflow_state",
+			"fieldtype": "Link",
+			"label": "Workflow State / حالة سير العمل",
+			"options": "Workflow State",
+			"read_only": 1,
+			"in_list_view": 1
+		},
+		{
+			"fieldname": "applied",
+			"fieldtype": "Check",
+			"label": "Applied to Attendance / مُطبَّق على سجل الحضور",
+			"read_only": 1,
+			"no_copy": 1
+		},
+		{
+			"fieldname": "applied_on",
+			"fieldtype": "Datetime",
+			"label": "Applied On / تاريخ التطبيق",
+			"read_only": 1,
+			"no_copy": 1
+		},
+		{
+			"fieldname": "amended_from",
+			"fieldtype": "Link",
+			"label": "Amended From",
+			"no_copy": 1,
+			"options": "Saudi Punch Correction",
+			"print_hide": 1,
+			"read_only": 1
+		}
+	],
+	"index_web_pages_for_search": 1,
+	"links": [],
+	"modified": "2026-10-02 00:00:00.000000",
+	"modified_by": "Administrator",
+	"module": "Saudi HR",
+	"name": "Saudi Punch Correction",
+	"owner": "Administrator",
+	"permissions": [
+		{
+			"role": "HR Manager",
+			"read": 1,
+			"write": 1,
+			"create": 1,
+			"delete": 1,
+			"submit": 1,
+			"cancel": 1,
+			"amend": 1,
+			"print": 1,
+			"email": 1,
+			"report": 1,
+			"export": 1,
+			"share": 1
+		},
+		{
+			"role": "HR User",
+			"read": 1,
+			"write": 1,
+			"create": 1,
+			"submit": 1,
+			"print": 1,
+			"email": 1,
+			"report": 1,
+			"export": 1,
+			"share": 1
+		},
+		{
+			"role": "Department Approver",
+			"read": 1,
+			"write": 1,
+			"print": 1,
+			"email": 1,
+			"report": 1,
+			"submit": 1,
+			"amend": 1
+		},
+		{
+			"role": "Accounts Manager",
+			"read": 1,
+			"write": 1,
+			"print": 1,
+			"email": 1,
+			"report": 1
+		},
+		{
+			"role": "Employee",
+			"read": 1,
+			"write": 1,
+			"create": 1,
+			"print": 1,
+			"submit": 1,
+			"amend": 1,
+			"report": 1,
+			"email": 1
+		},
+		{
+			"role": "Employee Self Service",
+			"read": 1,
+			"write": 1,
+			"create": 1,
+			"print": 1,
+			"submit": 1,
+			"amend": 1,
+			"report": 1,
+			"email": 1
+		},
+		{
+			"role": "Leave Approver",
+			"read": 1,
+			"write": 1,
+			"print": 1,
+			"email": 1,
+			"report": 1,
+			"submit": 1,
+			"amend": 1
+		},
+		{
+			"role": "System Manager",
+			"read": 1,
+			"write": 1,
+			"create": 1,
+			"delete": 1,
+			"submit": 1,
+			"cancel": 1,
+			"amend": 1,
+			"print": 1,
+			"email": 1,
+			"report": 1,
+			"export": 1,
+			"share": 1
+		}
+	],
+	"sort_field": "modified",
+	"sort_order": "DESC",
+	"states": [],
+	"track_changes": 1,
+	"title_field": "employee_name"
+}

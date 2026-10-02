@@ -391,6 +391,21 @@
 	.saudi-field textarea { min-height: 80px; resize: vertical; }
 	.saudi-field select { appearance: auto; }
 
+	/* Inline note under a field: what the server will and will not allow, shown
+	   before the employee hits submit rather than after it is refused. */
+	.saudi-hint {
+		margin-top: 8px;
+		padding: 10px 12px;
+		border: 1px solid #fde68a;
+		border-radius: 10px;
+		background: #fffbeb;
+		color: #92400e;
+		font-size: 13px;
+		line-height: 1.5;
+	}
+	.saudi-hint--blocked { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+	.saudi-hint--ok { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+
 	/* Submit Button */
 	.saudi-submit-btn {
 		width: 100%;

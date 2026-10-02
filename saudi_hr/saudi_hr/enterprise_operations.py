@@ -744,6 +744,73 @@ def _employee_rows(doctype, employee, fields, filters=None, order_by="modified d
 	return frappe.get_all(doctype, filters=query_filters, fields=fields, order_by=order_by, limit_page_length=limit)
 
 
+def _format_punch_time(value):
+	"""A punch time as the dashboard shows it, e.g. 08:05 ص."""
+	if not value or not hasattr(value, "strftime"):
+		return None
+	formatted = value.strftime("%I:%M %p")
+	if "AM" in formatted:
+		return formatted.replace("AM", "ص")
+	if "PM" in formatted:
+		return formatted.replace("PM", "م")
+	return formatted
+
+
+def _attendance_status_for(employee):
+	"""Where this employee actually is today, from their own punches.
+
+	The dashboard used to read the HRMS ``Employee Checkin``, which this site
+	does not have, so it always fell through to the wall clock and told every
+	employee they were "present now" with a ticking time. The punches this app
+	actually writes are ``Saudi Employee Checkin`` rows.
+
+	``status_code`` is what the page localises; ``status_label`` stays bilingual
+	for the Desk page that still reads it directly.
+	"""
+	today = nowdate()
+	punches = []
+	if _doctype_exists("Saudi Employee Checkin"):
+		punches = frappe.get_all(
+			"Saudi Employee Checkin",
+			filters={
+				"employee": employee,
+				"time": ["between", [f"{today} 00:00:00", f"{today} 23:59:59"]],
+			},
+			fields=["name", "log_type", "time"],
+			order_by="time asc",
+			limit_page_length=0,
+		)
+
+	last = punches[-1] if punches else None
+	# the check-in time is the last IN of the day, not the last punch: a day
+	# that ends with OUT still has a check-in worth showing
+	checkin = next((p for p in reversed(punches) if p.get("log_type") == "IN"), None)
+	checked_in = bool(last and last.get("log_type") == "IN")
+
+	if checked_in:
+		status_code = "checked_in"
+		status_label = "حاضر الآن / Present Now"
+	elif punches:
+		status_code = "checked_out"
+		status_label = "تم تسجيل الانصراف / Checked Out"
+	else:
+		status_code = "not_checked_in"
+		status_label = "لم تسجل الحضور / Not Checked In"
+
+	return {
+		"is_present": checked_in,
+		"status_code": status_code,
+		"status_label": status_label,
+		# the check-in time, and nothing else. There is no clock to tick here.
+		"checkin_time": _format_punch_time(checkin.get("time")) if checkin else None,
+		"time": _format_punch_time(checkin.get("time")) if checkin else "",
+		"punch_count": len(punches),
+		"live_clock": False,
+		"date_hijri": _hijri_date_str(today),
+		"date_gregorian": cstr(today),
+	}
+
+
 def _hijri_date_str(gdate):
 	"""Arabic Hijri date string via the tabular Islamic calendar, e.g. 'الأحد 9 ربيع الثاني 1448 هـ'."""
 	d = getdate(gdate)
@@ -817,30 +884,7 @@ def get_self_service_portal():
 	}
 
 	# Attendance status summary
-	latest_checkin = None
-	if _doctype_exists("Employee Checkin"):
-		checkins = frappe.get_all("Employee Checkin", filters={"employee": emp}, fields=["time", "log_type"], order_by="time desc", limit_page_length=1)
-		if checkins:
-			latest_checkin = checkins[0].get("time")
-
-	now_dt = now_datetime()
-	if latest_checkin and hasattr(latest_checkin, "strftime"):
-		formatted_time = latest_checkin.strftime("%I:%M %p")
-	else:
-		formatted_time = now_dt.strftime("%I:%M %p")
-	if "AM" in formatted_time:
-		formatted_time = formatted_time.replace("AM", "ص")
-	elif "PM" in formatted_time:
-		formatted_time = formatted_time.replace("PM", "م")
-
-	attendance_status = {
-		"is_present": True,
-		"status_label": "حاضر الآن",
-		"time": formatted_time,
-		"live_clock": not bool(latest_checkin),
-		"date_hijri": _hijri_date_str(nowdate()),
-		"date_gregorian": cstr(nowdate()),
-	}
+	attendance_status = _attendance_status_for(emp)
 
 	# Formatted recent requests list
 	recent_requests = []

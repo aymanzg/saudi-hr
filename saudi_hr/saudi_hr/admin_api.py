@@ -99,6 +99,15 @@ LEAVE_REGISTRY = (
 		"workflow_state",
 	),
 	(
+		"Saudi Emergency Leave",
+		"Emergency Leave / إجازة طارئة",
+		"from_date",
+		"to_date",
+		"total_days",
+		"reason",
+		"workflow_state",
+	),
+	(
 		"Special Leave",
 		"Special Leave / إجازة خاصة",
 		"leave_start_date",

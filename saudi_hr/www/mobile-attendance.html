@@ -80,7 +80,7 @@
 				</div>
 				<div class="saudi-attendance-body">
 					<div class="saudi-status-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> <span id="att-status-label">{{ att.status_label }}</span></div>
-					<div class="saudi-attendance-time" id="att-live-time">{{ att.time }}</div>
+					<div class="saudi-attendance-time" id="att-live-time" hidden>{{ att.time }}</div>
 					<div class="saudi-attendance-date" id="att-hijri-date"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> <span>{{ att.date_hijri }}</span></div>
 					<div class="saudi-elapsed" id="att-elapsed" style="display:none;"></div>
 					<button class="saudi-punch-btn saudi-punch-btn--in" id="home-punch-btn" onclick="startPunchFlow('IN')" data-i18n-key="punch_in">تسجيل دخول (IN)</button>
@@ -163,6 +163,8 @@
 					<option value="sick" data-i18n-key="leave_sick">إجازة مرضية</option>
 					<option value="special" data-i18n-key="leave_special">إجازة خاصة</option>
 					<option value="maternity_paternity" data-i18n-key="leave_maternity">إجازة أمومة وأبوة</option>
+					<option value="emergency_leave" data-i18n-key="leave_emergency">إجازة طارئة</option>
+					<option value="punch_correction" data-i18n-key="leave_punch_correction">تصحيح البصمة</option>
 				</select>
 			</div>
 			<div class="saudi-field" id="leave-subtype-field" style="display:none;">
@@ -171,11 +173,23 @@
 			</div>
 			<div class="saudi-field">
 				<label data-i18n-key="from_date">من تاريخ</label>
-				<input type="date" id="leave-start-date">
+				<input type="date" id="leave-start-date" onchange="onLeaveDatesChanged()">
 			</div>
-			<div class="saudi-field">
+			<div class="saudi-field" id="leave-end-date-field">
 				<label data-i18n-key="to_date">إلى تاريخ</label>
-				<input type="date" id="leave-end-date">
+				<input type="date" id="leave-end-date" onchange="onLeaveDatesChanged()">
+			</div>
+			<div class="saudi-field" id="leave-emergency-field" style="display:none;">
+				<label data-i18n-key="emergency_remaining">المتاح من الإجازة الطارئة</label>
+				<div class="saudi-card-lite"><strong id="leave-emergency-balance">--</strong></div>
+				<div class="saudi-hint" id="leave-emergency-warning" style="display:none;"></div>
+			</div>
+			<div class="saudi-field" id="punch-correction-field" style="display:none;">
+				<label data-i18n-key="current_checkin">وقت الحضور المسجل</label>
+				<div class="saudi-card-lite"><strong id="punch-current-time">—</strong></div>
+				<label data-i18n-key="corrected_time_label">وقت الحضور الصحيح</label>
+				<input type="time" id="punch-corrected-time">
+				<div class="saudi-hint" id="punch-correction-warning" style="display:none;"></div>
 			</div>
 			<div class="saudi-field">
 				<label data-i18n-key="reason_label">مبرر الطلب</label>
@@ -481,6 +495,7 @@ function renderQuickActions(portalData) {
 /* Leave Request */
 var leaveAttachments = [];
 var leaveOptionsData = null;
+var leaveBlocked = false;
 
 function initLeaveForm() {
 	var input = document.getElementById("leave-files-input");
@@ -556,9 +571,96 @@ function updateLeaveForm() {
 	var isSick = requestType === "sick";
 	var isSpecial = requestType === "special";
 	var isMaternity = requestType === "maternity_paternity";
+	var isEmergency = requestType === "emergency_leave";
+	var isPunch = requestType === "punch_correction";
 	document.getElementById("leave-subtype-field").style.display = (isSpecial || isMaternity) ? "block" : "none";
 	document.getElementById("leave-balance-field").style.display = isAnnual ? "block" : "none";
 	document.getElementById("half-day-field").style.display = isAnnual ? "block" : "none";
+	document.getElementById("leave-emergency-field").style.display = isEmergency ? "block" : "none";
+	document.getElementById("punch-correction-field").style.display = isPunch ? "block" : "none";
+	// a correction is always about one day, so there is no end date to ask for
+	document.getElementById("leave-end-date-field").style.display = isPunch ? "none" : "block";
+	leaveBlocked = false;
+	if (isEmergency) { refreshEmergencyAvailability(); }
+	else if (isPunch) { refreshPunchContext(); }
+}
+
+function setLeaveHint(elId, message, tone) {
+	var el = document.getElementById(elId);
+	if (!el) { return; }
+	if (!message) { el.style.display = "none"; el.textContent = ""; return; }
+	el.className = "saudi-hint" + (tone ? " saudi-hint--" + tone : "");
+	el.textContent = message;
+	el.style.display = "block";
+}
+
+/* The server is the gate; this only tells the employee why before they submit,
+   so nobody discovers the rule only from a refusal. */
+function countLeaveDays(fromDate, toDate) {
+	// inclusive of both ends, matching how the server counts a leave request
+	var start = new Date(fromDate + "T00:00:00");
+	var end = new Date((toDate || fromDate) + "T00:00:00");
+	if (isNaN(start.getTime()) || isNaN(end.getTime())) { return 0; }
+	return Math.round((end - start) / 86400000) + 1;
+}
+
+function refreshEmergencyAvailability() {
+	var fromDate = document.getElementById("leave-start-date").value;
+	frappe.call({
+		method: "saudi_hr.saudi_hr.doctype.saudi_emergency_leave.saudi_emergency_leave.get_emergency_leave_availability",
+		args: fromDate ? { from_date: fromDate } : {},
+		callback: function(r) {
+			var a = r.message || {};
+			var el = document.getElementById("leave-emergency-balance");
+			if (el) {
+				el.textContent = a.emergency_available == null ? "—"
+					: Number(a.emergency_available).toFixed(0) + " " + t("day_unit");
+			}
+			if (a.blocked_by_annual_leave) {
+				leaveBlocked = true;
+				setLeaveHint("leave-emergency-warning", t("emergency_gate_warning"), "blocked");
+			} else if (!(a.emergency_available > 0)) {
+				leaveBlocked = true;
+				setLeaveHint("leave-emergency-warning", t("emergency_quota_warning"), "blocked");
+			} else if (fromDate && countLeaveDays(fromDate, document.getElementById("leave-end-date").value) > a.emergency_available) {
+				leaveBlocked = true;
+				setLeaveHint("leave-emergency-warning", t("emergency_days_short"), "blocked");
+			} else {
+				leaveBlocked = false;
+				setLeaveHint("leave-emergency-warning", "");
+			}
+		}
+	});
+}
+
+function refreshPunchContext() {
+	var el = document.getElementById("punch-current-time");
+	if (el) { el.textContent = "…"; }
+	leaveBlocked = false;
+	setLeaveHint("punch-correction-warning", "");
+	var date = document.getElementById("leave-start-date").value;
+	if (!date) { if (el) { el.textContent = "—"; } return; }
+	frappe.call({
+		method: "saudi_hr.saudi_hr.doctype.saudi_punch_correction.saudi_punch_correction.get_punch_correction_context",
+		args: { attendance_date: date },
+		callback: function(r) {
+			var c = r.message || {};
+			if (el) { el.textContent = c.current_in_time ? c.current_in_time.slice(0, 5) : "—"; }
+			if (c.future_date) {
+				leaveBlocked = true;
+				setLeaveHint("punch-correction-warning", t("future_date_not_allowed"), "blocked");
+			} else if (!c.correctable) {
+				leaveBlocked = true;
+				setLeaveHint("punch-correction-warning", t("no_checkin_found"), "blocked");
+			}
+		}
+	});
+}
+
+function onLeaveDatesChanged() {
+	var requestType = document.getElementById("leave-request-type").value;
+	if (requestType === "emergency_leave") { refreshEmergencyAvailability(); }
+	else if (requestType === "punch_correction") { refreshPunchContext(); }
 }
 
 function renderLeaveAttachments() {
@@ -576,6 +678,16 @@ function submitMobileLeaveRequest() {
 		showToast(t("subtype_required"), "error");
 		return;
 	}
+	var correctedTime = "";
+	if (requestType === "punch_correction") {
+		correctedTime = document.getElementById("punch-corrected-time").value || "";
+		if (!correctedTime) { showToast(t("corrected_time_required"), "error"); return; }
+	}
+	if (leaveBlocked) {
+		showToast((document.getElementById("leave-emergency-warning").textContent
+			|| document.getElementById("punch-correction-warning").textContent || t("emergency_gate_warning")), "error");
+		return;
+	}
 	var args = {
 		request_type: requestType,
 		start_date: startDate,
@@ -585,6 +697,7 @@ function submitMobileLeaveRequest() {
 		half_day: document.getElementById("leave-half-day").checked ? 1 : 0,
 		attachments_json: JSON.stringify(leaveAttachments)
 	};
+	if (correctedTime) { args.corrected_time = correctedTime; }
 	btn.disabled = true;
 	btn.textContent = t("submitting");
 	frappe.call({
@@ -601,6 +714,7 @@ function submitMobileLeaveRequest() {
 			document.getElementById("leave-subtype-select").innerHTML = "";
 			document.getElementById("leave-half-day").checked = false;
 			document.getElementById("leave-files-input").value = "";
+			document.getElementById("punch-corrected-time").value = "";
 			leaveAttachments = [];
 			renderLeaveAttachments();
 			updateLeaveForm();
@@ -743,14 +857,29 @@ function updateHomeElapsed() {
 	el.style.display = "flex";
 }
 
-function updateLiveClock() {
-	if (!window.attLiveClock) return;
+/* The clock is the employee's own check-in time, and it only exists while they
+   are checked in. A ticking wall clock said nothing about their own day. */
+var ATT_STATUS_LABELS = {
+	checked_in: "att_checked_in_now",
+	checked_out: "att_checked_out",
+	not_checked_in: "att_not_checked_in"
+};
+
+function renderAttendanceClock() {
 	var el = document.getElementById("att-live-time");
-	if (!el) return;
-	var d = new Date();
-	var h = d.getHours(), m = d.getMinutes();
-	var am = h < 12, h12 = h % 12; if (h12 === 0) h12 = 12;
-	el.textContent = pad2(h12) + ":" + pad2(m) + " " + (am ? "ص" : "م");
+	var st = window.attStatus || {};
+	if (el) {
+		if (st.status_code === "checked_in" && st.checkin_time) {
+			el.textContent = st.checkin_time;
+			el.hidden = false;
+		} else {
+			el.textContent = "";
+			el.hidden = true;
+		}
+	}
+	var label = document.getElementById("att-status-label");
+	var key = ATT_STATUS_LABELS[st.status_code];
+	if (label && key) label.textContent = t(key);
 }
 
 function loadAttendanceLog() {
@@ -761,6 +890,7 @@ function loadAttendanceLog() {
 			var st = r.message || {};
 			window.attStatus = st;
 			window.attCheckinTime = (st.last_log_type === "IN") ? parseCheckinTime(st.last_checkin_time) : null;
+			renderAttendanceClock();
 			updateHomePunch();
 			updateHomeElapsed();
 			loadMonthlyAttendance();
@@ -1112,7 +1242,7 @@ document.addEventListener("DOMContentLoaded", function() {
 
 	if (window.frappe) {
 		loadAttendanceLog();
-		setInterval(function() { updateHomeElapsed(); updateLiveClock(); }, 30000);
+		setInterval(updateHomeElapsed, 30000);
 	}
 
 	restorePanel("home");
@@ -1154,10 +1284,8 @@ document.addEventListener("DOMContentLoaded", function() {
 					document.getElementById("leave-oth-num").textContent = data.leave_balance.other;
 				}
 				if (data.attendance_status) {
-					document.getElementById("att-status-label").textContent = data.attendance_status.status_label;
-					document.getElementById("att-live-time").textContent = data.attendance_status.time;
-					window.attLiveClock = !!data.attendance_status.live_clock;
-					updateLiveClock();
+					window.attStatus = data.attendance_status;
+					renderAttendanceClock();
 				}
 				if (data.summary && data.summary.pending_acknowledgements) {
 					document.getElementById("ack-count").textContent = data.summary.pending_acknowledgements;

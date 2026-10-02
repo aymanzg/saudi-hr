@@ -235,6 +235,24 @@ def has_special_leave_permission(doc, user=None, permission_type=None):
 	return _employee_permission(doc, user)
 
 
+def get_saudi_emergency_leave_query(user=None):
+	# emergency leave goes to the manager like sick leave does, so the approver
+	# has to be able to see the request they are being asked to approve
+	return _employee_or_approver_query("Saudi Emergency Leave", DIRECT_MANAGER_FIELDS, user)
+
+
+def has_saudi_emergency_leave_permission(doc, user=None, permission_type=None):
+	return _employee_or_approver_permission(doc, DIRECT_MANAGER_FIELDS, user)
+
+
+def get_saudi_punch_correction_query(user=None):
+	return _employee_or_approver_query("Saudi Punch Correction", DIRECT_MANAGER_FIELDS, user)
+
+
+def has_saudi_punch_correction_permission(doc, user=None, permission_type=None):
+	return _employee_or_approver_permission(doc, DIRECT_MANAGER_FIELDS, user)
+
+
 def get_attendance_location_query(user=None):
 	return _branch_query("Attendance Location", user)
 

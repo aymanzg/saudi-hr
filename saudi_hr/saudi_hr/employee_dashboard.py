@@ -28,6 +28,8 @@ DASHBOARD_GROUPS = (
 			"Saudi Shift Assignment",
 			"Saudi Annual Leave",
 			"Saudi Sick Leave",
+			"Saudi Emergency Leave",
+			"Saudi Punch Correction",
 			"Maternity Paternity Leave",
 			"Special Leave",
 			"Overtime Request",
