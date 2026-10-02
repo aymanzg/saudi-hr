@@ -13,9 +13,11 @@ resolved per doctype at call time.  The three request types use one, while
 Special Leave and Maternity Paternity Leave use a plain submit instead, and
 attaching a workflow to one of them later needs no change here.
 
-It does not grant visibility.  Every read goes through ``frappe.get_all``,
+It does not grant visibility.  Every read goes through ``frappe.get_list``,
 which applies the caller's own permissions, so an approver sees the stage
-they are responsible for rather than the whole inbox.
+they are responsible for rather than the whole inbox.  Counts the caller
+cannot legitimately make, such as company headcount while pinned to one
+employee, are withheld rather than approximated.
 """
 
 import json
@@ -25,6 +27,7 @@ from urllib.parse import quote
 import frappe
 from frappe import _
 from frappe.model.rename_doc import rename_doc
+from frappe.permissions import get_user_permissions
 from frappe.model.workflow import (
 	apply_workflow,
 	get_transitions,
@@ -44,6 +47,14 @@ from saudi_hr.saudi_hr.utils import assert_doctype_permissions, is_saudi_nationa
 # deliberately absent here: they come from each workflow, so a Department
 # Approver reaches the page and sees only their own queue without being a
 # general administrator.
+# The verb each endpoint allows. The page mirrors this to decide whether to
+# send a GET or a POST, and the tests assert the two stay in step, because
+# Frappe refuses a mismatched verb with "Not permitted" before the permission
+# check even runs.
+POST_ONLY_METHODS = frozenset(
+	{"create_employee", "apply_leave_action", "submit_leave_request"}
+)
+
 ADMIN_PORTAL_ROLES = frozenset(
 	{
 		"System Manager",
@@ -231,18 +242,55 @@ def get_admin_dashboard():
 		if not frappe.db.table_exists(doctype):
 			continue
 
-		summary = {"doctype": doctype, "label": label, "total": 0, "draft": 0, "closed": 0}
+		# An approver role may hold read on one leave doctype and not another.
+		# get_list raises rather than returning nothing, so the doctype is
+		# reported as unreadable instead of failing the whole dashboard.
+		readable = bool(frappe.has_permission(doctype, "read", throw=False))
+		summary = {
+			"doctype": doctype,
+			"label": label,
+			"total": 0,
+			"draft": 0,
+			"closed": 0,
+			"approved": 0,
+			"rejected": 0,
+			"cancelled": 0,
+			# closed with a state the portal does not recognise
+			"other": 0,
+			"readable": readable,
+			# the tally below is capped, so say so rather than report a wrong total
+			"truncated": False,
+		}
 		fields = _existing_fields(doctype, ["workflow_state", "status", "docstatus", "employee"])
-		for row in frappe.get_all(
-			doctype, fields=fields, order_by="creation desc", limit_page_length=MAX_LIMIT
-		):
+		# get_list, not get_all: a Department Approver must not see headcounts for
+		# requests the permission query hides from them.
+		rows = (
+			frappe.get_list(
+				doctype, fields=fields, order_by="creation desc", limit_page_length=MAX_LIMIT
+			)
+			if readable
+			else []
+		)
+		# Permissions are applied by get_list, so an exact count would need a
+		# second, permission-free query. Capping and flagging is the honest
+		# trade: the number is right for what it covers and the page says when
+		# there is more.
+		summary["truncated"] = len(rows) >= MAX_LIMIT
+		for row in rows:
 			summary["total"] += 1
+			state = _row_state(row)
+			# Report and dashboard must agree, so the same normalisation decides
+			# both. An open state is a draft; anything else is settled and is
+			# counted under the outcome it actually carries.
 			if _is_open(row):
 				summary["draft"] += 1
 			else:
 				summary["closed"] += 1
+				# anything unrecognised is closed but has no outcome, so it must
+				# not be counted as approved
+				summary[state if state in ("approved", "rejected", "cancelled") else "other"] += 1
 
-		actionable = _count_actionable(doctype, entry)
+		actionable = _count_actionable(doctype, entry) if readable else 0
 		summary["actionable"] = actionable
 		actionable_total += actionable
 		leave[doctype] = summary
@@ -251,23 +299,53 @@ def get_admin_dashboard():
 		"employees": _employee_counts(),
 		"leave": leave,
 		"actionable_total": actionable_total,
+		# labels of the doctypes whose tallies cover only the newest MAX_LIMIT rows
+		"truncated": sorted(
+			summary["label"] for summary in leave.values() if summary["truncated"]
+		),
 		"generated_at": now(),
 	}
 
 
 def _employee_counts():
-	counts = {
-		"total": frappe.db.count("Employee"),
-		"active": frappe.db.count("Employee", {"status": "Active"}),
-		"inactive": frappe.db.count("Employee", {"status": ["!=", "Active"]}),
-	}
+	"""Headcount as this user is allowed to see it.
+
+	Headcount is a company-wide number, so it is only meaningful to roles that
+	can read the whole employee list. A Department Approver arriving here has a
+	User Permission pinning them to their own department; company totals would
+	be both wrong and a leak, so they are withheld rather than approximated.
+	"""
+	counts = {"total": 0, "active": 0, "inactive": 0, "saudi": 0, "scoped": True}
+	if not frappe.has_permission("Employee", "read", throw=False):
+		return counts
+	# Frappe's own view of whether this user is pinned. It deliberately returns
+	# nothing for Administrator and Guest, so querying User Permission directly
+	# would wrongly report them as scoped.
+	if get_user_permissions(frappe.session.user).get("Employee"):
+		# a pinned user sees only their own slice, so no company total is shown
+		return counts
+	counts["scoped"] = False
+
+	status_field = _existing_fields("Employee", ["status"])
+	rows = (
+		frappe.get_list(
+			"Employee",
+			fields=["name"] + status_field,
+			limit_page_length=0,
+		)
+		if status_field
+		else []
+	)
+	counts["total"] = len(rows)
+	counts["active"] = sum(1 for row in rows if cstr(row.get("status")) == "Active")
+	counts["inactive"] = counts["total"] - counts["active"]
+
 	# The site stores nationality as free text in either direction, so reuse the
 	# app's own matcher rather than reimplementing it as a SQL LIKE.
 	nationality_field = _existing_fields("Employee", ["nationality", "custom_nationality"])
-	counts["saudi"] = 0
 	if nationality_field:
 		primary = nationality_field[0]
-		values = frappe.get_all("Employee", pluck=primary, limit_page_length=0) or []
+		values = frappe.get_list("Employee", pluck=primary, limit_page_length=0) or []
 		counts["saudi"] = sum(1 for value in values if is_saudi_nationality(value))
 	return counts
 
@@ -361,10 +439,18 @@ def _actionable_states(doctype):
 
 
 def _count_actionable(doctype, entry):
-	"""How many open requests the current user could act on right now."""
+	"""How many open requests the current user could act on right now.
+
+	Every branch goes through get_list, so the badge cannot advertise more work
+	than this user is actually allowed to see.
+	"""
 	if not get_workflow_name(doctype):
 		# no workflow: a draft the user is allowed to submit counts as actionable
-		return frappe.db.count(doctype, {"docstatus": 0})
+		# no limit_page_length: get_list defaults to 20 rows, which would cap the
+		# badge at 20 on a site with a long queue of unsubmitted drafts
+		return len(
+			frappe.get_list(doctype, pluck="name", filters={"docstatus": 0}, limit_page_length=0) or []
+		)
 
 	states = _actionable_states(doctype)
 	if not states:
@@ -372,7 +458,7 @@ def _count_actionable(doctype, entry):
 
 	# narrow to the states this user can act in before loading anything, so a
 	# site with a long leave history does not pay a document load per request
-	rows = frappe.get_all(
+	rows = frappe.get_list(
 		doctype,
 		filters={"workflow_state": ["in", list(states)]},
 		fields=["name", "workflow_state", "docstatus", "owner"],
@@ -391,6 +477,12 @@ def _count_actionable(doctype, entry):
 def list_employees(search=None, company=None, department=None, status=None, limit=None):
 	assert_portal_access()
 	limit = _clean_limit(limit)
+
+	# An approver role reaches the portal to clear leave, not to browse the
+	# employee directory. Withhold it rather than returning an empty table that
+	# looks like a broken query.
+	if not frappe.has_permission("Employee", "read", throw=False):
+		return {"rows": [], "limit": limit, "returned": 0, "restricted": True}
 
 	candidate_fields = _existing_fields(
 		"Employee",
@@ -440,7 +532,9 @@ def list_employees(search=None, company=None, department=None, status=None, limi
 			if field in candidate_fields
 		]
 
-	rows = frappe.get_all(
+	# get_list so a User Permission on Employee narrows this list the same way
+	# it narrows the Desk list view.
+	rows = frappe.get_list(
 		"Employee",
 		filters=filters,
 		or_filters=or_filters,
@@ -454,6 +548,8 @@ def list_employees(search=None, company=None, department=None, status=None, limi
 		"limit": limit,
 		"returned": len(rows),
 		"has_more": len(rows) == limit,
+		# the UI hides the employee panel rather than showing a bare table
+		"restricted": False,
 	}
 
 
@@ -497,6 +593,8 @@ def get_employee_form_options():
 		"gender",
 		"marital_status",
 		"status",
+		# the form exposes this one, so its options have to come back too
+		"custom_id_type",
 	)
 	options = {}
 	for field in candidates:
@@ -677,6 +775,10 @@ def list_leave_requests(state=None, doctype=None, limit=None):
 			continue
 		if not frappe.db.table_exists(leave_doctype):
 			continue
+		# a role may hold read on one leave doctype and not another; get_list
+		# raises in that case rather than returning nothing
+		if not frappe.has_permission(leave_doctype, "read", throw=False):
+			continue
 
 		fields = _existing_fields(
 			leave_doctype, ["name", "employee", "creation", "modified", "workflow_state", "status", "docstatus"]
@@ -686,7 +788,10 @@ def list_leave_requests(state=None, doctype=None, limit=None):
 
 		states = _actionable_states(leave_doctype) if get_workflow_name(leave_doctype) else {}
 
-		for record in frappe.get_all(
+		# get_list, not get_all: the app's permission_query_conditions already
+		# scope most roles, and bypassing it here would widen every approver's
+		# inbox to the whole site.
+		for record in frappe.get_list(
 			leave_doctype,
 			fields=list(dict.fromkeys(fields)),
 			order_by="creation desc",

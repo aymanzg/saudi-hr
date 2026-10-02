@@ -53,6 +53,73 @@ def defined_functions(source):
 	return set(re.findall(r"^\s*function\s+([A-Za-z_$][\w$]*)\s*\(", source, re.M))
 
 
+def strip_js_literals(source):
+	"""Blank out comments, strings and regex literals, keeping line structure.
+
+	A page builds HTML in strings and strips tags with regexes, so the raw
+	source contains ``var(--text-muted)``, ``:not(...)`` and ``/\\?"/``. Left in
+	place they look like calls to undefined functions. Regex literals are
+	detected by the preceding character rather than by full parsing, which is
+	enough for hand written page code.
+	"""
+	out = []
+	i = 0
+	length = len(source)
+	# a slash opens a regex only after something that cannot end an expression
+	regex_ok = set("(,=:[!&|?{};+-*%~^<>")
+	while i < length:
+		char = source[i]
+		if source.startswith("//", i):
+			while i < length and source[i] != "\n":
+				i += 1
+			continue
+		if source.startswith("/*", i):
+			end = source.find("*/", i + 2)
+			end = length if end == -1 else end + 2
+			out.append("\n" * source.count("\n", i, end))
+			i = end
+			continue
+		if char in "\"'":
+			quote = char
+			i += 1
+			while i < length:
+				if source[i] == "\\":
+					i += 2
+					continue
+				if source[i] == quote:
+					i += 1
+					break
+				i += 1
+			continue
+		if char == "/" and (not out or out[-1] in regex_ok):
+			end = i + 1
+			in_class = False
+			while end < length:
+				if source[end] == "\\":
+					end += 2
+					continue
+				if source[end] == "\n":
+					break
+				if source[end] == "[":
+					in_class = True
+				elif source[end] == "]":
+					in_class = False
+				elif source[end] == "/" and not in_class:
+					break
+				end += 1
+			out.append("\n" * source.count("\n", i, end))
+			i = end + 1
+			continue
+		out.append(char)
+		i += 1
+	return "".join(out)
+
+
+def page_script(source):
+	"""The page's own inline script, with comment and literal bodies removed."""
+	return strip_js_literals("\n".join(re.findall(r"<script>(.*?)</script>", source, re.S)))
+
+
 def portal_pages():
 	"""www pages that load the shared runtime."""
 	pages = []
@@ -190,9 +257,8 @@ class TestPortalSharedAssets(unittest.TestCase):
 			"console",
 		}
 		for name, source in portal_pages():
-			inline = re.findall(r"<script>(.*?)</script>", source, re.S)
-			page_js = "\n".join(inline)
-			called = set(re.findall(r"(?<![.\w$])([a-z_$][\w$]*)\s*\(", page_js))
+			page_js = page_script(source)
+			called = set(re.findall(r"(?<![.\w$:])([a-z_$][\w$]*)\s*\(", page_js))
 			own = defined_functions(page_js)
 			missing = sorted(called - known - own)
 			with self.subTest(page=name):

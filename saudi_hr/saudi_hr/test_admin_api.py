@@ -7,6 +7,8 @@ the counts asserted in tearDown prove the site is unchanged.
 """
 
 import json
+import os
+import re
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
@@ -34,8 +36,12 @@ WORKFLOW_DOCTYPES = ("Saudi Annual Leave", "Saudi Sick Leave", "Mobile Leave Req
 PLAIN_DOCTYPES = ("Special Leave", "Maternity Paternity Leave")
 
 
-class TestAdminApiAccess(FrappeTestCase):
-	"""The portal gate and the per-document permission behaviour under it."""
+class _ApiTestBase(FrappeTestCase):
+	"""Shared fixtures: a pinned admin user and a readable leave request.
+
+	Both are needed by more than one test class, so they live here rather than
+	being copied per class.
+	"""
 
 	def setUp(self):
 		super().setUp()
@@ -57,92 +63,27 @@ class TestAdminApiAccess(FrappeTestCase):
 		).insert(ignore_permissions=True)
 		return email
 
-	def test_portal_refuses_a_user_with_no_admin_role(self):
-		email = self._make_user(["Employee"])
-		frappe.set_user(email)
-		self.assertRaises(frappe.PermissionError, assert_portal_access)
-		for endpoint in (
-			get_admin_dashboard,
-			get_admin_config,
-			get_employee_form_options,
-			list_employees,
-			list_leave_requests,
-		):
-			self.assertRaises(frappe.PermissionError, endpoint)
-
-	def test_portal_refuses_guest(self):
-		frappe.set_user("Guest")
-		self.assertRaises(frappe.PermissionError, assert_portal_access)
-
-	def test_portal_allows_an_hr_role(self):
-		frappe.set_user(self._make_user(["HR User"]))
-		assert_portal_access()
-		self.assertEqual(get_admin_config()["user"], frappe.session.user)
-
-	def test_a_department_approver_reaches_the_page_without_being_hr(self):
-		frappe.set_user(self._make_user(["Department Approver"]))
-		assert_portal_access()
-		self.assertFalse(get_admin_config()["can_manage_employees"])
-
-	def test_unreadable_request_is_refused_with_a_clean_error(self):
-		"""A User Permission can hide a document the list query still returns.
-
-		The app's permission_query_conditions hook returns an empty condition for
-		elevated roles, so get_all() surfaces requests the document level check
-		refuses.  The portal must agree with the stricter check, otherwise it
-		offers a button that fails on click.
-		"""
-		request = self._make_leave_request("Saudi Annual Leave")
-		email = self._make_user(["HR User"])
-		frappe.set_user(email)
-
-		# pin the user to a different employee, as the site does for real HR
-		# users; apply_to_all_doctypes is what makes it reach the leave doctype
-		other = frappe.db.get_value(
-			"Employee",
-			{"name": ["!=", frappe.db.get_value("Saudi Annual Leave", request, "employee")]},
-			"name",
-		)
-		frappe.get_doc(
-			{
-				"doctype": "User Permission",
-				"user": email,
-				"allow": "Employee",
-				"for_value": other,
-				"apply_to_all_doctypes": 1,
-			}
-		).insert(ignore_permissions=True)
-
-		# the list query still offers the row, which is the trap this guards
-		self.assertIn(request, [r["name"] for r in list_leave_requests()["rows"]])
-		self.assertFalse(frappe.has_permission("Saudi Annual Leave", "read", doc=request, throw=False))
-		self.assertRaises(frappe.PermissionError, get_leave_request, "Saudi Annual Leave", request)
-		self.assertRaises(
-			frappe.PermissionError, apply_leave_action, "Saudi Annual Leave", request, "Submit Request"
-		)
-
-	def test_an_unreadable_request_is_never_marked_actionable(self):
-		request = self._make_leave_request("Saudi Annual Leave")
-		email = self._make_user(["HR User"])
-		frappe.set_user(email)
-		other = frappe.db.get_value(
-			"Employee",
-			{"name": ["!=", frappe.db.get_value("Saudi Annual Leave", request, "employee")]},
-			"name",
-		)
-		frappe.get_doc(
-			{
-				"doctype": "User Permission",
-				"user": email,
-				"allow": "Employee",
-				"for_value": other,
-				"apply_to_all_doctypes": 1,
-			}
-		).insert(ignore_permissions=True)
-		row = next(r for r in list_leave_requests()["rows"] if r["name"] == request)
-		self.assertFalse(row["actionable"])
-		self.assertEqual(row["actions"], [])
-		self.assertFalse(row["can_read"])
+	def _plain_draft(self, doctype):
+		employee = frappe.get_all("Employee", pluck="name", limit_page_length=1)[0]
+		doc = {"doctype": doctype, "employee": employee, "company": self.company}
+		if doctype == "Special Leave":
+			doc.update(
+				{
+					"leave_type": "Marriage Leave / إجازة زواج (م.113 – 5 أيام)",
+					"leave_start_date": "2026-11-01",
+					"leave_end_date": "2026-11-02",
+				}
+			)
+		else:
+			doc.update(
+				{
+					"leave_type": "Maternity / أمومة (84 يوماً)",
+					"leave_start_date": "2026-11-01",
+					"entitled_days": 84,
+					"medical_certificate_attached": 1,
+				}
+			)
+		return frappe.get_doc(doc).insert(ignore_permissions=True).name
 
 	def _make_leave_request(self, doctype):
 		"""A draft request owned by Administrator, so self-approval never blocks."""
@@ -174,13 +115,117 @@ class TestAdminApiAccess(FrappeTestCase):
 		return frappe.get_doc(doc).insert(ignore_permissions=True).name
 
 
-class TestAdminApiLeaveActions(FrappeTestCase):
-	"""Approval actions are the security boundary, so they are tested hardest."""
+class TestAdminApiAccess(_ApiTestBase):
+	"""The portal gate and the per-document permission behaviour under it."""
 
-	def setUp(self):
-		super().setUp()
-		frappe.set_user("Administrator")
-		self.company = frappe.get_all("Company", pluck="name", limit_page_length=1)[0]
+	def test_portal_refuses_a_user_with_no_admin_role(self):
+		email = self._make_user(["Employee"])
+		frappe.set_user(email)
+		self.assertRaises(frappe.PermissionError, assert_portal_access)
+		for endpoint in (
+			get_admin_dashboard,
+			get_admin_config,
+			get_employee_form_options,
+			list_employees,
+			list_leave_requests,
+		):
+			self.assertRaises(frappe.PermissionError, endpoint)
+
+	def test_portal_refuses_guest(self):
+		frappe.set_user("Guest")
+		self.assertRaises(frappe.PermissionError, assert_portal_access)
+
+	def test_portal_allows_an_hr_role(self):
+		frappe.set_user(self._make_user(["HR User"]))
+		assert_portal_access()
+		self.assertEqual(get_admin_config()["user"], frappe.session.user)
+
+	def test_a_department_approver_reaches_the_page_without_being_hr(self):
+		frappe.set_user(self._make_user(["Department Approver"]))
+		assert_portal_access()
+		self.assertFalse(get_admin_config()["can_manage_employees"])
+
+	def _pin_user_to_another_employee(self, email, request_doctype, request):
+		"""Pin a user to an employee other than the request's.
+
+		This is how the site configures real HR users, and it is the case where
+		the list query and the document check can disagree.
+		"""
+		other = frappe.db.get_value(
+			"Employee",
+			{"name": ["!=", frappe.db.get_value(request_doctype, request, "employee")]},
+			"name",
+		)
+		frappe.get_doc(
+			{
+				"doctype": "User Permission",
+				"user": email,
+				"allow": "Employee",
+				"for_value": other,
+				"apply_to_all_doctypes": 1,
+			}
+		).insert(ignore_permissions=True)
+
+	def test_unreadable_request_is_refused_with_a_clean_error(self):
+		"""A User Permission hides a request, and every layer must agree.
+
+		The inbox is built with get_list so the app's permission query applies;
+		get_all used to bypass it and leak rows the document check refuses. The
+		detail and action endpoints stay strict regardless, because a row can go
+		stale between listing and clicking.
+		"""
+		request = self._make_leave_request("Saudi Annual Leave")
+		email = self._make_user(["HR User"])
+		frappe.set_user(email)
+		self._pin_user_to_another_employee(email, "Saudi Annual Leave", request)
+
+		self.assertFalse(frappe.has_permission("Saudi Annual Leave", "read", doc=request, throw=False))
+		self.assertNotIn(request, [r["name"] for r in list_leave_requests()["rows"]])
+		self.assertRaises(frappe.PermissionError, get_leave_request, "Saudi Annual Leave", request)
+		self.assertRaises(
+			frappe.PermissionError, apply_leave_action, "Saudi Annual Leave", request, "Submit Request"
+		)
+
+	def test_the_inbox_never_shows_a_request_the_user_cannot_read(self):
+		"""No row may be returned that the document check would refuse.
+
+		can_read is kept in the payload as a defence in depth for the stale-row
+		case, but the list itself must already be clean.
+		"""
+		request = self._make_leave_request("Saudi Annual Leave")
+		email = self._make_user(["HR User"])
+		frappe.set_user(email)
+		self._pin_user_to_another_employee(email, "Saudi Annual Leave", request)
+
+		for row in list_leave_requests()["rows"]:
+			self.assertTrue(
+				frappe.has_permission(row["doctype"], "read", doc=row["name"], throw=False),
+				f"{row['doctype']} {row['name']} is listed but not readable",
+			)
+
+	def test_a_pinned_user_sees_no_actionable_requests_they_cannot_read(self):
+		"""The dashboard badge must not advertise work the inbox will hide."""
+		request = self._make_leave_request("Saudi Annual Leave")
+		email = self._make_user(["HR User"])
+		frappe.set_user(email)
+		self._pin_user_to_another_employee(email, "Saudi Annual Leave", request)
+
+		# the badge is per doctype, so compare it against the same doctype
+		actionable_in_inbox = len(
+			[
+				r
+				for r in list_leave_requests(doctype="Saudi Annual Leave")["rows"]
+				if r["actionable"]
+			]
+		)
+		dashboard = get_admin_dashboard()
+		self.assertEqual(
+			dashboard["leave"]["Saudi Annual Leave"]["actionable"], actionable_in_inbox
+		)
+
+
+class TestAdminApiLeaveActions(_ApiTestBase):
+	"""Approval actions are the security boundary, so they are tested hardest."""
 
 	def _draft(self, doctype="Saudi Annual Leave"):
 		employee = frappe.get_all("Employee", pluck="name", limit_page_length=1)[0]
@@ -299,28 +344,6 @@ class TestAdminApiLeaveActions(FrappeTestCase):
 			frappe.ValidationError, submit_leave_request, "Maternity Paternity Leave", request
 		)
 
-	def _plain_draft(self, doctype):
-		employee = frappe.get_all("Employee", pluck="name", limit_page_length=1)[0]
-		doc = {"doctype": doctype, "employee": employee, "company": self.company}
-		if doctype == "Special Leave":
-			doc.update(
-				{
-					"leave_type": "Marriage Leave / إجازة زواج (م.113 – 5 أيام)",
-					"leave_start_date": "2026-11-01",
-					"leave_end_date": "2026-11-02",
-				}
-			)
-		else:
-			doc.update(
-				{
-					"leave_type": "Maternity / أمومة (84 يوماً)",
-					"leave_start_date": "2026-11-01",
-					"entitled_days": 84,
-					"medical_certificate_attached": 1,
-				}
-			)
-		return frappe.get_doc(doc).insert(ignore_permissions=True).name
-
 	def _hr_user(self, roles=("HR User",)):
 		suffix = frappe.generate_hash(length=8).lower()
 		email = f"saudi.action.{suffix}@example.com"
@@ -337,13 +360,8 @@ class TestAdminApiLeaveActions(FrappeTestCase):
 		return email
 
 
-class TestAdminApiLeaveInbox(FrappeTestCase):
+class TestAdminApiLeaveInbox(_ApiTestBase):
 	"""The inbox merges five doctypes with different fields into one shape."""
-
-	def setUp(self):
-		super().setUp()
-		frappe.set_user("Administrator")
-		self.company = frappe.get_all("Company", pluck="name", limit_page_length=1)[0]
 
 	def test_registry_matches_this_site(self):
 		"""Each entry's fields must exist, or the inbox silently shows blanks."""
@@ -482,13 +500,11 @@ class TestAdminApiWorkflowParsing(FrappeTestCase):
 		return email
 
 
-class TestAdminApiEmployees(FrappeTestCase):
+class TestAdminApiEmployees(_ApiTestBase):
 	"""Employee creation has to land on the employee number, not a series name."""
 
 	def setUp(self):
 		super().setUp()
-		frappe.set_user("Administrator")
-		self.company = frappe.get_all("Company", pluck="name", limit_page_length=1)[0]
 		self.employees_before = frappe.db.count("Employee")
 
 	def _assert_employee_delta(self, delta):
@@ -656,11 +672,26 @@ class TestAdminApiEmployees(FrappeTestCase):
 		self.assertIn("company", options)
 		self.assertIn(self.company, options["company"])
 
+	def test_form_options_cover_every_select_the_form_renders(self):
+		"""The dialog fills a <select> per key, so a missing key leaves it empty."""
+		options = get_employee_form_options()["options"]
+		form = open(
+			os.path.join(frappe.get_app_path("saudi_hr"), "www", "saudi-admin.html")
+		).read()
+		wanted = dict(
+			re.findall(r'<select id="(emp-[a-z-]+)" name="([a-z_]+)"', form)
+		)
+		self.assertGreater(len(wanted), 5)
+		for control, field in wanted.items():
+			self.assertIn(field, options, f"{control} has no options for {field}")
 
-class TestAdminApiDashboard(FrappeTestCase):
-	def setUp(self):
-		super().setUp()
-		frappe.set_user("Administrator")
+	def test_form_options_refuse_a_user_without_create_permission(self):
+		frappe.set_user(self._make_user(["Department Approver"]))
+		self.assertRaises(frappe.PermissionError, get_employee_form_options)
+
+
+class TestAdminApiDashboard(_ApiTestBase):
+	"""Headcount and leave tallies, which the dashboard and report both read."""
 
 	def test_dashboard_counts_match_the_employee_table(self):
 		summary = get_admin_dashboard()["employees"]
@@ -684,13 +715,104 @@ class TestAdminApiDashboard(FrappeTestCase):
 			dashboard["actionable_total"], sum(v["actionable"] for v in dashboard["leave"].values())
 		)
 
+	def test_every_row_is_counted_in_exactly_one_outcome_column(self):
+		"""The report is built from these numbers, so the columns must add up.
 
-class TestAdminApiDoesNotMutateOnRead(FrappeTestCase):
+		A cancelled request used to be reported as approved, because approved was
+		computed as total - draft.
+		"""
+		leave = get_admin_dashboard()["leave"]
+		for doctype, summary in leave.items():
+			self.assertEqual(
+				summary["draft"] + summary["closed"], summary["total"], doctype
+			)
+			self.assertEqual(
+				summary["approved"]
+				+ summary["rejected"]
+				+ summary["cancelled"]
+				+ summary["other"],
+				summary["closed"],
+				doctype,
+			)
+			self.assertLessEqual(summary["actionable"], summary["draft"], doctype)
+
+	def test_a_cancelled_request_is_not_reported_as_approved(self):
+		"""Cancelled is its own outcome, not an approval."""
+		before = get_admin_dashboard()["leave"]["Saudi Annual Leave"]
+		request = self._make_leave_request("Saudi Annual Leave")
+		frappe.db.set_value("Saudi Annual Leave", request, "workflow_state", "Cancelled", update_modified=False)
+		after = get_admin_dashboard()["leave"]["Saudi Annual Leave"]
+		self.assertEqual(after["cancelled"], before["cancelled"] + 1)
+		self.assertEqual(after["total"], before["total"] + 1)
+		self.assertEqual(after["closed"], before["closed"] + 1)
+		self.assertEqual(after["approved"], before["approved"], "a cancelled row must not be approved")
+		self.assertEqual(after["other"], before["other"])
+
+	def test_the_tally_says_when_it_was_capped(self):
+		"""The counts walk at most MAX_LIMIT rows, so an exact-looking total
+		would be a lie on a site with a long history."""
+		from saudi_hr.saudi_hr import admin_api
+
+		self.assertEqual(get_admin_dashboard()["truncated"], [])
+		frappe.flags.in_test = True
+		original = admin_api.MAX_LIMIT
+		try:
+			# one row is enough to prove the cap is reported rather than hidden
+			admin_api.MAX_LIMIT = 1
+			dashboard = get_admin_dashboard()
+		finally:
+			admin_api.MAX_LIMIT = original
+		self.assertTrue(dashboard["truncated"], "a capped doctype must be named")
+		for label in dashboard["truncated"]:
+			self.assertIn(label, [summary["label"] for summary in dashboard["leave"].values()])
+		self.assertIn(
+			dashboard["leave"]["Saudi Annual Leave"]["label"], dashboard["truncated"]
+		)
+		self.assertTrue(dashboard["leave"]["Saudi Annual Leave"]["truncated"])
+		self.assertLessEqual(dashboard["leave"]["Saudi Annual Leave"]["total"], 1)
+
+	def test_the_actionable_badge_is_not_capped_by_the_page_size(self):
+		"""frappe.get_list returns 20 rows unless told otherwise, which would
+		silently cap the badge at 20 on a long queue."""
+		frappe.set_user("Administrator")
+		baseline = get_admin_dashboard()["leave"]["Special Leave"]["actionable"]
+		for _ in range(22):
+			self._plain_draft("Special Leave")
+		summary = get_admin_dashboard()["leave"]["Special Leave"]
+		self.assertEqual(summary["actionable"], baseline + 22)
+		self.assertGreater(summary["actionable"], 20)
+
+	def test_headcount_is_withheld_from_a_pinned_user(self):
+		"""Company totals are withheld rather than shown wrong or leaked."""
+		email = self._make_user(["Department Approver"])
+		frappe.set_user(email)
+		frappe.get_doc(
+			{
+				"doctype": "User Permission",
+				"user": email,
+				"allow": "Employee",
+				"for_value": frappe.get_all("Employee", pluck="name", limit_page_length=1)[0],
+				"apply_to_all_doctypes": 1,
+			}
+		).insert(ignore_permissions=True)
+
+		summary = get_admin_dashboard()["employees"]
+		self.assertTrue(summary["scoped"])
+		for key in ("total", "active", "inactive", "saudi"):
+			self.assertEqual(summary[key], 0, key)
+
+	def test_administrator_still_gets_company_headcount(self):
+		"""Frappe ignores User Permissions for Administrator, so do the same."""
+		summary = get_admin_dashboard()["employees"]
+		self.assertFalse(summary["scoped"])
+		self.assertGreater(summary["total"], 0)
+
+
+class TestAdminApiDoesNotMutateOnRead(_ApiTestBase):
 	"""A read endpoint must not write, or the audit trail fills with noise."""
 
 	def setUp(self):
 		super().setUp()
-		frappe.set_user("Administrator")
 		self.tracked = [entry[0] for entry in LEAVE_REGISTRY] + ["Employee"]
 		self.before = {doctype: frappe.db.count(doctype) for doctype in self.tracked}
 

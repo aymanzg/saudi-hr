@@ -1,0 +1,854 @@
+{% extends "templates/web.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block banner %}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block header %}{% endblock %}
+{% block header_actions %}{% endblock %}
+{% block page_footer %}{% endblock %}
+
+{% block head_include %}
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/saudi_hr/css/saudi_portal.css?v=2">
+{% endblock %}
+
+{% block page_content %}
+{% set dash = dashboard or {} %}
+{% set emp_stats = dash.employees or {} %}
+{% set leave_stats = dash.leave or {} %}
+
+<div class="saudi-shell">
+
+	<!-- ============ SIDE RAIL ============ -->
+	<nav class="saudi-rail" aria-label="Main">
+		<div class="saudi-rail__brand">
+			<span aria-hidden="true">🧭</span>
+			<span data-i18n-key="admin_brand">إدارة الموارد البشرية</span>
+		</div>
+
+		<button class="saudi-rail__item saudi-rail__item--active" data-panel="dashboard" type="button">
+			<span class="saudi-rail__icon" aria-hidden="true">📊</span>
+			<span data-i18n-key="admin_nav_dashboard">لوحة التحكم</span>
+		</button>
+		<button class="saudi-rail__item" data-panel="approvals" type="button">
+			<span class="saudi-rail__icon" aria-hidden="true">✅</span>
+			<span data-i18n-key="admin_nav_approvals">الموافقات</span>
+			<span id="approvals-badge" class="saudi-chip saudi-chip--pending" hidden></span>
+		</button>
+		<button class="saudi-rail__item" data-panel="employees" type="button">
+			<span class="saudi-rail__icon" aria-hidden="true">👥</span>
+			<span data-i18n-key="admin_nav_employees">الموظفون</span>
+		</button>
+		<button class="saudi-rail__item" data-panel="report" type="button">
+			<span class="saudi-rail__icon" aria-hidden="true">📈</span>
+			<span data-i18n-key="admin_nav_report">التقارير</span>
+		</button>
+
+		<span class="saudi-rail__spacer"></span>
+		<button class="saudi-rail__item" id="lang-toggle" type="button">EN</button>
+		<button class="saudi-rail__item" type="button" data-action="logout">
+			<span class="saudi-rail__icon" aria-hidden="true">↩</span>
+			<span data-i18n-key="logout">تسجيل الخروج</span>
+		</button>
+	</nav>
+
+	<main class="saudi-main">
+		<div class="saudi-main__body">
+
+			<!-- ============ PANEL: DASHBOARD ============ -->
+			<section class="saudi-panel saudi-panel--active" id="panel-dashboard">
+				<div class="saudi-section-header">
+					<div>
+						<div class="saudi-section-header__title" data-i18n-key="admin_welcome">مرحباً</div>
+						<div style="font-size:13px;color:var(--text-muted);" data-i18n-key="admin_welcome_subtitle">ملخص الحضور</div>
+					</div>
+					<div style="font-size:13px;color:var(--text-muted);">{{ full_name | e }}</div>
+				</div>
+
+				<div class="saudi-stats">
+					<div class="saudi-stats__group {{ 'saudi-stats--hidden' if emp_stats.get('scoped') }}" id="headcount-stats">
+						<div class="saudi-stat">
+							<div class="saudi-stat__value" id="stat-total">{{ emp_stats.get("total", 0) }}</div>
+							<div class="saudi-stat__label" data-i18n-key="admin_stat_total_employees">إجمالي الموظفين</div>
+						</div>
+						<div class="saudi-stat">
+							<div class="saudi-stat__value" id="stat-active">{{ emp_stats.get("active", 0) }}</div>
+							<div class="saudi-stat__label" data-i18n-key="admin_stat_active">الموظفون النشطون</div>
+						</div>
+						<div class="saudi-stat">
+							<div class="saudi-stat__value" id="stat-saudi">{{ emp_stats.get("saudi", 0) }}</div>
+							<div class="saudi-stat__label" data-i18n-key="admin_stat_saudi">الموظفون السعوديون</div>
+						</div>
+					</div>
+					<div class="saudi-stat {{ 'saudi-stat--alert' if dash.get('actionable_total') }}">
+						<div class="saudi-stat__value" id="stat-actionable">{{ dash.get("actionable_total", 0) }}</div>
+						<div class="saudi-stat__label" data-i18n-key="admin_stat_actionable">بانتظار إجراء</div>
+					</div>
+				</div>
+
+				<div class="saudi-table-wrap">
+					<table class="saudi-table">
+						<thead>
+							<tr>
+								<th data-i18n-key="admin_leave_type">نوع الطلب</th>
+								<th data-i18n-key="admin_col_actions">إجراءات</th>
+								<th style="text-align:center;" data-i18n-key="admin_state_pending">بانتظار</th>
+								<th style="text-align:center;" data-i18n-key="admin_col_status">الحالة</th>
+							</tr>
+						</thead>
+						<tbody id="dashboard-leave-rows">
+							<tr><td colspan="4" class="saudi-table__empty">—</td></tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<!-- ============ PANEL: APPROVALS ============ -->
+			<section class="saudi-panel" id="panel-approvals">
+				<div class="saudi-toolbar">
+					<div class="saudi-field saudi-toolbar__search">
+						<label class="sr-only" for="approvals-search" data-i18n-key="admin_search_leave">بحث</label>
+						<input type="search" id="approvals-search" autocomplete="off"
+							data-i18n-key="admin_search_leave" placeholder="ابحث...">
+					</div>
+					<button class="saudi-btn saudi-btn--primary" type="button" id="approvals-scope"
+						data-scope="actionable" data-i18n-key="admin_approvals_pending">بانتظار إجراء</button>
+					<button class="saudi-btn" type="button" id="approvals-scope-all"
+						data-scope="all" data-i18n-key="admin_approvals_all">كل الطلبات</button>
+				</div>
+
+				<div class="saudi-split">
+					<div>
+						<div class="saudi-list" id="approvals-list" role="list"></div>
+					</div>
+					<div class="saudi-detail" id="approvals-detail"></div>
+				</div>
+			</section>
+
+			<!-- ============ PANEL: EMPLOYEES ============ -->
+			<section class="saudi-panel" id="panel-employees">
+				<div class="saudi-toolbar">
+					<div class="saudi-field saudi-toolbar__search">
+						<label class="sr-only" for="employees-search" data-i18n-key="admin_search_employees">بحث</label>
+						<input type="search" id="employees-search" autocomplete="off"
+							data-i18n-key="admin_search_employees" placeholder="ابحث...">
+					</div>
+<button class="saudi-btn saudi-btn--primary" type="button" data-action="open-employee-form"
+					id="employee-add-btn" data-i18n-key="admin_add_employee">إضافة موظف</button>
+				</div>
+
+				<div class="saudi-table-wrap">
+					<table class="saudi-table">
+						<thead>
+							<tr>
+								<th data-i18n-key="admin_col_number">الرقم</th>
+								<th data-i18n-key="admin_col_name">الاسم</th>
+								<th class="saudi-col--desktop" data-i18n-key="admin_col_department">القسم</th>
+								<th class="saudi-col--desktop" data-i18n-key="admin_col_designation">المسمى</th>
+								<th data-i18n-key="admin_col_status">الحالة</th>
+								<th class="saudi-col--desktop" data-i18n-key="admin_col_actions">إجراءات</th>
+							</tr>
+						</thead>
+						<tbody id="employees-rows"></tbody>
+					</table>
+				</div>
+			</section>
+
+			<!-- ============ PANEL: REPORT ============ -->
+			<section class="saudi-panel" id="panel-report">
+				<div class="saudi-section-header">
+					<div class="saudi-section-header__title" data-i18n-key="admin_nav_report">التقارير</div>
+				</div>
+				<div class="saudi-table-wrap">
+					<table class="saudi-table">
+						<thead>
+							<tr>
+								<th data-i18n-key="admin_leave_type">نوع الطلب</th>
+								<th style="text-align:center;" data-i18n-key="admin_state_pending">بانتظار</th>
+								<th style="text-align:center;" data-i18n-key="admin_state_approved">معتمدة</th>
+								<th style="text-align:center;" data-i18n-key="admin_state_rejected">مرفوضة</th>
+								<th style="text-align:center;" data-i18n-key="admin_state_cancelled">ملغاة</th>
+								<th style="text-align:center;" data-i18n-key="admin_col_status">الإجمالي</th>
+							</tr>
+						</thead>
+						<tbody id="report-rows"></tbody>
+					</table>
+					<p class="saudi-table__note" id="report-note" hidden></p>
+				</div>
+			</section>
+
+		</div>
+	</main>
+</div>
+
+<!-- ============ ADD EMPLOYEE DIALOG ============ -->
+<div class="saudi-modal saudi-modal--center" id="employee-modal" style="display:none;" role="dialog"
+	aria-modal="true" aria-labelledby="employee-modal-title">
+	<div class="saudi-modal__dialog">
+		<div class="saudi-modal__header">
+			<div class="saudi-modal__title" id="employee-modal-title" data-i18n-key="admin_add_employee">إضافة موظف</div>
+			<button class="saudi-btn saudi-btn--ghost" type="button" data-action="close-employee-form"
+				aria-label="Close" data-i18n-key="cancel">إلغاء</button>
+		</div>
+
+		<form id="employee-form" class="saudi-modal__body" autocomplete="off">
+			<div class="saudi-form-grid">
+				<div class="saudi-form-section" data-i18n-key="admin_section_identity">البيانات الأساسية</div>
+				<div class="saudi-field">
+					<label for="emp-number" data-i18n-key="admin_field_number">الرقم الوظيفي</label>
+					<input type="text" id="emp-number" name="employee_number" required>
+				</div>
+				<div class="saudi-field">
+					<label for="emp-first-name" data-i18n-key="admin_field_full_name">الاسم الكامل</label>
+					<input type="text" id="emp-first-name" name="first_name" required>
+				</div>
+				<div class="saudi-field">
+					<label for="emp-full-name-en" data-i18n-key="admin_field_full_name_en">الاسم بالإنجليزية</label>
+					<input type="text" id="emp-full-name-en" name="custom_full_name_english" dir="ltr">
+				</div>
+				<div class="saudi-field">
+					<label for="emp-gender" data-i18n-key="admin_field_gender">الجنس</label>
+					<select id="emp-gender" name="gender"></select>
+				</div>
+				<div class="saudi-field">
+					<label for="emp-dob" data-i18n-key="admin_field_dob">تاريخ الميلاد</label>
+					<input type="date" id="emp-dob" name="date_of_birth">
+				</div>
+				<div class="saudi-field">
+					<label for="emp-email" data-i18n-key="admin_field_email">البريد الإلكتروني</label>
+					<input type="email" id="emp-email" name="company_email" dir="ltr">
+				</div>
+				<div class="saudi-field">
+					<label for="emp-mobile" data-i18n-key="admin_field_mobile">رقم الجوال</label>
+					<input type="tel" id="emp-mobile" name="mobile_no" dir="ltr">
+				</div>
+
+				<div class="saudi-form-section" data-i18n-key="admin_section_work">بيانات العمل</div>
+				<div class="saudi-field">
+					<label for="emp-company" data-i18n-key="admin_field_company">الشركة</label>
+					<select id="emp-company" name="company"></select>
+				</div>
+				<div class="saudi-field">
+					<label for="emp-department" data-i18n-key="admin_field_department">القسم</label>
+					<select id="emp-department" name="department"></select>
+				</div>
+				<div class="saudi-field">
+					<label for="emp-designation" data-i18n-key="admin_field_designation">المسمى الوظيفي</label>
+					<select id="emp-designation" name="designation"></select>
+				</div>
+				<div class="saudi-field">
+					<label for="emp-branch" data-i18n-key="admin_field_branch">الفرع</label>
+					<select id="emp-branch" name="branch"></select>
+				</div>
+				<div class="saudi-field">
+					<label for="emp-reports-to" data-i18n-key="admin_field_reports_to">المدير المباشر</label>
+					<select id="emp-reports-to" name="reports_to"></select>
+				</div>
+				<div class="saudi-field">
+					<label for="emp-status" data-i18n-key="admin_field_status">حالة الموظف</label>
+					<select id="emp-status" name="status"></select>
+				</div>
+				<div class="saudi-field">
+					<label for="emp-doj" data-i18n-key="admin_field_doj">تاريخ الالتحاق</label>
+					<input type="date" id="emp-doj" name="date_of_joining">
+				</div>
+
+				<div class="saudi-form-section" data-i18n-key="admin_section_national">البيانات الوطنية</div>
+				<div class="saudi-field">
+					<label for="emp-nationality" data-i18n-key="admin_field_nationality">الجنسية</label>
+					<input type="text" id="emp-nationality" name="custom_nationality">
+				</div>
+				<div class="saudi-field">
+					<label for="emp-id-type" data-i18n-key="admin_field_id_type">نوع الهوية</label>
+					<select id="emp-id-type" name="custom_id_type"></select>
+				</div>
+				<div class="saudi-field">
+					<label for="emp-id-number" data-i18n-key="admin_field_id_number">رقم الهوية</label>
+					<input type="text" id="emp-id-number" name="custom_id_number" dir="ltr">
+				</div>
+				<div class="saudi-field">
+					<label for="emp-id-expiry" data-i18n-key="admin_field_id_expiry">انتهاء الهوية</label>
+					<input type="date" id="emp-id-expiry" name="custom_id_expiration_date">
+				</div>
+			</div>
+		</form>
+
+		<div class="saudi-modal__footer">
+			<button class="saudi-btn" type="button" data-action="close-employee-form" data-i18n-key="cancel">إلغاء</button>
+			<button class="saudi-btn saudi-btn--primary" type="button" id="employee-save"
+				data-action="save-employee" data-i18n-key="save">حفظ</button>
+		</div>
+	</div>
+</div>
+
+<div class="saudi-toast" id="saudi-toast" role="status" aria-live="polite"></div>
+{% endblock %}
+
+{% block script %}
+<script src="/assets/saudi_hr/js/saudi_portal.js?v=2"></script>
+<script>
+/* ═══ Page state ═══════════════════════════════════════════════════════════ */
+/* Rendered into a JavaScript literal, so the booleans are written as JS */
+var ADMIN_CFG = { can_manage_employees: {{ 'true' if can_manage_employees else 'false' }} };
+var ADMIN_STATE = {
+	employees: [],
+	leave: [],
+	scope: "actionable",
+	selected: null,
+	options: {},
+	searchTimer: null,
+	lastFocus: null,
+	trapping: false,
+	employees_restricted: false
+};
+
+/* ═══ Boot ═════════════════════════════════════════════════════════════════ */
+document.addEventListener("DOMContentLoaded", function () {
+	// the rail is the only nav, so its clicks are bound here rather than inline
+	document.querySelectorAll(".saudi-rail__item[data-panel]").forEach(function (item) {
+		item.addEventListener("click", function () { navigate(item.getAttribute("data-panel")); });
+	});
+
+	// one delegated listener for the shell buttons, so no markup carries an
+	// inline handler and the bindings survive a re-render
+	document.addEventListener("click", function (e) {
+		var trigger = e.target.closest("[data-action]");
+		if (!trigger || trigger.closest("#approvals-detail")) return;
+		switch (trigger.getAttribute("data-action")) {
+			case "logout": logoutUser(); break;
+			case "open-employee-form": openEmployeeForm(); break;
+			case "close-employee-form": closeEmployeeForm(); break;
+			case "save-employee": saveEmployee(); break;
+		}
+	});
+
+	var addBtn = document.getElementById("employee-add-btn");
+	if (addBtn) addBtn.hidden = !ADMIN_CFG.can_manage_employees;
+
+	["approvals-search", "employees-search"].forEach(function (id) {
+		var el = document.getElementById(id);
+		if (!el) return;
+		el.addEventListener("input", function () {
+			clearTimeout(ADMIN_STATE.searchTimer);
+			// debounce so a search does not fire a request per keystroke
+			ADMIN_STATE.searchTimer = setTimeout(function () {
+				if (id === "employees-search") loadEmployees();
+				else renderApprovalList();
+			}, 280);
+		});
+	});
+
+	["approvals-scope", "approvals-scope-all"].forEach(function (id) {
+		var el = document.getElementById(id);
+		if (!el) return;
+		el.addEventListener("click", function () {
+			ADMIN_STATE.scope = el.getAttribute("data-scope");
+			ADMIN_STATE.selected = null;
+			toggleScopeButtons();
+			renderApprovalList();
+			renderApprovalDetail(null);
+		});
+	});
+
+	document.addEventListener("keydown", function (e) {
+		if (e.key === "Escape") {
+			if (document.getElementById("employee-modal").style.display === "flex") closeEmployeeForm();
+		}
+		handleFocusTrap(e);
+	});
+
+	// seed the report table from the server-rendered dashboard, then refresh
+	// every panel from the API so a stale page never shows stale numbers
+	var seeded = {{ (dashboard.get("leave") or {}) | tojson }};
+	if (seeded && Object.keys(seeded).length) renderLeaveTables(seeded);
+	restorePanel("dashboard");
+	loadDashboard();
+	loadLeave();
+	loadEmployeeOptions();
+});
+
+function toggleScopeButtons() {
+	var pending = document.getElementById("approvals-scope");
+	var all = document.getElementById("approvals-scope-all");
+	if (pending) pending.classList.toggle("saudi-btn--primary", ADMIN_STATE.scope === "actionable");
+	if (all) all.classList.toggle("saudi-btn--primary", ADMIN_STATE.scope === "all");
+}
+
+/* ═══ API helpers ══════════════════════════════════════════════════════════ */
+/* Read endpoints are declared methods=["GET"] on the server, so they must be
+   requested as GET.  Frappe rejects a mismatched verb with "Not permitted",
+   so the two sets are kept apart here rather than posting everything. */
+var ADMIN_WRITES = {
+	create_employee: 1,
+	apply_leave_action: 1,
+	submit_leave_request: 1
+};
+
+function callAdmin(method, args) {
+	return frappe.call({
+		type: ADMIN_WRITES[method] ? "POST" : "GET",
+		freeze: true,
+		freeze_message: t("admin_submitting"),
+		args: Object.assign({ method: "saudi_hr.saudi_hr.admin_api." + method }, args || {})
+	}).then(function (r) { return r.message; });
+}
+
+function onApiError(err, fallback) {
+	showToast(serverErrorMessage(err, fallback), "error");
+}
+
+/* ═══ Dashboard ════════════════════════════════════════════════════════════ */
+function loadDashboard() {
+	callAdmin("get_admin_dashboard").then(function (d) {
+		var e = d.employees || {};
+		// a scoped user gets no headcount; hide those tiles rather than showing
+		// zeros that read as "this company has no employees"
+		var headcount = document.getElementById("headcount-stats");
+		if (headcount) headcount.classList.toggle("saudi-stats--hidden", !!e.scoped);
+		if (e.scoped) return;
+		put("stat-total", e.total);
+		put("stat-active", e.active);
+		put("stat-saudi", e.saudi);
+		put("stat-actionable", d.actionable_total);
+		var badge = document.getElementById("approvals-badge");
+		if (badge) {
+			badge.textContent = d.actionable_total;
+			badge.hidden = !d.actionable_total;
+		}
+		renderLeaveTables(d.leave || {}, d.truncated || []);
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function put(id, value) {
+	var el = document.getElementById(id);
+	if (el) el.textContent = typeof value === "number" ? value : value || 0;
+}
+
+/* One source of truth for the dashboard and report tables. */
+function renderLeaveTables(leave, truncated) {
+	// A doctype the user cannot read is reported as blank rather than zero,
+	// so nobody reads "0 requests" as "nobody has ever asked for this".
+	var visible = Object.keys(leave).filter(function (k) { return leave[k].readable !== false; });
+
+	var dash = document.getElementById("dashboard-leave-rows");
+	if (dash) {
+		dash.innerHTML = visible.length
+			? visible.map(function (k) {
+				var v = leave[k];
+				return "<tr><td>" + esc(v.label) + "</td><td></td>"
+					+ "<td style='text-align:center;'>" + (v.actionable || 0) + "</td>"
+					+ "<td style='text-align:center;'>" + (v.total || 0) + "</td></tr>";
+			}).join("")
+			: emptyRow(4, t("admin_no_requests"));
+	}
+
+	var report = document.getElementById("report-rows");
+	if (report) {
+		var totalAll = 0;
+		var body = visible.map(function (k) {
+			var v = leave[k];
+			totalAll += v.total || 0;
+			// approved / rejected come from the server's own state counts.
+			// Falling back to total - draft would quietly count a cancelled
+			// request as approved.
+			return "<tr><td>" + esc(v.label) + "</td>"
+				+ "<td style='text-align:center;'>" + (v.draft || 0) + "</td>"
+				+ "<td style='text-align:center;'>" + (v.approved || 0) + "</td>"
+				+ "<td style='text-align:center;'>" + (v.rejected || 0) + "</td>"
+				+ "<td style='text-align:center;'>"
+				+ ((v.cancelled || 0) + (v.other || 0)) + "</td>"
+				+ "<td style='text-align:center;'>" + (v.total || 0) + "</td></tr>";
+		}).join("");
+		report.innerHTML = body
+			? body + "<tr><td style='font-weight:800;'>—</td><td style='text-align:center;' colspan='5'>"
+				+ totalAll + "</td></tr>"
+			: emptyRow(6, t("admin_no_requests"));
+	}
+
+	// The server caps the tally it walks, so where it stopped early the total
+	// is "at least this". Saying so beats a number that looks exact.
+	var note = document.getElementById("report-note");
+	if (note) {
+		var labels = Array.isArray(truncated) ? truncated : [];
+		note.textContent = labels.length ? t("admin_report_truncated").replace("{types}", labels.join("، ")) : "";
+		note.hidden = !labels.length;
+	}
+}
+
+function emptyRow(span, text) {
+	return "<tr><td colspan='" + span + "' class='saudi-table__empty'>" + esc(text) + "</td></tr>";
+}
+
+/* ═══ Approvals ═════════════════════════════════════════════════════════════ */
+function loadLeave() {
+	callAdmin("list_leave_requests", { limit: 200 }).then(function (r) {
+		ADMIN_STATE.leave = r.rows || [];
+		renderApprovalList();
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function visibleRequests() {
+	var query = (document.getElementById("approvals-search").value || "").trim().toLowerCase();
+	return ADMIN_STATE.leave.filter(function (row) {
+		if (ADMIN_STATE.scope === "actionable" && !row.actionable) return false;
+		if (!query) return true;
+		return [row.name, row.employee, row.label, row.kind]
+			.some(function (v) { return v && String(v).toLowerCase().indexOf(query) !== -1; });
+	});
+}
+
+function renderApprovalList() {
+	var box = document.getElementById("approvals-list");
+	if (!box) return;
+	var rows = visibleRequests();
+
+	if (!rows.length) {
+		box.innerHTML = "<div class='saudi-empty'>"
+			+ "<span class='saudi-empty__icon' aria-hidden='true'>📭</span>"
+			+ "<div>" + esc(ADMIN_STATE.scope === "actionable" ? t("admin_no_actionable") : t("admin_no_requests"))
+			+ "</div></div>";
+		return;
+	}
+
+	box.innerHTML = rows.map(function (row) {
+		var active = ADMIN_STATE.selected === row.doctype + "|" + row.name ? " saudi-list-item--active" : "";
+		var key = esc(row.doctype + "|" + row.name);
+		return "<button type='button' role='listitem' class='saudi-list-item" + active + "' data-key='" + key + "'>"
+			+ "<div class='saudi-list-item__row'>"
+			+ "<span class='saudi-list-item__title'>" + esc(row.employee || "—") + "</span>"
+			+ stateChip(row.state)
+			+ "</div>"
+			+ "<div class='saudi-list-item__meta'>" + esc(row.label) + (row.kind ? " · " + esc(row.kind) : "") + "</div>"
+			+ "<div class='saudi-list-item__tags'>"
+			+ "<span class='saudi-chip saudi-chip--muted'>" + esc(row.name) + "</span>"
+			+ "<span class='saudi-chip saudi-chip--muted'>" + fmtDays(row.days) + "</span>"
+			+ "</div>"
+			+ "</button>";
+	}).join("");
+
+	box.querySelectorAll(".saudi-list-item").forEach(function (el) {
+		el.addEventListener("click", function () { selectRequest(el.getAttribute("data-key")); });
+	});
+}
+
+function fmtDays(days) {
+	var n = Number(days || 0);
+	return n + " " + (CURRENT_LANG === "ar" ? "يوم" : (n === 1 ? "day" : "days"));
+}
+
+function stateChip(state) {
+	var cls = "draft";
+	var key = "admin_state_unknown";
+	if (state === "pending") { cls = "pending"; key = "admin_state_pending"; }
+	else if (state === "approved") { cls = "approved"; key = "admin_state_approved"; }
+	else if (state === "rejected") { cls = "rejected"; key = "admin_state_rejected"; }
+	else if (state === "cancelled") { cls = "cancelled"; key = "admin_state_cancelled"; }
+	else if (state === "draft") { key = "admin_state_draft"; }
+	return "<span class='saudi-chip saudi-chip--" + cls + "'>" + esc(t(key)) + "</span>";
+}
+
+function selectRequest(key) {
+	ADMIN_STATE.selected = key;
+	renderApprovalList();
+	var parts = String(key).split("|");
+	loadRequestDetail(parts[0], parts.slice(1).join("|"));
+}
+
+function renderApprovalDetail(payload) {
+	var box = document.getElementById("approvals-detail");
+	if (!box) return;
+	if (!payload) {
+		box.innerHTML = "<div class='saudi-detail-card'><div class='saudi-empty'>"
+			+ "<span class='saudi-empty__icon' aria-hidden='true'>👈</span>"
+			+ "<div>" + esc(t("admin_pick_request")) + "</div></div></div>";
+		return;
+	}
+
+	var kv = [
+		[t("admin_request_no"), payload.name],
+		[t("admin_requester"), payload.employee_name || payload.employee],
+		[t("admin_status"), t("admin_state_" + (payload.state || "unknown"))],
+		[t("admin_leave_type"), payload.kind || payload.leave_type || "—"]
+	];
+
+	// Only the actions the server returned are rendered. The list may be
+	// stale by the time it is clicked, so the detail pane re-asks.
+	var actions = (payload.actions || []).map(function (a) {
+		return "<button type='button' class='saudi-btn " + actionClass(a.action) + "'"
+			+ " data-action='" + esc(a.action) + "'"
+			+ (a.action === "submit" ? "" : " data-next='" + esc(a.next_state || "") + "'") + ">"
+			+ esc(actionLabel(a.action)) + "</button>";
+	}).join(" ");
+
+	box.innerHTML = "<div class='saudi-detail-card'>"
+		+ "<div class='saudi-detail-card__header'>"
+		+ "<div><div class='saudi-detail-card__title'>" + esc(payload.name) + "</div>"
+		+ "<div class='saudi-detail-card__subtitle'>" + esc(payload.label || "") + "</div></div>"
+		+ stateChip(payload.state)
+		+ "</div>"
+		+ "<div class='saudi-detail-card__body'>"
+		+ "<div class='saudi-key-value'>"
+		+ kv.map(function (p) {
+			return "<div class='saudi-key-value__key'>" + esc(p[0]) + "</div>"
+				+ "<div class='saudi-key-value__value'>" + esc(p[1] == null || p[1] === "" ? "—" : String(p[1])) + "</div>";
+		}).join("")
+		+ "</div>"
+		+ periodRow(payload)
+		+ (payload.description ? "<div>" + esc(payload.description) + "</div>" : "")
+		+ "</div>"
+		+ "<div class='saudi-detail-card__actions'>"
+		+ "<a class='saudi-btn' href='" + esc(payload.desk_url || "#") + "' target='_blank' rel='noopener'>"
+		+ esc(t("admin_view_in_desk")) + "</a>"
+		+ (actions || "<span style='font-size:12px;color:var(--text-muted);'>" + esc(t("admin_restricted_row")) + "</span>")
+		+ "</div></div>";
+
+	box.querySelectorAll("[data-action]").forEach(function (btn) {
+		btn.addEventListener("click", function () { applyAction(payload, btn); });
+	});
+}
+
+function actionClass(action) {
+	if (/reject|cancel/i.test(action)) return "saudi-btn--danger";
+	if (/approve|submit|send/i.test(action)) return "saudi-btn--primary";
+	return "";
+}
+
+function periodRow(payload) {
+	var f = payload.fields || {};
+	var start = f.leave_start_date || f.from_date;
+	var end = f.leave_end_date || f.to_date;
+	if (!start && !end) return "";
+	var days = f.total_leave_days || f.total_days || f.actual_days || f.entitled_days || 0;
+	return "<div class='saudi-key-value'>"
+		+ "<div class='saudi-key-value__key'>" + esc(t("admin_period")) + "</div>"
+		+ "<div class='saudi-key-value__value'>" + esc(start || "—") + " → " + esc(end || "—") + "</div>"
+		+ "<div class='saudi-key-value__key'>" + esc(t("admin_days")) + "</div>"
+		+ "<div class='saudi-key-value__value'>" + fmtDays(days) + "</div>"
+		+ "</div>";
+}
+
+function loadRequestDetail(doctype, name) {
+	callAdmin("get_leave_request", { doctype: doctype, name: name }).then(function (d) {
+		d.label = d.label || "";
+		d.employee_name = d.fields ? d.fields.employee_name : "";
+		renderApprovalDetail(d);
+	}).catch(function (err) {
+		// a User Permission can hide a request the list still showed
+		ADMIN_STATE.selected = null;
+		renderApprovalList();
+		showToast(serverErrorMessage(err, t("admin_restricted_row")), "error");
+	});
+}
+
+function applyAction(payload, btn) {
+	var action = btn.getAttribute("data-action");
+	var next = btn.getAttribute("data-next");
+	if (!confirm(confirmText(action, payload.name))) return;
+
+	btn.disabled = true;
+	var method = action === "submit" ? "submit_leave_request" : "apply_leave_action";
+	var args = { doctype: payload.doctype, name: payload.name };
+	if (method === "apply_leave_action") args.action = action;
+
+	callAdmin(method, args).then(function () {
+		showToast(t("admin_action_done") + " " + actionLabel(action), "success");
+		ADMIN_STATE.selected = null;
+		renderApprovalDetail(null);
+		// the list, the counts and the badge all move together
+		return Promise.all([loadLeave(), loadDashboard()]);
+	}).catch(function (err) {
+		btn.disabled = false;
+		onApiError(err, t("admin_action_failed"));
+	});
+}
+
+/* The server returns an English action name; the button and the confirmation
+   both need the portal's own word for it. An unmapped name falls back to the
+   raw action rather than to a blank button. */
+var ADMIN_ACTION_KEYS = {
+	submit: "admin_action_submit",
+	approve: "admin_action_approve",
+	reject: "admin_action_reject",
+	cancel: "admin_action_cancel"
+};
+
+function actionLabel(action) {
+	return t(ADMIN_ACTION_KEYS[String(action || "").toLowerCase()] || action);
+}
+
+function confirmText(action, name) {
+	return t("admin_confirm_action")
+		.replace("{action}", actionLabel(action))
+		.replace("{name}", name || "");
+}
+
+/* ═══ Employees ═════════════════════════════════════════════════════════════ */
+function loadEmployees() {
+	var query = (document.getElementById("employees-search").value || "").trim();
+	callAdmin("list_employees", { search: query || null, limit: 100 }).then(function (r) {
+		ADMIN_STATE.employees = r.rows || [];
+		ADMIN_STATE.employees_restricted = !!r.restricted;
+		renderEmployees(ADMIN_STATE.employees_restricted);
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function renderEmployees(restricted) {
+	var body = document.getElementById("employees-rows");
+	if (!body) return;
+	if (restricted) {
+		body.innerHTML = emptyRow(6, t("admin_employees_restricted"));
+		return;
+	}
+	if (!ADMIN_STATE.employees.length) {
+		body.innerHTML = emptyRow(6, t("admin_no_employees"));
+		return;
+	}
+	body.innerHTML = ADMIN_STATE.employees.map(function (row) {
+		return "<tr>"
+			+ "<td style='font-weight:800;' dir='ltr'>" + esc(row.employee_number) + "</td>"
+			+ "<td>" + esc(row.full_name) + "</td>"
+			+ "<td class='saudi-col--desktop'>" + esc(row.department || "—") + "</td>"
+			+ "<td class='saudi-col--desktop'>" + esc(row.designation || "—") + "</td>"
+			+ "<td>" + esc(row.status || "—") + "</td>"
+			+ "<td class='saudi-col--desktop'><div class='saudi-table__actions'>"
+			+ "<a class='saudi-btn' href='" + esc(row.desk_url) + "' target='_blank' rel='noopener'>"
+			+ esc(CURRENT_LANG === "ar" ? "فتح" : "Open") + "</a>"
+			+ "</div></td>"
+			+ "</tr>";
+	}).join("");
+}
+
+function loadEmployeeOptions() {
+	if (!ADMIN_CFG.can_manage_employees) return;
+	callAdmin("get_employee_form_options").then(function (r) {
+		ADMIN_STATE.options = r.options || {};
+		fillSelect("emp-company", "company");
+		fillSelect("emp-department", "department");
+		fillSelect("emp-designation", "designation");
+		fillSelect("emp-branch", "branch");
+		fillSelect("emp-reports-to", "reports_to");
+		fillSelect("emp-gender", "gender");
+		fillSelect("emp-status", "status");
+		fillSelect("emp-id-type", "custom_id_type");
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function fillSelect(id, key) {
+	var el = document.getElementById(id);
+	var values = ADMIN_STATE.options[key];
+	if (!el || !values) return;
+	el.innerHTML = "<option value=''>" + esc(t("admin_select_placeholder")) + "</option>"
+		+ values.map(function (v) {
+			return "<option value='" + esc(v) + "'>" + esc(v) + "</option>";
+		}).join("");
+}
+
+function openEmployeeForm() {
+	if (!ADMIN_CFG.can_manage_employees) return;
+	document.getElementById("employee-form").reset();
+	loadEmployeeOptions();
+	var modal = document.getElementById("employee-modal");
+	// remember the trigger so focus can go back where it came from on close
+	ADMIN_STATE.lastFocus = document.activeElement;
+	modal.style.display = "flex";
+	document.body.classList.add("saudi-modal-open");
+	trappedFocus(true);
+	var first = document.getElementById("emp-number");
+	if (first) first.focus();
+}
+
+function closeEmployeeForm() {
+	var modal = document.getElementById("employee-modal");
+	modal.style.display = "none";
+	document.body.classList.remove("saudi-modal-open");
+	trappedFocus(false);
+	if (ADMIN_STATE.lastFocus && ADMIN_STATE.lastFocus.focus) ADMIN_STATE.lastFocus.focus();
+	ADMIN_STATE.lastFocus = null;
+}
+
+/* Keep Tab inside the dialog while it is open. A modal that lets focus reach
+   the page behind it is unusable with a keyboard and is announced wrongly by
+   a screen reader. */
+function trappedFocus(on) {
+	ADMIN_STATE.trapping = !!on;
+}
+
+function handleFocusTrap(e) {
+	if (!ADMIN_STATE.trapping || e.key !== "Tab") return;
+	var modal = document.getElementById("employee-modal");
+	var focusable = modal.querySelectorAll(
+		"a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
+	);
+	if (!focusable.length) return;
+	var first = focusable[0];
+	var last = focusable[focusable.length - 1];
+	if (e.shiftKey && document.activeElement === first) {
+		e.preventDefault();
+		last.focus();
+	} else if (!e.shiftKey && document.activeElement === last) {
+		e.preventDefault();
+		first.focus();
+	}
+}
+
+function saveEmployee() {
+	var form = document.getElementById("employee-form");
+	var payload = {};
+	// read only the named controls, so a stray field cannot reach the API
+	form.querySelectorAll("[name]").forEach(function (el) {
+		var value = (el.value || "").trim();
+		if (value) payload[el.getAttribute("name")] = value;
+	});
+	if (!payload.employee_number || !payload.first_name) {
+		showToast(t("admin_field_number") + " / " + t("admin_field_full_name"), "error");
+		return;
+	}
+
+	var btn = document.getElementById("employee-save");
+	btn.disabled = true;
+	callAdmin("create_employee", { payload_json: JSON.stringify(payload) }).then(function (r) {
+		showToast(t("admin_employee_saved"), "success");
+		closeEmployeeForm();
+		return Promise.all([loadEmployees(), loadDashboard()]);
+	}).catch(function (err) {
+		onApiError(err, t("admin_action_failed"));
+	}).then(function () {
+		btn.disabled = false;
+	});
+}
+
+/* ═══ Re-render on language change ═════════════════════════════════════════ */
+SAUDI_LANG_RENDERERS.push(function () {
+	toggleScopeButtons();
+	if (document.getElementById("panel-employees").classList.contains("saudi-panel--active")) {
+		renderEmployees(ADMIN_STATE.employees_restricted);
+	}
+	if (document.getElementById("panel-approvals").classList.contains("saudi-panel--active")) {
+		renderApprovalList();
+		renderApprovalDetail(null);
+	}
+});
+
+/* ═══ Per-panel loaders ═════════════════════════════════════════════════════ */
+SAUDI_PANEL_LOADERS["dashboard"] = function () { loadDashboard(); };
+SAUDI_PANEL_LOADERS["employees"] = function () { loadEmployees(); };
+SAUDI_PANEL_LOADERS["approvals"] = function () { loadLeave(); };
+SAUDI_PANEL_LOADERS["report"] = function () { loadDashboard(); };
+
+/* ═══ Utilities ════════════════════════════════════════════════════════════ */
+function esc(value) {
+	if (value == null) return "";
+	return String(value)
+		.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+initPortalLang();
+</script>
+{% endblock %}

@@ -25,6 +25,21 @@
 	.page-breadcrumbs, .page-header-wrapper, .page-footer { display: none !important; }
 	.page_content { padding: 0 !important; }
 
+	/* Search inputs carry a visible placeholder, so their label is for screen
+	   readers only. Visually hidden rather than display:none, which would drop
+	   the control's accessible name. */
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
 	.saudi-app {
 		max-width: 760px;
 		margin: 0 auto;
@@ -558,6 +573,15 @@
 	gap: 12px;
 	margin-bottom: 20px;
 }
+/* The headcount tiles collapse as a group so the actionable tile keeps its
+   own row rather than stretching across a half-empty grid. */
+.saudi-stats__group {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 12px;
+	grid-column: 1 / -1;
+}
+.saudi-stats--hidden { display: none; }
 .saudi-stat {
 	background: var(--card-bg);
 	border: 1px solid var(--border-color);
@@ -606,6 +630,8 @@
 .saudi-table tbody tr:hover { background: var(--app-primary-light); }
 .saudi-table__actions { display: flex; gap: 6px; justify-content: flex-end; }
 .saudi-table__empty { padding: 32px 14px; text-align: center; color: var(--text-muted); font-size: 13px; }
+.saudi-table__note { margin: 10px 14px 0; font-size: 12px; color: var(--text-muted); }
+.saudi-table__note[hidden] { display: none; }
 
 /* Two-column form layout on desktop */
 .saudi-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
@@ -626,6 +652,213 @@
 	color: var(--text-muted);
 }
 .saudi-empty__icon { font-size: 40px; display: block; margin-bottom: 10px; opacity: 0.5; }
+
+/* ─── Master-detail approval queue ─────────────────────────────────────────────
+   A heavy inbox is worked as a queue: pick from a list, review in a detail
+   pane, act without a page change. On a phone the two collapse to one
+   column, because a side-by-side review pane is unusable at 380px. */
+
+.saudi-split {
+	display: grid;
+	grid-template-columns: minmax(300px, 38%) minmax(0, 1fr);
+	gap: 16px;
+	align-items: start;
+}
+@media (max-width: 900px) {
+	.saudi-split { grid-template-columns: 1fr; }
+	.saudi-detail { position: static; }
+}
+.saudi-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-height: calc(100vh - 190px);
+	overflow-y: auto;
+	padding: 2px;
+	/* the scrollbar sits inside the column so it cannot shift the detail pane */
+	scrollbar-width: thin;
+}
+.saudi-detail { position: sticky; top: 16px; min-width: 0; }
+
+.saudi-list-item {
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+	width: 100%;
+	padding: 12px 14px;
+	border: 1px solid var(--border-color);
+	border-radius: 12px;
+	background: #ffffff;
+	font-family: inherit;
+	text-align: start;
+	cursor: pointer;
+	transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+	box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+.saudi-list-item:hover { border-color: var(--app-primary); background: var(--app-primary-light); }
+.saudi-list-item--active {
+	border-color: var(--app-primary);
+	background: #ffffff;
+	box-shadow: 0 0 0 2px rgba(11, 93, 75, 0.14);
+}
+.saudi-list-item__row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.saudi-list-item__title { font-size: 14px; font-weight: 800; color: var(--text-main); line-height: 1.3; }
+.saudi-list-item__when { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+.saudi-list-item__meta { font-size: 12px; color: var(--text-muted); }
+.saudi-list-item__tags { display: flex; flex-wrap: wrap; gap: 5px; }
+
+/* Status is never carried by colour alone: each chip has a text label. */
+.saudi-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 9px;
+	border: 1px solid transparent;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 800;
+	line-height: 1.5;
+	white-space: nowrap;
+}
+.saudi-chip--pending { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+.saudi-chip--draft { background: #f1f5f9; color: #334155; border-color: #cbd5e1; }
+.saudi-chip--approved { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+.saudi-chip--rejected { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+.saudi-chip--cancelled { background: #f5f3ff; color: #5b21b6; border-color: #ddd6fe; }
+.saudi-chip--muted { background: #f8fafc; color: #64748b; border-color: #e2e8f0; }
+
+/* ─── Detail card ──────────────────────────────────────────────────────────── */
+
+.saudi-detail-card {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 18px 20px;
+	border: 1px solid var(--border-color);
+	border-radius: 14px;
+	background: #ffffff;
+	box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+.saudi-detail-card__header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 12px;
+	padding-bottom: 14px;
+	border-bottom: 1px solid var(--border-color);
+}
+.saudi-detail-card__title { font-size: 16px; font-weight: 800; color: var(--text-main); }
+.saudi-detail-card__subtitle { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+.saudi-detail-card__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	justify-content: flex-end;
+	padding-top: 14px;
+	border-top: 1px solid var(--border-color);
+}
+.saudi-key-value {
+	display: grid;
+	grid-template-columns: 132px minmax(0, 1fr);
+	gap: 9px 14px;
+	padding: 13px 15px;
+	border-radius: 12px;
+	background: var(--app-bg);
+}
+.saudi-key-value__key { font-size: 13px; font-weight: 700; color: var(--text-muted); }
+.saudi-key-value__value {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text-main);
+	/* employee and reference names can be long and must not widen the pane */
+	word-break: break-word;
+	overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+	.saudi-key-value { grid-template-columns: 1fr; }
+	.saudi-detail-card { padding: 15px 14px; }
+}
+
+/* ─── Buttons ──────────────────────────────────────────────────────────────── */
+
+.saudi-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 9px 15px;
+	border: 1px solid var(--border-color);
+	border-radius: 10px;
+	background: #ffffff;
+	color: var(--text-main);
+	font-family: inherit;
+	font-size: 13px;
+	font-weight: 800;
+	line-height: 1.2;
+	text-decoration: none;
+	white-space: nowrap;
+	cursor: pointer;
+	transition: background 0.15s ease, border-color 0.15s ease;
+}
+.saudi-btn:hover { background: var(--app-primary-light); }
+.saudi-btn--primary { background: #0b5d4b; border-color: #0b5d4b; color: #ffffff; }
+.saudi-btn--primary:hover { background: #094d3e; }
+.saudi-btn--danger { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+.saudi-btn--danger:hover { background: #fee2e2; }
+.saudi-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Keyboard focus must be visible on every interactive element, including
+   the ones the design system paints with a border-only resting state. */
+.saudi-btn:focus-visible,
+.saudi-list-item:focus-visible,
+.saudi-rail__item:focus-visible,
+.saudi-nav-item:focus-visible,
+.saudi-field select:focus-visible,
+.saudi-field input:focus-visible,
+.saudi-field textarea:focus-visible {
+	outline: 2px solid var(--app-primary);
+	outline-offset: 2px;
+}
+
+/* ─── Dialog ─────────────────────────────────────────────────────────────────
+   A centred dialog on desktop, a bottom sheet on a phone, so the primary
+   action stays within thumb reach. */
+
+/* While a dialog is open the page behind it must not scroll, or a touch drag
+   on the overlay scrolls the list instead of the form. */
+body.saudi-modal-open { overflow: hidden; }
+.saudi-modal--center { align-items: center; justify-content: center; }
+.saudi-modal__dialog {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+	width: min(760px, 94vw);
+	max-height: min(90vh, 900px);
+	overflow-y: auto;
+	padding: 20px 22px 18px;
+	border-radius: 16px;
+	background: #ffffff;
+	box-shadow: 0 20px 60px -12px rgba(15, 23, 42, 0.35);
+}
+@media (max-width: 640px) {
+	.saudi-modal__dialog { width: 100vw; border-radius: 16px 16px 0 0; }
+}
+.saudi-modal__header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+}
+.saudi-modal__title { font-size: 16px; font-weight: 800; color: var(--text-main); }
+.saudi-modal__footer {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	justify-content: flex-end;
+	padding-top: 14px;
+	border-top: 1px solid var(--border-color);
+}
 
 /* Wider screen-specific table columns that would crowd a phone */
 @media (min-width: 1024px) {

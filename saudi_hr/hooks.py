@@ -22,11 +22,18 @@ add_to_apps_screen = [
 		"title": "Mobile Attendance",
 		"route": "/mobile-attendance",
 	},
+	{
+		"name": "saudi_hr_admin",
+		"logo": "/assets/saudi_hr/images/logo.svg",
+		"title": "HR Administration",
+		"route": "/saudi-admin",
+	},
 ]
 
 # ─── Web Routes ──────────────────────────────────────────────────────────────────
 website_route_rules = [
 	{"from_route": "/mobile-attendance", "to_route": "mobile-attendance"},
+	{"from_route": "/saudi-admin", "to_route": "saudi-admin"},
 ]
 
 # ─── Scheduled Tasks ───────────────────────────────────────────────────────────
