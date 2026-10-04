@@ -25,6 +25,7 @@ from saudi_hr.saudi_hr.admin_api import (
 	create_employee,
 	get_admin_dashboard,
 	get_admin_config,
+	get_employee_detail,
 	get_employee_form_options,
 	get_leave_request,
 	list_employees,
@@ -123,6 +124,18 @@ class _ApiTestBase(FrappeTestCase):
 					"medical_certificate_attached": 1,
 				}
 			)
+		return frappe.get_doc(doc).insert(ignore_permissions=True).name
+
+	def _make_service_request(self, request_type="visa_issuance"):
+		"""A draft HR Service Request, which the inbox counts as a request too."""
+		doc = {
+			"doctype": "HR Service Request",
+			"employee": self.employee,
+			"employee_name": frappe.db.get_value("Employee", self.employee, "employee_name"),
+			"company": self.company,
+			"request_type": request_type,
+			"description": "admin api test",
+		}
 		return frappe.get_doc(doc).insert(ignore_permissions=True).name
 
 
@@ -699,6 +712,58 @@ class TestAdminApiEmployees(_ApiTestBase):
 	def test_form_options_refuse_a_user_without_create_permission(self):
 		frappe.set_user(self._make_user(["Department Approver"]))
 		self.assertRaises(frappe.PermissionError, get_employee_form_options)
+
+
+class TestAdminApiEmployeeDetail(_ApiTestBase):
+	"""The in-panel employee profile that replaced the Desk hand-off."""
+
+	def test_detail_returns_a_readable_profile_with_a_desk_fallback(self):
+		payload = get_employee_detail(self.employee)
+		profile = payload["profile"]
+		self.assertEqual(profile["name"], self.employee)
+		self.assertTrue(profile["full_name"])
+		self.assertTrue(profile["employee_number"])
+		self.assertEqual(profile["status"], "Active")
+		self.assertEqual(profile["desk_url"], admin_api.desk_route("Employee", self.employee))
+		self.assertIn("requests", payload)
+		self.assertFalse(payload["truncated"])
+
+	def test_detail_masks_the_iban_and_the_identity_number(self):
+		"""The portal only displays these, so it must never receive them whole."""
+		iban = "SA0000000000000000001234"
+		id_number = "1098765432"
+		frappe.db.set_value(
+			"Employee", self.employee, {"iban": iban, "custom_id_number": id_number}
+		)
+		profile = get_employee_detail(self.employee)["profile"]
+		self.assertTrue(iban.endswith(profile["iban"].lstrip("*")))
+		self.assertNotIn(iban, json.dumps(profile))
+		self.assertTrue(id_number.endswith(profile["custom_id_number"].lstrip("*")))
+		self.assertNotIn(id_number, json.dumps(profile))
+
+	def test_detail_lists_that_employees_requests_newest_first(self):
+		name = self._make_leave_request("Saudi Sick Leave")
+		payload = get_employee_detail(self.employee)
+		self.assertIn(name, [row["name"] for row in payload["requests"]])
+		row = next(r for r in payload["requests"] if r["name"] == name)
+		self.assertEqual(row["doctype"], "Saudi Sick Leave")
+		self.assertEqual(row["days"], 2.0)
+		self.assertEqual(row["desk_url"], admin_api.desk_route("Saudi Sick Leave", name))
+
+		# the service-request entry carries a kind and no day count, and the
+		# dialog has to render both without breaking
+		service = self._make_service_request("visa_issuance")
+		payload = get_employee_detail(self.employee)
+		service_row = next(r for r in payload["requests"] if r["name"] == service)
+		self.assertEqual(service_row["kind"], "visa_issuance")
+		self.assertIsNone(service_row["days"])
+
+	def test_detail_refuses_an_unknown_or_unreadable_employee(self):
+		self.assertRaises(frappe.DoesNotExistError, get_employee_detail, "SA-EM-NOPE")
+
+	def test_detail_refuses_a_caller_without_read_permission(self):
+		frappe.set_user(self._make_user(["Department Approver"]))
+		self.assertRaises(frappe.PermissionError, get_employee_detail, self.employee)
 
 
 class TestAdminApiDashboard(_ApiTestBase):

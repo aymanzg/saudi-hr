@@ -287,6 +287,26 @@
 	</div>
 </div>
 
+<!-- ============ EMPLOYEE DETAIL DIALOG ============ -->
+<div class="saudi-modal saudi-modal--center" id="employee-detail-modal" style="display:none;" role="dialog"
+	aria-modal="true" aria-labelledby="employee-detail-title">
+	<div class="saudi-modal__dialog">
+		<div class="saudi-modal__header">
+			<div class="saudi-modal__title" id="employee-detail-title" data-i18n-key="admin_employee_details">
+				بيانات الموظف
+			</div>
+			<button class="saudi-btn saudi-btn--ghost" type="button" data-action="close-employee-detail"
+				data-i18n-key="cancel">إلغاء</button>
+		</div>
+
+		<div class="saudi-modal__body" id="employee-detail-body">
+			<div class="saudi-empty"><span class="saudi-empty__icon" aria-hidden="true">⏳</span>
+				<div data-i18n-key="loading">جارٍ التحميل...</div>
+			</div>
+		</div>
+	</div>
+</div>
+
 <div class="saudi-toast" id="saudi-toast" role="status" aria-live="polite"></div>
 {% endblock %}
 
@@ -324,6 +344,7 @@ document.addEventListener("DOMContentLoaded", function () {
 			case "logout": logoutUser(); break;
 			case "open-employee-form": openEmployeeForm(); break;
 			case "close-employee-form": closeEmployeeForm(); break;
+			case "close-employee-detail": closeEmployeeDetail(); break;
 			case "save-employee": saveEmployee(); break;
 		}
 	});
@@ -358,6 +379,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
 	document.addEventListener("keydown", function (e) {
 		if (e.key === "Escape") {
+			var detail = document.getElementById("employee-detail-modal");
+			if (detail && detail.style.display === "flex") { closeEmployeeDetail(); return; }
 			if (document.getElementById("employee-modal").style.display === "flex") closeEmployeeForm();
 		}
 		handleFocusTrap(e);
@@ -555,7 +578,7 @@ function renderApprovalList() {
 	box.innerHTML = rows.map(function (row) {
 		var active = ADMIN_STATE.selected === row.doctype + "|" + row.name ? " saudi-list-item--active" : "";
 		var key = esc(row.doctype + "|" + row.name);
-		var desk = row.desk_url ? "<a class='saudi-btn saudi-btn--ghost' href='" + esc(row.desk_url) + "' target='_blank' rel='noopener' onclick='event.stopPropagation();'>" + esc(t("admin_view_in_desk")) + "</a>" : "";
+		var desk = row.desk_url ? "<a class='saudi-btn saudi-btn--ghost' href='" + esc(row.desk_url) + "' target='_blank' rel='noopener'>" + esc(t("admin_view_in_desk")) + "</a>" : "";
 		return "<button type='button' role='listitem' class='saudi-list-item" + active + "' data-key='" + key + "'>"
 			+ "<div class='saudi-list-item__row'>"
 			+ "<span class='saudi-list-item__title'>" + esc(row.employee || "—") + "</span>"
@@ -572,7 +595,12 @@ function renderApprovalList() {
 	}).join("");
 
 	box.querySelectorAll(".saudi-list-item").forEach(function (el) {
-		el.addEventListener("click", function () { selectRequest(el.getAttribute("data-key")); });
+		el.addEventListener("click", function (e) {
+			// the Desk link inside a card navigates on its own; opening it must
+			// not also select the row behind it
+			if (e.target && e.target.closest("a")) return;
+			selectRequest(el.getAttribute("data-key"));
+		});
 	});
 }
 
@@ -765,11 +793,128 @@ function renderEmployees(restricted) {
 			+ "<td class='saudi-col--desktop'>" + esc(row.designation || "—") + "</td>"
 			+ "<td>" + esc(row.status || "—") + "</td>"
 			+ "<td class='saudi-col--desktop'><div class='saudi-table__actions'>"
-			+ "<a class='saudi-btn' href='" + esc(row.desk_url) + "' target='_blank' rel='noopener'>"
-			+ esc(CURRENT_LANG === "ar" ? "فتح" : "Open") + "</a>"
+			// opens the in-panel profile, so reviewing someone never means
+			// leaving the portal; Desk stays available from inside that dialog
+			+ "<button class='saudi-btn' type='button' data-employee='" + esc(row.name) + "'>"
+			+ esc(CURRENT_LANG === "ar" ? "عرض" : "View") + "</button>"
 			+ "</div></td>"
 			+ "</tr>";
 	}).join("");
+
+	body.querySelectorAll("[data-employee]").forEach(function (btn) {
+		btn.addEventListener("click", function () { openEmployeeDetail(btn.getAttribute("data-employee")); });
+	});
+}
+
+function closeEmployeeDetail() {
+	var modal = document.getElementById("employee-detail-modal");
+	if (!modal) return;
+	modal.style.display = "none";
+	document.body.classList.remove("saudi-modal-open");
+	trappedFocus(false);
+	if (ADMIN_STATE.lastFocus && ADMIN_STATE.lastFocus.focus) ADMIN_STATE.lastFocus.focus();
+	ADMIN_STATE.lastFocus = null;
+}
+
+function kvBlock(pairs) {
+	var rows = pairs
+		.filter(function (pair) { return pair[1] !== null && pair[1] !== undefined && pair[1] !== ""; })
+		.map(function (pair) {
+			return "<div class='saudi-key-value__key'>" + esc(pair[0]) + "</div>"
+				+ "<div class='saudi-key-value__value'>" + esc(pair[1]) + "</div>";
+		})
+		.join("");
+	return rows ? "<div class='saudi-key-value'>" + rows + "</div>" : "";
+}
+
+function renderEmployeeDetail(payload) {
+	var box = document.getElementById("employee-detail-body");
+	if (!box) return;
+	if (!payload) { box.innerHTML = ""; return; }
+
+	var p = payload.profile || {};
+	var requests = payload.requests || [];
+
+	var requestRows = requests.length
+		? requests.map(function (row) {
+			return "<tr>"
+				+ "<td>" + esc(row.label) + (row.kind ? " · " + esc(requestKind(row.kind)) : "") + "</td>"
+				+ "<td style='font-weight:700;' dir='ltr'>" + esc(row.name) + "</td>"
+				+ "<td>" + stateChip(row.state) + "</td>"
+				+ "<td>" + (row.days === null || row.days === undefined ? "—" : fmtDays(row.days)) + "</td>"
+				+ "</tr>";
+		}).join("")
+		: "<tr><td colspan='4'>" + esc(t("admin_no_requests")) + "</td></tr>";
+
+	box.innerHTML = "<div class='saudi-detail-card'>"
+		+ "<div class='saudi-detail-card__header'>"
+		+ "<div><div class='saudi-detail-card__title'>" + esc(p.full_name || p.name || "") + "</div>"
+		+ "<div class='saudi-detail-card__subtitle'>" + esc(t("admin_col_number") + ": " + (p.employee_number || p.name || "")) + "</div></div>"
+		// employment status is not a workflow state, so it gets a plain chip
+		// instead of the approved/pending colours
+		+ (p.status ? "<span class='saudi-chip'>" + esc(p.status) + "</span>" : "")
+		+ "</div>"
+		+ kvBlock([
+			[t("admin_field_number"), p.employee_number],
+			[t("admin_field_full_name_en"), p.custom_full_name_english],
+			[t("admin_field_gender"), p.gender],
+			[t("admin_field_dob"), p.date_of_birth],
+			[t("admin_field_nationality"), p.custom_nationality || p.nationality],
+			[t("admin_field_id_type"), p.custom_id_type],
+			[t("admin_field_id_number"), p.custom_id_number],
+			[t("admin_field_id_expiry"), p.custom_id_expiration_date]
+		])
+		+ kvBlock([
+			[t("admin_field_company"), p.company],
+			[t("admin_field_department"), p.department],
+			[t("admin_field_designation"), p.designation],
+			[t("admin_field_branch"), p.branch],
+			[t("admin_field_grade"), p.grade],
+			[t("admin_field_reports_to"), p.reports_to],
+			[t("admin_field_employment_type"), p.employment_type],
+			[t("admin_field_joining_date"), p.date_of_joining],
+			[t("admin_field_leaving_date"), p.date_of_leaving],
+			[t("admin_field_email"), p.company_email],
+			[t("admin_field_personal_email"), p.personal_email],
+			[t("admin_field_mobile"), p.mobile_no],
+			[t("admin_field_iban"), p.iban]
+		])
+		+ "<div class='saudi-detail-card__title'>" + esc(t("admin_employee_requests")) + "</div>"
+		+ (payload.truncated ? "<p class='saudi-table__note'>" + esc(t("admin_employee_requests_truncated")) + "</p>" : "")
+		+ "<div style='overflow-x:auto'><table class='saudi-table'><thead><tr>"
+		+ "<th>" + esc(t("admin_leave_type")) + "</th>"
+		+ "<th>" + esc(t("admin_request_no")) + "</th>"
+		+ "<th>" + esc(t("admin_status")) + "</th>"
+		+ "<th>" + esc(t("admin_days")) + "</th>"
+		+ "</tr></thead><tbody>" + requestRows + "</tbody></table></div>"
+		+ "<div class='saudi-detail-card__actions'>"
+		+ "<a class='saudi-btn saudi-btn--ghost' href='" + esc(p.desk_url || "#") + "' target='_blank' rel='noopener'>"
+		+ esc(t("admin_view_in_desk")) + "</a>"
+		+ "</div>"
+		+ "</div>";
+}
+
+function openEmployeeDetail(name) {
+	var modal = document.getElementById("employee-detail-modal");
+	var box = document.getElementById("employee-detail-body");
+	if (!modal || !box) return;
+	// remember the trigger so focus can go back where it came from on close
+	ADMIN_STATE.lastFocus = document.activeElement;
+	modal.style.display = "flex";
+	document.body.classList.add("saudi-modal-open");
+	trappedFocus(true);
+	var closeBtn = modal.querySelector("[data-action='close-employee-detail']");
+	if (closeBtn) closeBtn.focus();
+	box.innerHTML = "<div class='saudi-empty'><span class='saudi-empty__icon' aria-hidden='true'>⏳</span>"
+		+ "<div>" + esc(t("loading")) + "</div></div>";
+
+	callAdmin("get_employee_detail", { name: name }).then(function (payload) {
+		renderEmployeeDetail(payload);
+	}).catch(function (err) {
+		// a User Permission can hide an employee the list still showed
+		box.innerHTML = "<div class='saudi-empty'><span class='saudi-empty__icon' aria-hidden='true'>⚠️</span>"
+			+ "<div>" + esc(serverErrorMessage(err, t("admin_restricted_row"))) + "</div></div>";
+	});
 }
 
 function loadEmployeeOptions() {
@@ -831,7 +976,10 @@ function trappedFocus(on) {
 
 function handleFocusTrap(e) {
 	if (!ADMIN_STATE.trapping || e.key !== "Tab") return;
-	var modal = document.getElementById("employee-modal");
+	// whichever dialog is actually open owns the trap
+	var modal = document.getElementById("employee-detail-modal");
+	if (!modal || modal.style.display !== "flex") modal = document.getElementById("employee-modal");
+	if (!modal || modal.style.display !== "flex") return;
 	var focusable = modal.querySelectorAll(
 		"a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
 	);

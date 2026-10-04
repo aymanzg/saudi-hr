@@ -324,7 +324,9 @@ class TestAdminPageSafety(FrappeTestCase):
 
 	def test_no_hardcoded_admin_endpoints(self):
 		"""The page must not call the API directly, only through callAdmin."""
-		self.assertEqual(self.js.count("frappe.call"), 1)
+		# count the call itself, not the comment that explains why it looks
+		# like this, so the rule survives the explanation being rewritten
+		self.assertEqual(self.js.count("frappe.call({"), 1)
 		self.assertIn("function callAdmin(", self.js)
 
 	def test_reads_are_sent_as_get_and_writes_as_post(self):
@@ -542,6 +544,62 @@ class TestAdminPageBehaviour(FrappeTestCase):
 			[],
 		)
 
+	def test_the_employee_row_opens_the_panel_not_desk(self):
+		"""Reviewing somebody must not mean leaving the portal."""
+		self.assertEqual(
+			self._run(
+				"ADMIN_STATE.employees = [{ name: 'EMP-1', employee_number: '855',"
+				" full_name: 'Jane Doe', department: 'IT', designation: 'Dev',"
+				" status: 'Active', desk_url: '/app/employee/EMP-1' }];"
+				"renderEmployees(false);"
+				"var html = document.getElementById('employees-rows').innerHTML;"
+				"check('no desk hand-off', function() { return !html.includes('_blank'); });"
+				"check('no desk url', function() { return !html.includes('/app/employee/'); });"
+				"check('carries the employee', function() {"
+				" return html.includes(\"data-employee='EMP-1'\"); });"
+			),
+			[],
+		)
+
+	def test_the_detail_dialog_asks_the_server_for_that_one_employee(self):
+		self.assertEqual(
+			self._run(
+				"var seen = null; frappe.call = function(o) { seen = o; o.callback({ message:"
+				" { profile: { name: 'EMP-1' }, requests: [] } }); };"
+				"openEmployeeDetail('EMP-1');"
+				"check('one employee only', function() { return seen.args.name === 'EMP-1'; });"
+				"check('server side endpoint', function() { return seen.url ==="
+				" '/api/method/saudi_hr.saudi_hr.admin_api.get_employee_detail'; });"
+				"check('dialog opened', function() { return document.getElementById"
+				"('employee-detail-modal').style.display === 'flex'; });"
+			),
+			[],
+		)
+
+	def test_the_detail_body_renders_leave_and_service_requests_together(self):
+		self.assertEqual(
+			self._run(
+				"renderEmployeeDetail({ profile: { name: 'EMP-1', employee_number: '855',"
+				" full_name: 'Jane Doe', status: 'Active', iban: '****9205',"
+				" desk_url: '/app/employee/EMP-1' }, requests: ["
+				" { doctype: 'Saudi Annual Leave', label: 'Annual Leave', name: 'SA-ALR-1',"
+				" kind: null, days: 11, state: 'pending' },"
+				" { doctype: 'HR Service Request', label: 'Visa & Services', name: 'SAU-SRV-1',"
+				" kind: 'visa_issuance', days: null, state: 'draft' } ] });"
+				"var html = document.getElementById('employee-detail-body').innerHTML;"
+				"check('leave row', function() { return html.includes('SA-ALR-1'); });"
+				"check('leave days', function() { return html.includes('11'); });"
+				"check('service row', function() { return html.includes('SAU-SRV-1'); });"
+				"check('service kind translated', function() { return html.includes('تأشيرة'); });"
+				"check('masked iban shown', function() { return html.includes('9205'); });"
+				"check('no day cell for a service request', function() {"
+				" return !html.includes('null'); });"
+				"check('desk kept as a fallback', function() {"
+				" return html.includes('/app/employee/EMP-1'); });"
+			),
+			[],
+		)
+
 	def test_reads_go_out_as_get_and_writes_as_post(self):
 		self.assertEqual(
 			self._run(
@@ -549,8 +607,11 @@ class TestAdminPageBehaviour(FrappeTestCase):
 				" return Promise.resolve({ message: {} }); };"
 				"check('read verb', function() { callAdmin('list_leave_requests', {});"
 				" return seen.type === 'GET'; });"
-				"check('read target', function() { return seen.args.method ==="
+				"check('read target', function() { return seen.url ==="
+				" '/api/method/saudi_hr.saudi_hr.admin_api.list_leave_requests'; });"
+				"check('endpoint named for the header too', function() { return seen.method ==="
 				" 'saudi_hr.saudi_hr.admin_api.list_leave_requests'; });"
+				"check('args stay out of the url', function() { return !('method' in seen.args); });"
 				"check('write verb', function() { callAdmin('apply_leave_action',"
 				" { doctype: 'x', name: 'y', action: 'approve' });"
 				" return seen.type === 'POST'; });"

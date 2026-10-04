@@ -107,6 +107,20 @@ LEAVE_REGISTRY = (
 		"reason",
 		"workflow_state",
 	),
+	# Not leave, but the same shape: a per-employee request with its own
+	# approval workflow.  Visa issuance, residence and Iqama paperwork all land
+	# here as request_type, so the inbox keeps one row shape for them too.
+	(
+		"HR Service Request",
+		"Visa & Services / تأشيرات وخدمات",
+		"from_date",
+		"to_date",
+		# a service request has no day count; only a value field, which is a
+		# money amount for the fee-bearing types and 0 elsewhere
+		None,
+		"request_type",
+		"workflow_state",
+	),
 	(
 		"Special Leave",
 		"Special Leave / إجازة خاصة",
@@ -124,20 +138,6 @@ LEAVE_REGISTRY = (
 		"entitled_days",
 		"leave_type",
 		None,
-	),
-	# Not leave, but the same shape: a per-employee request with its own
-	# approval workflow.  Visa issuance, residence and Iqama paperwork all land
-	# here as request_type, so the inbox keeps one row shape for them too.
-	(
-		"HR Service Request",
-		"Visa & Services / تأشيرات وخدمات",
-		"from_date",
-		"to_date",
-		# a service request has no day count; only a value field, which is a
-		# money amount for the fee-bearing types and 0 elsewhere
-		None,
-		"request_type",
-		"workflow_state",
 	),
 )
 
@@ -181,6 +181,21 @@ REQUIRED_EMPLOYEE_FIELDS = ("first_name", "company", "gender", "date_of_birth", 
 # A bounded page size keeps one request from pulling an entire employee table.
 MAX_LIMIT = 200
 DEFAULT_LIMIT = 50
+
+# One employee's request history in the detail modal.
+EMPLOYEE_REQUEST_LIMIT = 40
+
+
+def _mask_identifier(value):
+	"""Show enough of an id or IBAN to recognise it, never enough to use it.
+
+	The portal is a read-only surface, so there is no reason to hand back a full
+	IBAN or national id to a browser that only displays it.
+	"""
+	text = cstr(value or "").strip()
+	if len(text) <= 4:
+		return "*" * len(text) or None
+	return "*" * (len(text) - 4) + text[-4:]
 
 
 def assert_portal_access():
@@ -609,6 +624,113 @@ def _employee_row(row):
 		"modified": str(row.get("modified")) if row.get("modified") else None,
 		# a renamed employee is reachable under its number, so both routes open
 		"desk_url": desk_route("Employee", row.get("name")),
+	}
+
+
+@frappe.whitelist(methods=["GET"])
+def get_employee_detail(name):
+	"""One employee's portal view, so the admin page never has to leave for Desk.
+
+	Same permission rule as ``list_employees``: a User Permission pinned to one
+	employee narrows this to that employee, and a caller with no read on Employee
+	is refused rather than handed an empty profile.
+	"""
+	assert_portal_access()
+	employee = cstr(name or "").strip()
+	if not employee:
+		frappe.throw(_("Employee is required."), frappe.ValidationError)
+
+	# the doc-level check evaluates User Permissions against the real document,
+	# which a plain dict from get_list cannot do
+	if not frappe.has_permission("Employee", "read", doc=employee, throw=False):
+		frappe.throw(_("You do not have access to this employee."), frappe.PermissionError)
+
+	doc = frappe.get_doc("Employee", employee)
+	meta = frappe.get_meta("Employee")
+
+	candidates = (
+		"employee_number",
+		"first_name",
+		"middle_name",
+		"last_name",
+		"date_of_birth",
+		"gender",
+		"marital_status",
+		"nationality",
+		"company",
+		"department",
+		"designation",
+		"branch",
+		"grade",
+		"reports_to",
+		"employment_type",
+		"status",
+		"date_of_joining",
+		"date_of_leaving",
+		"company_email",
+		"personal_email",
+		"mobile_no",
+		"custom_full_name_english",
+		"custom_nationality",
+		"custom_id_type",
+		"custom_id_number",
+		"custom_id_expiration_date",
+		"iban",
+	)
+	# IBAN and national id are secrets; the portal only displays them
+	SECRET_FIELDS = ("iban", "custom_id_number")
+
+	profile = {}
+	for field in candidates:
+		if not meta.has_field(field):
+			continue
+		value = _jsonable(doc.get(field))
+		if field in SECRET_FIELDS:
+			value = _mask_identifier(value)
+		profile[field] = value
+
+	profile["full_name"] = doc.get("employee_name") or " ".join(
+		part for part in (doc.get("first_name"), doc.get("middle_name"), doc.get("last_name")) if part
+	)
+	profile["name"] = doc.name
+	profile["desk_url"] = desk_route("Employee", doc.name)
+
+	# the same requests the approvals inbox would show for this person, so an
+	# admin can see an employee's request history without switching pages
+	requests = []
+	for entry in LEAVE_REGISTRY:
+		doctype = entry[0]
+		if not frappe.db.table_exists(doctype) or not frappe.has_permission(doctype, "read", throw=False):
+			continue
+		fields = _existing_fields(
+			doctype,
+			["name", "creation", "workflow_state", "status", "docstatus", entry[2], entry[3], entry[4], entry[5]],
+		)
+		for record in frappe.get_list(
+			doctype,
+			filters={"employee": doc.name},
+			fields=list(dict.fromkeys(fields)),
+			order_by="creation desc",
+			limit_page_length=EMPLOYEE_REQUEST_LIMIT,
+		):
+			requests.append(
+				{
+					"doctype": doctype,
+					"label": entry[1],
+					"name": record.get("name"),
+					"kind": record.get(entry[5]) if entry[5] else None,
+					"days": flt(record.get(entry[4])) if entry[4] else None,
+					"state": _row_state(record),
+					"created_at": str(record.get("creation")) if record.get("creation") else None,
+					"desk_url": desk_route(doctype, record.get("name")),
+				}
+			)
+	requests.sort(key=lambda row: row.get("created_at") or "", reverse=True)
+
+	return {
+		"profile": profile,
+		"requests": requests,
+		"truncated": len(requests) >= EMPLOYEE_REQUEST_LIMIT,
 	}
 
 

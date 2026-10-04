@@ -223,6 +223,13 @@ var LABELS = {
 		admin_action_failed: "تعذر تنفيذ الإجراء",
 		admin_restricted_row: "لا تملك صلاحية فتح هذا الطلب",
 		admin_submitting: "جارٍ التنفيذ...",
+		admin_employee_details: "بيانات الموظف",
+		admin_employee_requests: "طلبات الموظف",
+		admin_employee_requests_truncated: "يعرض أحدث الطلبات فقط",
+		admin_field_joining_date: "تاريخ الالتحاق",
+		admin_field_leaving_date: "تاريخ المغادرة",
+		admin_field_personal_email: "البريد الشخصي",
+		admin_field_iban: "الآيبان",
 
 		// HR Service Request.request_type stores raw option values, so the
 		// inbox would otherwise show "visa_issuance" instead of a label.
@@ -484,6 +491,13 @@ var LABELS = {
 		admin_action_failed: "The action could not be completed",
 		admin_restricted_row: "You cannot open this request",
 		admin_submitting: "Working...",
+		admin_employee_details: "Employee Details",
+		admin_employee_requests: "Employee Requests",
+		admin_employee_requests_truncated: "Showing the most recent requests only",
+		admin_field_joining_date: "Joining Date",
+		admin_field_leaving_date: "Leaving Date",
+		admin_field_personal_email: "Personal Email",
+		admin_field_iban: "IBAN",
 
 		srv_work_permit_issuance: "Work Permit Issuance",
 		srv_work_permit_renewal: "Work Permit Renewal",
