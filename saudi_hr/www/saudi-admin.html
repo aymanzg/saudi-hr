@@ -561,10 +561,11 @@ function renderApprovalList() {
 			+ "<span class='saudi-list-item__title'>" + esc(row.employee || "—") + "</span>"
 			+ stateChip(row.state)
 			+ "</div>"
-			+ "<div class='saudi-list-item__meta'>" + esc(row.label) + (row.kind ? " · " + esc(row.kind) : "") + "</div>"
+			+ "<div class='saudi-list-item__meta'>" + esc(row.label) + (row.kind ? " · " + esc(requestKind(row.kind)) : "") + "</div>"
 			+ "<div class='saudi-list-item__tags'>"
 			+ "<span class='saudi-chip saudi-chip--muted'>" + esc(row.name) + "</span>"
-			+ "<span class='saudi-chip saudi-chip--muted'>" + fmtDays(row.days) + "</span>"
+			// a service request has no day count; only show the chip where one exists
+			+ (row.days === null || row.days === undefined ? "" : "<span class='saudi-chip saudi-chip--muted'>" + fmtDays(row.days) + "</span>")
 			+ "</div>"
 			+ "<div style='margin-top:8px;display:flex;justify-content:flex-end;'>" + desk + "</div>"
 			+ "</button>";
@@ -578,6 +579,15 @@ function renderApprovalList() {
 function fmtDays(days) {
 	var n = Number(days || 0);
 	return n + " " + (CURRENT_LANG === "ar" ? "يوم" : (n === 1 ? "day" : "days"));
+}
+
+/* Leave types arrive as readable text, but HR Service Request stores raw
+   Select option values like "visa_issuance".  Translate those and leave
+   anything already human-readable untouched. */
+function requestKind(kind) {
+	if (!kind) return "";
+	var labelled = t("srv_" + kind);
+	return labelled === "srv_" + kind ? kind : labelled;
 }
 
 function stateChip(state) {
@@ -612,7 +622,7 @@ function renderApprovalDetail(payload) {
 		[t("admin_request_no"), payload.name],
 		[t("admin_requester"), payload.employee_name || payload.employee],
 		[t("admin_status"), t("admin_state_" + (payload.state || "unknown"))],
-		[t("admin_leave_type"), payload.kind || payload.leave_type || "—"]
+		[t("admin_leave_type"), requestKind(payload.kind || payload.leave_type) || "—"]
 	];
 
 	// Only the actions the server returned are rendered. The list may be

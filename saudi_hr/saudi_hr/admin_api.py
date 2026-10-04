@@ -125,6 +125,20 @@ LEAVE_REGISTRY = (
 		"leave_type",
 		None,
 	),
+	# Not leave, but the same shape: a per-employee request with its own
+	# approval workflow.  Visa issuance, residence and Iqama paperwork all land
+	# here as request_type, so the inbox keeps one row shape for them too.
+	(
+		"HR Service Request",
+		"Visa & Services / تأشيرات وخدمات",
+		"from_date",
+		"to_date",
+		# a service request has no day count; only a value field, which is a
+		# money amount for the fee-bearing types and 0 elsewhere
+		None,
+		"request_type",
+		"workflow_state",
+	),
 )
 
 # Employee fields the admin form may write.  Anything not listed is dropped
@@ -840,7 +854,9 @@ def list_leave_requests(state=None, doctype=None, limit=None):
 					"kind": record.get(entry[5]) if entry[5] else None,
 					"from_date": record.get(entry[2]) if entry[2] else None,
 					"to_date": record.get(entry[3]) if entry[3] else None,
-					"days": flt(record.get(entry[4])) if entry[4] else 0.0,
+					# null rather than 0 when the doctype has no day field, so the UI
+					# can drop the chip instead of claiming a 0-day request
+					"days": flt(record.get(entry[4])) if entry[4] else None,
 					"state": record_state,
 					"raw_state": record.get("workflow_state") or record.get("status"),
 					"docstatus": cint(record.get("docstatus")),
@@ -916,7 +932,8 @@ def get_leave_request(doctype, name):
 	"""
 	assert_portal_access()
 	leave_doctype = cstr(doctype or "").strip()
-	if not any(entry[0] == leave_doctype for entry in LEAVE_REGISTRY):
+	entry = next((item for item in LEAVE_REGISTRY if item[0] == leave_doctype), None)
+	if not entry:
 		frappe.throw(_("Unsupported leave document type."), frappe.ValidationError)
 
 	# get_transitions() raises a bare PermissionError on denial, which surfaces
@@ -939,6 +956,9 @@ def get_leave_request(doctype, name):
 		"raw_state": doc.get("workflow_state") or doc.get("status"),
 		"has_workflow": bool(get_workflow_name(leave_doctype)),
 		"actions": _dedupe_actions(transitions),
+		# the detail panel labels the request with this; the registry says which
+		# field carries it, and it may be absent on some doctypes
+		"kind": doc.get(entry[5]) if entry[5] else None,
 		# the detail panel's "open in Desk" button reads this; without it the
 		# link renders as "#" and the click goes nowhere
 		"desk_url": desk_route(leave_doctype, doc.name),
