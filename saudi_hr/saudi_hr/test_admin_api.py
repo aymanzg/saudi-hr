@@ -9,12 +9,16 @@ the counts asserted in tearDown prove the site is unchanged.
 import json
 import os
 import re
+from datetime import date
+from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import add_days, getdate, nowdate
 
 from saudi_hr.saudi_hr import admin_api
 from saudi_hr.saudi_hr.admin_api import (
+	ATTENDANCE_STATUS_KEYS,
 	LEAVE_REGISTRY,
 	STANDARD_FIELDS,
 	_dedupe_actions,
@@ -25,6 +29,7 @@ from saudi_hr.saudi_hr.admin_api import (
 	create_employee,
 	get_admin_dashboard,
 	get_admin_config,
+	get_attendance_overview,
 	get_employee_detail,
 	get_employee_form_options,
 	get_leave_request,
@@ -32,7 +37,7 @@ from saudi_hr.saudi_hr.admin_api import (
 	list_leave_requests,
 	submit_leave_request,
 )
-from saudi_hr.saudi_hr.test_support import make_qa_employee
+from saudi_hr.saudi_hr.test_support import get_or_create_department, make_qa_employee
 
 WORKFLOW_DOCTYPES = (
 	"Saudi Annual Leave",
@@ -148,8 +153,9 @@ class TestAdminApiAccess(_ApiTestBase):
 		self.assertRaises(frappe.PermissionError, assert_portal_access)
 		for endpoint in (
 			get_admin_dashboard,
-			get_admin_config,
-			get_employee_form_options,
+get_admin_config,
+	get_attendance_overview,
+	get_employee_form_options,
 			list_employees,
 			list_leave_requests,
 		):
@@ -764,6 +770,316 @@ class TestAdminApiEmployeeDetail(_ApiTestBase):
 	def test_detail_refuses_a_caller_without_read_permission(self):
 		frappe.set_user(self._make_user(["Department Approver"]))
 		self.assertRaises(frappe.PermissionError, get_employee_detail, self.employee)
+
+
+def _department_tally(overview, department):
+	for row in overview["departments"]:
+		if row["department"] == department:
+			return row
+	return {"days": 0, "present": 0, "absent": 0, "half_day": 0, "on_leave": 0, "late_days": 0, "hours": 0}
+
+
+class _AttendanceTestBase(_ApiTestBase):
+	"""Attendance fixtures on the suite's own employee.
+
+	Every record is dated today or in the past on purpose: a future-dated day
+	would fall outside the report window and quietly turn these assertions into
+	vacuous ones.
+	"""
+
+	def setUp(self):
+		super().setUp()
+		self.today = nowdate()
+
+	def _day(self, offset):
+		return str(add_days(getdate(self.today), offset))
+
+	def _month_day(self, day):
+		"""A date inside the current calendar month.
+
+		Relative offsets are not usable for the month tally: on the 2nd, "yesterday"
+		is the previous month and the assertion would be measuring the wrong bucket.
+		"""
+		today = getdate(self.today)
+		return str(date(today.year, today.month, min(day, today.day)))
+
+	def _make_attendance(
+		self,
+		offset=None,
+		status="Present / حاضر",
+		employee=None,
+		in_time="08:30:00",
+		out_time="16:00:00",
+		hours=7.5,
+		late_minutes=0,
+		on=None,
+	):
+		day = on or self._day(offset)
+		doc = {
+			"doctype": "Saudi Daily Attendance",
+			"employee": employee or self.employee,
+			"attendance_date": day,
+			"status": status,
+			"in_time": f"{day} {in_time}",
+			"out_time": f"{day} {out_time}",
+			"working_hours": hours,
+		}
+		if late_minutes:
+			doc.update({"late_entry": 1, "late_minutes": late_minutes})
+		if status in ATTENDANCE_STATUS_KEYS:
+			doc["status"] = status
+		else:
+			# Select validation refuses an unknown option on insert, so the row
+			# is written valid first and then overwritten the way a site that
+			# later adds the option would have stored it
+			doc["status"] = "Present / حاضر"
+		name = frappe.get_doc(doc).insert(ignore_permissions=True).name
+		if status not in ATTENDANCE_STATUS_KEYS:
+			frappe.db.set_value("Saudi Daily Attendance", name, "status", status)
+		return name
+
+	def _deny(self, *doctypes):
+		"""has_permission patched to refuse only these doctypes.
+
+		Refusing everything would also break the Employee read that guards the
+		employee itself, and the test would pass for the wrong reason.
+		"""
+		real = admin_api.frappe.has_permission
+
+		def check(doctype=None, ptype=None, doc=None, user=None, **kwargs):
+			if doctype in doctypes:
+				return False
+			return real(doctype, ptype, doc=doc, user=user, **kwargs)
+
+		return check
+
+	def _make_checkin(self, offset=0, at="09:15:00", log_type="IN", employee=None):
+		return frappe.get_doc(
+			{
+				"doctype": "Saudi Employee Checkin",
+				"employee": employee or self.employee,
+				"log_type": log_type,
+				"time": f"{self._day(offset)} {at}",
+			}
+		).insert(ignore_permissions=True).name
+
+
+class TestAdminApiEmployeeAttendance(_AttendanceTestBase):
+	"""The attendance block inside the employee dialog."""
+
+	def test_detail_carries_an_attendance_block_for_the_dialog(self):
+		payload = get_employee_detail(self.employee)
+		attendance = payload["attendance"]
+		self.assertTrue(attendance["readable"])
+		for key in ("today", "checkin", "month", "month_label", "recent", "truncated"):
+			self.assertIn(key, attendance)
+
+	def test_todays_row_comes_first_and_carries_the_day_times(self):
+		name = self._make_attendance(0, in_time="08:05:00", out_time="17:45:00", hours=9.67)
+		older = self._make_attendance(-3)
+		attendance = get_employee_detail(self.employee)["attendance"]
+
+		self.assertEqual(attendance["recent"][0]["name"], name)
+		self.assertEqual(attendance["recent"][0]["date"], self.today)
+		self.assertEqual(attendance["recent"][0]["in_time"], "08:05")
+		self.assertEqual(attendance["recent"][0]["out_time"], "17:45")
+		self.assertEqual(attendance["today"]["name"], name)
+		self.assertIn(older, [row["name"] for row in attendance["recent"]])
+
+	def test_the_bilingual_status_maps_to_one_stable_key(self):
+		"""status is a bilingual Select, so its raw text cannot be matched on."""
+		expected = {
+			"Present / حاضر": "present",
+			"Absent / غائب": "absent",
+			"Half Day / نصف يوم": "half_day",
+			"On Leave / إجازة": "on_leave",
+		}
+		for label in expected:
+			self._make_attendance(-1, status=label)
+
+		recent = get_employee_detail(self.employee)["attendance"]["recent"]
+		self.assertEqual({row["status"]: row["status_key"] for row in recent}, expected)
+
+	def test_an_unrecognised_status_is_counted_as_other_and_not_dropped(self):
+		"""A new option added to the Select must not vanish from the tally."""
+		self._make_attendance(-1, status="Remote / عن بعد")
+		recent = get_employee_detail(self.employee)["attendance"]["recent"]
+		self.assertEqual(recent[0]["status"], "Remote / عن بعد")
+		self.assertEqual(recent[0]["status_key"], "other")
+
+	def test_the_month_tally_counts_every_status_and_the_late_days(self):
+		self._make_attendance(on=self._month_day(1))
+		self._make_attendance(on=self._month_day(2), status="Absent / غائب")
+		self._make_attendance(
+			on=self._month_day(3), status="Half Day / نصف يوم", out_time="12:30:00", hours=4
+		)
+		self._make_attendance(on=self._month_day(4), status="On Leave / إجازة")
+		self._make_attendance(on=self._month_day(5), late_minutes=25)
+
+		month = get_employee_detail(self.employee)["attendance"]["month"]
+		self.assertEqual(month["days"], 5)
+		self.assertEqual(month["present"], 2)
+		self.assertEqual(month["absent"], 1)
+		self.assertEqual(month["half_day"], 1)
+		self.assertEqual(month["on_leave"], 1)
+		self.assertEqual(month["late_days"], 1)
+		self.assertEqual(month["late_minutes"], 25)
+		# working_hours is recalculated from in/out on validate, so four full
+		# days plus a real half day is what has to come back
+		self.assertEqual(month["hours"], 34.0)
+
+	def test_another_employees_attendance_is_never_included(self):
+		other = make_qa_employee(self.company, f"attendance-{frappe.generate_hash(length=6)}")
+		self._make_attendance(0, employee=other)
+		self._make_attendance(0)
+		recent = get_employee_detail(self.employee)["attendance"]["recent"]
+		self.assertEqual(len(recent), 1)
+		self.assertEqual(recent[0]["employee"], self.employee)
+
+	def test_the_recent_list_says_when_it_was_capped(self):
+		for offset in range(admin_api.EMPLOYEE_ATTENDANCE_DAYS + 3):
+			self._make_attendance(-offset)
+		attendance = get_employee_detail(self.employee)["attendance"]
+		self.assertEqual(len(attendance["recent"]), admin_api.EMPLOYEE_ATTENDANCE_DAYS)
+		self.assertTrue(attendance["truncated"])
+
+	def test_a_punch_reports_the_day_when_there_is_no_closed_day_yet(self):
+		"""Mid-shift there is no attendance row, and an empty dialog would read
+		as "did not work" rather than "still in". """
+		self._make_checkin(0, at="09:15:00")
+		attendance = get_employee_detail(self.employee)["attendance"]
+		self.assertIsNone(attendance["today"])
+		self.assertEqual(attendance["checkin"]["log_type"], "IN")
+		self.assertEqual(attendance["checkin"]["time"], "09:15")
+
+	def test_a_punch_from_another_day_is_not_reported_as_today(self):
+		"""A stale punch would otherwise stand in for a day that never happened."""
+		self._make_checkin(-4, at="09:15:00", log_type="OUT")
+		attendance = get_employee_detail(self.employee)["attendance"]
+		self.assertIsNone(attendance["checkin"])
+		self.assertIsNone(attendance["today"])
+
+	def test_todays_punch_is_found_at_all(self):
+		"""Guards the test above it: a today filter that matches nothing would
+		make 'no punch today' pass for the wrong reason."""
+		self._make_checkin(-4, at="09:15:00")
+		self._make_checkin(0, at="07:05:00")
+		attendance = get_employee_detail(self.employee)["attendance"]
+		self.assertEqual(attendance["checkin"]["time"], "07:05")
+
+	def test_a_closed_day_wins_over_the_punch_it_came_from(self):
+		self._make_attendance(0)
+		self._make_checkin(0, at="08:05:00")
+		self._make_checkin(0, at="16:00:00", log_type="OUT")
+		attendance = get_employee_detail(self.employee)["attendance"]
+		self.assertIsNotNone(attendance["today"])
+		self.assertEqual(attendance["today"]["in_time"], "08:30")
+
+	def test_no_attendance_permission_reads_as_restricted_not_as_zero(self):
+		"""Zeros would say the employee never came to work."""
+		self._make_attendance(0)
+		with patch.object(admin_api.frappe, "has_permission", self._deny(admin_api.ATTENDANCE_DOCTYPE)):
+			attendance = get_employee_detail(self.employee)["attendance"]
+		self.assertFalse(attendance["readable"])
+		self.assertEqual(attendance["recent"], [])
+
+
+class TestAdminApiAttendanceOverview(_AttendanceTestBase):
+	"""The company and department report in the report panel."""
+
+	def test_the_window_defaults_to_the_last_thirty_days(self):
+		window = admin_api._attendance_window(None, None)
+		self.assertEqual(window["days"], admin_api.DEFAULT_ATTENDANCE_DAYS)
+		self.assertEqual(window["to_date"], nowdate())
+		self.assertEqual(
+			window["from_date"], str(add_days(getdate(nowdate()), -(admin_api.DEFAULT_ATTENDANCE_DAYS - 1)))
+		)
+
+	def test_a_reversed_range_is_swapped_rather_than_returned_empty(self):
+		window = admin_api._attendance_window("2026-05-10", "2026-05-01")
+		self.assertEqual(window["from_date"], "2026-05-01")
+		self.assertEqual(window["to_date"], "2026-05-10")
+
+	def test_the_window_is_capped_so_the_query_cannot_be_made_unbounded(self):
+		window = admin_api._attendance_window("2020-01-01", "2026-05-01")
+		self.assertEqual(window["days"], admin_api.MAX_ATTENDANCE_DAYS)
+		self.assertEqual(window["to_date"], "2026-05-01")
+
+	def test_the_totals_add_up_the_window(self):
+		# the report is company-wide and this site already holds real records,
+		# so the fixture is measured as a delta rather than as the whole total
+		before = get_attendance_overview()["totals"]
+		self._make_attendance(-1)
+		self._make_attendance(-2, status="Absent / غائب")
+		self._make_attendance(-3, status="On Leave / إجازة", late_minutes=12)
+		self._make_attendance(admin_api.MAX_ATTENDANCE_DAYS + 5)
+
+		totals = get_attendance_overview()["totals"]
+		self.assertEqual(totals["days"] - before["days"], 3)
+		self.assertEqual(totals["present"] - before["present"], 1)
+		self.assertEqual(totals["absent"] - before["absent"], 1)
+		self.assertEqual(totals["on_leave"] - before["on_leave"], 1)
+		self.assertEqual(totals["late_minutes"] - before["late_minutes"], 12)
+
+	def test_the_department_rows_add_up_to_the_totals(self):
+		department = get_or_create_department(self.company)
+		frappe.db.set_value("Employee", self.employee, "department", department)
+		before = _department_tally(get_attendance_overview(), department)
+		self._make_attendance(-1)
+		self._make_attendance(-2, status="Absent / غائب")
+
+		data = get_attendance_overview()
+		rows = data["departments"]
+		for key in ("days", "present", "absent", "half_day", "on_leave", "late_days"):
+			self.assertAlmostEqual(sum(row[key] for row in rows), data["totals"][key], msg=key)
+		self.assertEqual(round(sum(row["hours"] for row in rows), 2), round(data["totals"]["hours"], 2))
+
+		# the department the fixture employee belongs to gains exactly the two
+		# days added, and every employee in the bucket counts once
+		mine = next(row for row in rows if row["department"] == department)
+		self.assertEqual(mine["days"] - before["days"], 2)
+		self.assertEqual(mine["present"] - before["present"], 1)
+		assigned = frappe.get_all("Employee", filters={"department": department}, pluck="name")
+		self.assertLessEqual(mine["employees"], len(assigned) or 1)
+
+	def test_a_day_outside_the_window_is_not_counted(self):
+		self._make_attendance(-1)
+		overview = get_attendance_overview(from_date=self._day(-10), to_date=self._day(-2))
+		self.assertEqual(overview["days"], 9)
+		self.assertNotIn(self.employee, {row["employee"] for row in overview["today"]})
+
+	def test_the_department_list_is_capped_and_says_so(self):
+		data = get_attendance_overview(limit=1)
+		self.assertLessEqual(len(data["departments"]), 1)
+		if data["truncated"]:
+			self.assertGreater(data["department_count"], len(data["departments"]))
+
+	def test_todays_punches_carry_the_employee_name_for_the_table(self):
+		name = self._make_checkin(0, at="10:20:00", log_type="OUT")
+		# an older punch alongside it, so the assertion cannot pass by the
+		# filter quietly matching nothing at all
+		self._make_checkin(-5, at="08:00:00")
+		rows = get_attendance_overview()["today"]
+		self.assertEqual(len(rows), 1)
+		self.assertIn(name, [row["name"] for row in rows])
+		row = next(r for r in rows if r["name"] == name)
+		self.assertEqual(row["employee"], self.employee)
+		self.assertTrue(row["employee_name"])
+		self.assertEqual(row["time"], "10:20")
+		self.assertEqual(row["log_type"], "OUT")
+
+	def test_a_punch_from_another_day_is_not_listed_under_today(self):
+		self._make_checkin(-2)
+		self.assertEqual(get_attendance_overview()["today"], [])
+
+	def test_no_attendance_permission_reads_as_restricted(self):
+		self._make_attendance(0)
+		denied = self._deny(admin_api.ATTENDANCE_DOCTYPE, admin_api.CHECKIN_DOCTYPE)
+		with patch.object(admin_api.frappe, "has_permission", denied):
+			data = get_attendance_overview()
+		self.assertFalse(data["readable"])
+		self.assertIsNone(data["totals"])
+		self.assertEqual(data["departments"], [])
 
 
 class TestAdminApiDashboard(_ApiTestBase):

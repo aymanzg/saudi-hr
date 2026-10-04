@@ -600,6 +600,212 @@ class TestAdminPageBehaviour(FrappeTestCase):
 			[],
 		)
 
+	def test_the_detail_dialog_renders_the_employees_attendance(self):
+		self.assertEqual(
+			self._run(
+				"renderEmployeeDetail({ profile: { name: 'EMP-1', employee_number: '855',"
+				" full_name: 'Jane Doe', status: 'Active', desk_url: '/app/employee/EMP-1' },"
+				" requests: [], attendance: { readable: true, month_label: '2026-10',"
+				" month: { days: 3, present: 2, absent: 1, half_day: 0, on_leave: 0,"
+				" late_days: 1, late_minutes: 12, hours: 22.5 },"
+				" today: { name: 'SAU-ATT-1', date: '2026-10-04', status: 'Present / حاضر',"
+				" status_key: 'present', in_time: '08:05', out_time: '17:45', hours: 9.67 },"
+				" checkin: null, recent: [ { name: 'SAU-ATT-1', date: '2026-10-04',"
+				" status: 'Present / حاضر', status_key: 'present', in_time: '08:05',"
+				" out_time: '17:45', hours: 9.67, late_minutes: 12 } ], truncated: false } });"
+				"var html = document.getElementById('employee-detail-body').innerHTML;"
+				"check('attendance heading', function() { return html.includes(t('admin_attendance')); });"
+				"check('today rendered', function() { return html.includes('08:05') && html.includes('17:45'); });"
+				"check('month label shown', function() { return html.includes('2026-10'); });"
+				"check('late minutes shown', function() { return html.includes('12'); });"
+				"check('working hours shown', function() { return html.includes('9.67'); });"
+			),
+			[],
+		)
+
+	def test_the_detail_dialog_names_the_status_in_the_portals_own_words(self):
+		"""status is a bilingual Select, so the raw value cannot be the label."""
+		self.assertEqual(
+			self._run(
+				"renderEmployeeDetail({ profile: { name: 'EMP-1' }, requests: [],"
+				" attendance: { readable: true, month_label: '2026-10', month: null,"
+				" today: { status: 'Present / حاضر', status_key: 'present', in_time: '08:05',"
+				" out_time: '16:00', hours: 7.5 }, checkin: null,"
+				" recent: [ { name: 'A', date: '2026-10-04', status: 'Present / حاضر',"
+				" status_key: 'present', in_time: '08:05', out_time: '16:00' } ],"
+				" truncated: false } });"
+				"var html = document.getElementById('employee-detail-body').innerHTML;"
+				"check('local label', function() { return html.includes(t('admin_attendance_status_present')); });"
+				"check('no duplicate state chip', function() {"
+				" return !html.includes('saudi-chip--muted'); });"
+			),
+			[],
+		)
+
+	def test_an_unknown_attendance_status_still_renders_its_own_text(self):
+		self.assertEqual(
+			self._run(
+				"renderEmployeeDetail({ profile: { name: 'EMP-1' }, requests: [],"
+				" attendance: { readable: true, month_label: '2026-10', month: null,"
+				" today: null, checkin: null,"
+				" recent: [ { name: 'A', date: '2026-10-04', status: 'Remote / عن بعد',"
+				" status_key: 'other', in_time: null, out_time: null } ], truncated: false } });"
+				"var html = document.getElementById('employee-detail-body').innerHTML;"
+				"check('raw text kept', function() { return html.includes('Remote / عن بعد'); });"
+			),
+			[],
+		)
+
+	def test_a_day_with_only_a_punch_says_which_way_the_punch_went(self):
+		# only the today line is under test: the table under it is allowed to
+		# say that no days have been recorded yet
+		self.assertEqual(
+			self._run(
+				"renderEmployeeDetail({ profile: { name: 'EMP-1' }, requests: [],"
+				" attendance: { readable: true, month_label: '2026-10', month: null,"
+				" today: null, checkin: { log_type: 'IN', time: '09:15' },"
+				" recent: [], truncated: false } });"
+				"var html = document.getElementById('employee-detail-body').innerHTML;"
+				"var today = html.split('saudi-key-value__value')[1].split('</div>')[0];"
+				"check('punch shown', function() { return today.includes('09:15'); });"
+				"check('direction translated', function() { return today.includes(t('admin_attendance_in')); });"
+				"check('not read as an empty day', function() {"
+				" return !today.includes(t('admin_attendance_no_records')); });"
+			),
+			[],
+		)
+
+	def test_an_employee_with_no_records_says_so_rather_than_showing_zero(self):
+		self.assertEqual(
+			self._run(
+				"renderEmployeeDetail({ profile: { name: 'EMP-1' }, requests: [],"
+				" attendance: { readable: true, month_label: '2026-10',"
+				" month: { days: 0, present: 0, absent: 0, half_day: 0, on_leave: 0,"
+				" late_days: 0, late_minutes: 0, hours: 0 },"
+				" today: null, checkin: null, recent: [], truncated: false } });"
+				"var html = document.getElementById('employee-detail-body').innerHTML;"
+				"check('empty message', function() { return html.includes(t('admin_attendance_no_records')); });"
+			),
+			[],
+		)
+
+	def test_unreadable_attendance_says_restricted_not_absent(self):
+		"""Zero would tell the reader the employee never came to work."""
+		self.assertEqual(
+			self._run(
+				"renderEmployeeDetail({ profile: { name: 'EMP-1' }, requests: [],"
+				" attendance: { readable: false, recent: [] } });"
+				"var html = document.getElementById('employee-detail-body').innerHTML;"
+				"check('restricted message', function() {"
+				" return html.includes(t('admin_attendance_not_readable')); });"
+				"check('no tiles', function() { return !html.includes('saudi-stat__value'); });"
+			),
+			[],
+		)
+
+	def test_the_report_panel_renders_the_company_attendance(self):
+		self.assertEqual(
+			self._run(
+				"var seen = null; frappe.call = function(o) { seen = o; o.callback({ message:"
+				" { readable: true, from_date: '2026-09-05', to_date: '2026-10-04',"
+				" totals: { days: 25, present: 23, absent: 1, half_day: 1, on_leave: 0,"
+				" late_days: 2, late_minutes: 30, hours: 130.22 }, department_count: 2,"
+				" truncated: false,"
+				" departments: [ { department: 'Operations', employees: 4, days: 12,"
+				" present: 12, absent: 0, half_day: 0, on_leave: 0, late_days: 1,"
+				" late_minutes: 15, hours: 80.5 } ],"
+				" today: [ { name: 'SAU-CHK-1', employee: '855', employee_name: 'Jane Doe',"
+				" log_type: 'OUT', time: '16:05' } ] } }); };"
+				"renderAttendanceOverview({ readable: true, from_date: '2026-09-05',"
+				" to_date: '2026-10-04',"
+				" totals: { days: 25, present: 23, absent: 1, half_day: 1, on_leave: 0,"
+				" late_days: 2, late_minutes: 30, hours: 130.22 }, department_count: 2,"
+				" truncated: false,"
+				" departments: [ { department: 'Operations', employees: 4, days: 12,"
+				" present: 12, absent: 0, half_day: 0, on_leave: 0, late_days: 1,"
+				" late_minutes: 15, hours: 80.5 } ],"
+				" today: [ { name: 'SAU-CHK-1', employee: '855', employee_name: 'Jane Doe',"
+				" log_type: 'OUT', time: '16:05' } ] });"
+				"var rows = document.getElementById('attendance-rows').innerHTML;"
+				"var totals = document.getElementById('attendance-totals').innerHTML;"
+				"var punches = document.getElementById('attendance-today-rows').innerHTML;"
+				"check('window shown', function() { return document.getElementById('attendance-window')"
+				".textContent.includes('2026-09-05'); });"
+				"check('department row', function() { return rows.includes('Operations') && rows.includes('12'); });"
+				"check('totals tiled', function() { return totals.includes('130.22'); });"
+				"check('punch employee named', function() { return punches.includes('Jane Doe'); });"
+				"check('punch direction translated', function() {"
+				" return punches.includes(t('admin_attendance_out')); });"
+			),
+			[],
+		)
+
+	def test_the_report_panel_says_restricted_when_attendance_cannot_be_read(self):
+		self.assertEqual(
+			self._run(
+				"renderAttendanceOverview({ readable: false, from_date: '2026-09-05',"
+				" to_date: '2026-10-04', totals: null, departments: [], today: [] });"
+				"var rows = document.getElementById('attendance-rows').innerHTML;"
+				"check('restricted', function() {"
+				" return rows.includes(t('admin_attendance_not_readable')); });"
+				"check('no zero totals', function() {"
+				" return !document.getElementById('attendance-totals').innerHTML.includes('saudi-stat'); });"
+			),
+			[],
+		)
+
+	def test_a_capped_department_list_says_so(self):
+		self.assertEqual(
+			self._run(
+				"renderAttendanceOverview({ readable: true, from_date: '2026-09-05',"
+				" to_date: '2026-10-04', totals: { days: 25 }, department_count: 40,"
+				" truncated: true, departments: [], today: [] });"
+				"var note = document.getElementById('attendance-note');"
+				"check('note shown', function() { return note.hidden === false && note.textContent !== ''; });"
+			),
+			[],
+		)
+
+	def test_the_attendance_report_is_asked_for_over_get(self):
+		self.assertEqual(
+			self._run(
+				"var seen = null; frappe.call = function(o) { seen = o; o.callback({ message:"
+				" { readable: false, departments: [], today: [] } }); };"
+				"loadAttendance();"
+				"check('endpoint', function() { return seen.url ==="
+				" '/api/method/saudi_hr.saudi_hr.admin_api.get_attendance_overview'; });"
+				"check('read sent as get', function() { return seen.type === 'GET'; });"
+			),
+			[],
+		)
+
+	def test_switching_language_rebuilds_the_attendance_tables(self):
+		"""They are built from the last response, not from markup, so a switch
+		that left them alone would keep them in the previous language."""
+		self.assertEqual(
+			self._run(
+				"ADMIN_STATE.attendance = { readable: true, from_date: '2026-09-05',"
+				" to_date: '2026-10-04',"
+				" totals: { days: 25, present: 25, absent: 0, half_day: 0, on_leave: 0,"
+				" late_days: 0, late_minutes: 0, hours: 130.22 }, department_count: 1,"
+				" truncated: false,"
+				" departments: [ { department: 'Ops', employees: 4, days: 12, present: 12,"
+				" absent: 0, half_day: 0, on_leave: 0, late_days: 0, late_minutes: 0,"
+				" hours: 80.5 } ],"
+				" today: [ { name: 'C1', employee: '855', employee_name: 'Jane',"
+				" log_type: 'OUT', time: '16:05' } ] };"
+				"renderAttendanceOverview(ADMIN_STATE.attendance);"
+				"var before = document.getElementById('attendance-totals').innerHTML;"
+				"toggleLang();"
+				"var after = document.getElementById('attendance-totals').innerHTML;"
+				"check('rendered in arabic first', function() { return before.includes('أيام مسجلة'); });"
+				"check('rendered in english next', function() { return after.includes('Recorded Days'); });"
+				"check('punch direction switched', function() { return document"
+				".getElementById('attendance-today-rows').innerHTML.includes('Out'); });"
+			),
+			[],
+		)
+
 	def test_reads_go_out_as_get_and_writes_as_post(self):
 		self.assertEqual(
 			self._run(

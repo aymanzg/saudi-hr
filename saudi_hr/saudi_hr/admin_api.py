@@ -35,7 +35,16 @@ from frappe.model.workflow import (
 	get_workflow_name,
 	has_approval_access,
 )
-from frappe.utils import cint, cstr, flt, getdate, now
+from frappe.utils import (
+	add_days,
+	cint,
+	cstr,
+	flt,
+	get_datetime,
+	getdate,
+	now,
+	nowdate,
+)
 
 from saudi_hr.scripts.rename_employees_to_employee_number import (
 	is_valid_name,
@@ -184,6 +193,187 @@ DEFAULT_LIMIT = 50
 
 # One employee's request history in the detail modal.
 EMPLOYEE_REQUEST_LIMIT = 40
+
+# Attendance: recent days in the employee dialog, and the window the
+# company-wide overview walks by default.
+ATTENDANCE_DOCTYPE = "Saudi Daily Attendance"
+CHECKIN_DOCTYPE = "Saudi Employee Checkin"
+EMPLOYEE_ATTENDANCE_DAYS = 15
+DEFAULT_ATTENDANCE_DAYS = 30
+MAX_ATTENDANCE_DAYS = 180
+
+# The status column is a bilingual Select, so the value carries both languages.
+# Keying on the English prefix keeps the counters stable when the label text
+# changes, and lets the portal render one readable word of its own.
+ATTENDANCE_STATUSES = (
+	("Present / حاضر", "present"),
+	("Absent / غائب", "absent"),
+	("Half Day / نصف يوم", "half_day"),
+	("On Leave / إجازة", "on_leave"),
+)
+ATTENDANCE_STATUS_KEYS = dict(ATTENDANCE_STATUSES)
+
+
+def _attendance_status_key(value):
+	"""'Present / حاضر' -> 'present'.
+
+	Anything else is 'other': a status option the portal does not know yet
+	still has to land in a bucket, and its own text is carried alongside so the
+	row can show what was actually recorded.
+	"""
+	text = cstr(value or "").strip()
+	if not text:
+		return None
+	if text in ATTENDANCE_STATUS_KEYS:
+		return ATTENDANCE_STATUS_KEYS[text]
+	for raw, key in ATTENDANCE_STATUSES:
+		if text.startswith(raw.split(" /")[0]) or raw.startswith(text):
+			return key
+	return "other"
+
+
+def _time_only(value):
+	"""Datetime -> 'HH:MM', so the dialog shows a punch time and not a date."""
+	if not value:
+		return None
+	moment = get_datetime(value)
+	return moment.strftime("%H:%M") if moment else None
+
+
+def _attendance_period_counts(rows):
+	"""Count one attendance window without trusting a SQL GROUP BY.
+
+	The status column holds free bilingual text, so the grouping is done here
+	against the same mapping the dialog uses. That keeps the counters and the
+	rows a user sees from ever disagreeing.
+	"""
+	counts = {"present": 0, "absent": 0, "half_day": 0, "on_leave": 0, "other": 0}
+	late_days = 0
+	late_minutes = 0.0
+	hours = 0.0
+	for row in rows:
+		key = _attendance_status_key(row.get("status"))
+		counts[key if key in counts else "other"] += 1
+		late_minutes += flt(row.get("late_minutes"))
+		hours += flt(row.get("working_hours"))
+		if flt(row.get("late_minutes")) > 0 or row.get("late_entry"):
+			late_days += 1
+	return {
+		"days": len(rows),
+		"present": counts["present"],
+		"absent": counts["absent"],
+		"half_day": counts["half_day"],
+		"on_leave": counts["on_leave"],
+		"other": counts["other"],
+		"late_days": late_days,
+		"late_minutes": round(late_minutes, 1),
+		"hours": round(hours, 2),
+	}
+
+
+def _attendance_rows(employee, limit=EMPLOYEE_ATTENDANCE_DAYS, from_date=None, to_date=None):
+	"""Attendance days for one employee, newest first."""
+	if not frappe.has_permission(ATTENDANCE_DOCTYPE, "read", throw=False):
+		return None
+	# a list of conditions rather than one ["between", ...] filter: between
+	# silently matches nothing on this field, and an empty report reads as
+	# "nobody worked" rather than as a broken query
+	filters = [["employee", "=", employee]]
+	if from_date:
+		filters.append(["attendance_date", ">=", str(from_date)])
+	if to_date:
+		filters.append(["attendance_date", "<=", str(to_date)])
+	fields = _existing_fields(
+		ATTENDANCE_DOCTYPE,
+		[
+			"name",
+			"employee",
+			"attendance_date",
+			"status",
+			"in_time",
+			"out_time",
+			"working_hours",
+			"late_entry",
+			"late_minutes",
+			"early_exit",
+			"early_exit_minutes",
+		],
+	)
+	return frappe.get_list(
+		ATTENDANCE_DOCTYPE,
+		filters=filters,
+		fields=fields,
+		order_by="attendance_date desc",
+		limit_page_length=limit,
+	)
+
+
+def _attendance_view(row):
+	return {
+		"name": row.get("name"),
+		"employee": row.get("employee"),
+		"date": str(row.get("attendance_date")) if row.get("attendance_date") else None,
+		"status": row.get("status"),
+		"status_key": _attendance_status_key(row.get("status")),
+		"in_time": _time_only(row.get("in_time")),
+		"out_time": _time_only(row.get("out_time")),
+		"hours": flt(row.get("working_hours")) or None,
+		"late_minutes": flt(row.get("late_minutes")) or None,
+		"early_exit_minutes": flt(row.get("early_exit_minutes")) or None,
+		"desk_url": desk_route(ATTENDANCE_DOCTYPE, row.get("name")),
+	}
+
+
+def _latest_checkin(employee):
+	"""Today's punch, so the dialog can say 'in since 08:51' before the day
+	is closed and a Saudi Daily Attendance row exists."""
+	if not frappe.has_permission(CHECKIN_DOCTYPE, "read", throw=False):
+		return None
+	fields = _existing_fields(CHECKIN_DOCTYPE, ["name", "log_type", "time", "late_minutes", "attendance_location"])
+	# today only: an unpunched day inherits the previous day's last punch and
+	# would then be reported as though the employee were on site
+	last = frappe.get_list(
+		CHECKIN_DOCTYPE,
+		filters=[
+			["employee", "=", employee],
+			["time", ">=", nowdate()],
+			["time", "<=", now()],
+		],
+		fields=fields,
+		order_by="time desc",
+		limit_page_length=1,
+	)
+	if not last:
+		return None
+	row = last[0]
+	return {
+		"log_type": row.get("log_type"),
+		"time": _time_only(row.get("time")),
+		"late_minutes": flt(row.get("late_minutes")) or None,
+		"location": row.get("attendance_location"),
+		"name": row.get("name"),
+		"desk_url": desk_route(CHECKIN_DOCTYPE, row.get("name")),
+	}
+
+
+def _employee_attendance(employee):
+	"""Today's punch, this month's tally and the recent days for one employee."""
+	today = nowdate()
+	month_start = today[:7] + "-01"
+	month_rows = _attendance_rows(employee, limit=0, from_date=month_start) or []
+	recent_rows = _attendance_rows(employee, limit=EMPLOYEE_ATTENDANCE_DAYS) or []
+
+	today_row = next((row for row in recent_rows if str(row.get("attendance_date")) == today), None)
+	return {
+		"readable": frappe.has_permission(ATTENDANCE_DOCTYPE, "read", throw=False),
+		"today": _attendance_view(today_row) if today_row else None,
+		"checkin": _latest_checkin(employee),
+		"month": _attendance_period_counts(month_rows),
+		"month_label": month_start[:7],
+		"recent": [_attendance_view(row) for row in recent_rows],
+		"recent_limit": EMPLOYEE_ATTENDANCE_DAYS,
+		"truncated": len(recent_rows) >= EMPLOYEE_ATTENDANCE_DAYS,
+	}
 
 
 def _mask_identifier(value):
@@ -731,6 +921,7 @@ def get_employee_detail(name):
 		"profile": profile,
 		"requests": requests,
 		"truncated": len(requests) >= EMPLOYEE_REQUEST_LIMIT,
+		"attendance": _employee_attendance(doc.name),
 	}
 
 
@@ -1198,3 +1389,157 @@ def submit_leave_request(doctype, name):
 		"state": _row_state(doc.as_dict()),
 		"raw_state": doc.get("workflow_state") or doc.get("status"),
 	}
+
+
+@frappe.whitelist(methods=["GET"])
+def get_attendance_overview(from_date=None, to_date=None, limit=25):
+	"""Company-wide attendance for the report panel.
+
+	One window, counted twice from the same rows: a total, and a breakdown per
+	department.  `frappe.get_list` drops any row the caller may not read, so the
+	totals only ever cover what they are allowed to see; when the doctype itself
+	is unreadable the whole block says so instead of reporting zeros, because
+	"0 present" reads as "nobody worked".
+	"""
+	assert_portal_access()
+
+	readable = frappe.has_permission(ATTENDANCE_DOCTYPE, "read", throw=False)
+	employee_readable = frappe.has_permission("Employee", "read", throw=False)
+	window = _attendance_window(from_date, to_date)
+
+	if not readable or not employee_readable:
+		return {
+			"readable": False,
+			"from_date": window["from_date"],
+			"to_date": window["to_date"],
+			"totals": None,
+			"departments": [],
+			"scoped": bool(get_user_permissions(frappe.session.user).get("Employee")),
+		}
+
+	fields = _existing_fields(
+		ATTENDANCE_DOCTYPE,
+		["name", "employee", "attendance_date", "status", "working_hours", "late_entry", "late_minutes"],
+	)
+	rows = frappe.get_list(
+		ATTENDANCE_DOCTYPE,
+		# see _attendance_rows: "between" matches nothing on this field
+		filters=[
+			["attendance_date", ">=", window["from_date"]],
+			["attendance_date", "<=", window["to_date"]],
+		],
+		fields=fields,
+		order_by="attendance_date desc",
+		limit_page_length=0,
+	)
+
+	totals = _attendance_period_counts(rows)
+
+	# department comes from Employee, so the mapping is resolved once per
+	# employee rather than joined, and only for employees this caller can read
+	departments = {}
+	for employee in {row.get("employee") for row in rows if row.get("employee")}:
+		department = frappe.db.get_value("Employee", employee, "department")
+		departments[employee] = department or ""
+
+	by_department = {}
+	for row in rows:
+		department = departments.get(row.get("employee"), "")
+		bucket = by_department.setdefault(
+			department,
+			{"department": department, "employees": set(), **_attendance_period_counts([])},
+		)
+		if row.get("employee"):
+			bucket["employees"].add(row.get("employee"))
+		one = _attendance_period_counts([row])
+		for key in ("present", "absent", "half_day", "on_leave", "other", "days", "late_days", "late_minutes", "hours"):
+			bucket[key] += one[key]
+
+	summary = sorted(
+		(
+			{
+				"department": bucket["department"],
+				"employees": len(bucket["employees"]),
+				"days": bucket["days"],
+				"present": bucket["present"],
+				"absent": bucket["absent"],
+				"half_day": bucket["half_day"],
+				"on_leave": bucket["on_leave"],
+				"other": bucket["other"],
+				"late_days": bucket["late_days"],
+				"late_minutes": round(bucket["late_minutes"], 1),
+				"hours": round(bucket["hours"], 2),
+			}
+			for bucket in by_department.values()
+		),
+		# biggest attendance first, and an unnamed department last rather than
+		# first, because "" would otherwise sort to the top
+		key=lambda row: (row["department"] == "", -row["days"], row["department"]),
+	)
+
+	# the report table is a summary, not a record list, so it is capped and
+	# says so instead of pretending the visible rows are all of them
+	capped = summary[: cint(limit) or 25]
+
+	return {
+		"readable": True,
+		"from_date": window["from_date"],
+		"to_date": window["to_date"],
+		"days": window["days"],
+		"totals": totals,
+		"departments": capped,
+		"department_count": len(summary),
+		"truncated": len(summary) > len(capped),
+		"scoped": bool(get_user_permissions(frappe.session.user).get("Employee")),
+		"today": _attendance_today_rows(),
+	}
+
+
+def _attendance_window(from_date, to_date):
+	"""Normalise the requested window, defaulting to the last 30 days."""
+	today = nowdate()
+	end = getdate(to_date) if to_date else getdate(today)
+	start = getdate(from_date) if from_date else add_days(end, -(DEFAULT_ATTENDANCE_DAYS - 1))
+	if start > end:
+		start, end = end, start
+	span = (end - start).days + 1
+	if span > MAX_ATTENDANCE_DAYS:
+		start = add_days(end, -(MAX_ATTENDANCE_DAYS - 1))
+	return {
+		"from_date": str(start),
+		"to_date": str(end),
+		"days": (end - start).days + 1,
+	}
+
+
+def _attendance_today_rows(limit=12):
+	"""Today's punches, so the report answers "who is in?" without a filter."""
+	if not frappe.has_permission(CHECKIN_DOCTYPE, "read", throw=False):
+		return []
+	fields = _existing_fields(CHECKIN_DOCTYPE, ["name", "employee", "log_type", "time", "late_minutes"])
+	# two conditions, not ["between", ...]: between matches nothing on this field
+	# here, which would leave the table permanently empty rather than wrong
+	rows = frappe.get_list(
+		CHECKIN_DOCTYPE,
+		filters=[["time", ">=", nowdate()], ["time", "<=", now()]],
+		fields=fields,
+		order_by="time desc",
+		limit_page_length=limit,
+	)
+	names = {}
+	for row in rows:
+		employee = row.get("employee")
+		if employee and employee not in names:
+			names[employee] = frappe.db.get_value("Employee", employee, "employee_name") or employee
+	return [
+		{
+			"name": row.get("name"),
+			"employee": row.get("employee"),
+			"employee_name": names.get(row.get("employee")) or row.get("employee"),
+			"log_type": row.get("log_type"),
+			"time": _time_only(row.get("time")),
+			"late_minutes": flt(row.get("late_minutes")) or None,
+			"desk_url": desk_route(CHECKIN_DOCTYPE, row.get("name")),
+		}
+		for row in rows
+	]

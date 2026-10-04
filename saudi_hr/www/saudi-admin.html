@@ -181,6 +181,50 @@
 					</table>
 					<p class="saudi-table__note" id="report-note" hidden></p>
 				</div>
+
+				<!-- ============ ATTENDANCE OVERVIEW ============ -->
+				<div class="saudi-section-header" style="margin-top:22px;">
+					<div>
+						<div class="saudi-section-header__title" data-i18n-key="admin_attendance_overview">ملخص الحضور</div>
+						<div style="font-size:13px;color:var(--text-muted);" id="attendance-window"></div>
+					</div>
+				</div>
+				<div class="saudi-stats" id="attendance-totals"></div>
+				<div class="saudi-table-wrap">
+					<table class="saudi-table">
+						<thead>
+							<tr>
+								<th data-i18n-key="admin_field_department">القسم</th>
+								<th style="text-align:center;" data-i18n-key="admin_attendance_employees">الموظفون</th>
+								<th style="text-align:center;" data-i18n-key="admin_attendance_present">حاضر</th>
+								<th style="text-align:center;" data-i18n-key="admin_attendance_absent">غائب</th>
+								<th style="text-align:center;" data-i18n-key="admin_attendance_half_day">نصف يوم</th>
+								<th style="text-align:center;" data-i18n-key="admin_attendance_on_leave">في إجازة</th>
+								<th style="text-align:center;" data-i18n-key="admin_attendance_late_days">أيام تأخير</th>
+								<th style="text-align:center;" data-i18n-key="admin_attendance_hours">ساعات العمل</th>
+							</tr>
+						</thead>
+						<tbody id="attendance-rows"></tbody>
+					</table>
+					<p class="saudi-table__note" id="attendance-note" hidden></p>
+				</div>
+
+				<div class="saudi-section-header" style="margin-top:22px;">
+					<div class="saudi-section-header__title" data-i18n-key="admin_attendance_today_punches">تسجيلات اليوم</div>
+				</div>
+				<div class="saudi-table-wrap">
+					<table class="saudi-table">
+						<thead>
+							<tr>
+								<th data-i18n-key="admin_col_number">الرقم</th>
+								<th data-i18n-key="admin_attendance_employee">الموظف</th>
+								<th data-i18n-key="admin_attendance_type">الحركة</th>
+								<th data-i18n-key="admin_attendance_time">الوقت</th>
+							</tr>
+						</thead>
+						<tbody id="attendance-today-rows"></tbody>
+					</table>
+				</div>
 			</section>
 
 		</div>
@@ -325,7 +369,8 @@ var ADMIN_STATE = {
 	searchTimer: null,
 	lastFocus: null,
 	trapping: false,
-	employees_restricted: false
+	employees_restricted: false,
+	attendance: null
 };
 
 /* ═══ Boot ═════════════════════════════════════════════════════════════════ */
@@ -478,7 +523,10 @@ function loadDashboard() {
 			badge.hidden = !d.actionable_total;
 		}
 		renderLeaveTables(d.leave || {}, d.truncated || []);
-		}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+		}).catch(function (err) { onApiError(err, t("admin_action_failed")); })
+		// the report panel owns the attendance tables, so they ride along with
+		// the dashboard load rather than needing a second one
+		.then(loadAttendance);
 	});
 }
 
@@ -887,11 +935,194 @@ function renderEmployeeDetail(payload) {
 		+ "<th>" + esc(t("admin_status")) + "</th>"
 		+ "<th>" + esc(t("admin_days")) + "</th>"
 		+ "</tr></thead><tbody>" + requestRows + "</tbody></table></div>"
+		+ renderAttendance(payload.attendance)
 		+ "<div class='saudi-detail-card__actions'>"
 		+ "<a class='saudi-btn saudi-btn--ghost' href='" + esc(p.desk_url || "#") + "' target='_blank' rel='noopener'>"
 		+ esc(t("admin_view_in_desk")) + "</a>"
 		+ "</div>"
 		+ "</div>";
+}
+
+/* ═══ Attendance ════════════════════════════════════════════════════════════ */
+/* The status column on Saudi Daily Attendance is a bilingual Select, so the
+   server sends a stable key alongside the raw text and the portal renders one
+   word of its own instead of whichever label the record happens to carry. */
+function attendanceStatus(row) {
+	var key = row.status_key || row.status;
+	var labelKey = "admin_attendance_status_" + key;
+	var label = t(labelKey);
+	// t() hands back the key when the label is missing, which is how a status
+	// option this build does not know yet falls back to its own recorded text
+	if (label === labelKey) label = row.status || "—";
+	return "<span class='saudi-chip saudi-chip--" + attendanceTone(key) + "'>" + esc(label) + "</span>";
+}
+
+function attendanceTone(key) {
+	if (key === "present") return "approved";
+	if (key === "absent") return "rejected";
+	return "muted";
+}
+
+function fmtHours(hours) {
+	return round2(hours) + " " + (CURRENT_LANG === "ar" ? "ساعة" : (round2(hours) === 1 ? "hour" : "hours"));
+}
+
+/* The tile label already says what the number is, so the value stays bare. */
+function round2(value) {
+	return Number(value || 0).toFixed(2);
+}
+
+function fmtMinutes(minutes) {
+	var n = Math.round(Number(minutes || 0));
+	return n + " " + (CURRENT_LANG === "ar" ? "دقيقة" : (n === 1 ? "minute" : "minutes"));
+}
+
+function attendanceTiles(counts) {
+	if (!counts) return "";
+	var tiles = [
+		[t("admin_attendance_days"), counts.days || 0],
+		[t("admin_attendance_present"), counts.present || 0],
+		[t("admin_attendance_absent"), counts.absent || 0],
+		[t("admin_attendance_half_day"), counts.half_day || 0],
+		[t("admin_attendance_on_leave"), counts.on_leave || 0],
+		[t("admin_attendance_late_days"), counts.late_days || 0],
+		[t("admin_attendance_hours"), round2(counts.hours)]
+	];
+	return "<div class='saudi-stats'>" + tiles.map(function (tile) {
+		return "<div class='saudi-stat'><div class='saudi-stat__value'>" + esc(tile[1])
+			+ "</div><div class='saudi-stat__label'>" + esc(tile[0]) + "</div></div>";
+	}).join("") + "</div>";
+}
+
+/* The employee's own attendance: today's punch, the month's tally and the
+   recent days. A caller with no read on attendance is told so rather than
+   shown a set of zeros that would read as "never came to work". */
+function renderAttendance(attendance) {
+	if (!attendance) return "";
+	if (attendance.readable === false) {
+		return "<div class='saudi-detail-card__title'>" + esc(t("admin_attendance")) + "</div>"
+			+ "<p class='saudi-table__note'>" + esc(t("admin_attendance_not_readable")) + "</p>";
+	}
+
+	var today = attendance.today;
+	var checkin = attendance.checkin;
+	var recent = attendance.recent || [];
+
+	var todayRow = "<div class='saudi-key-value'>"
+		+ "<div class='saudi-key-value__key'>" + esc(t("admin_attendance_today")) + "</div>"
+		+ "<div class='saudi-key-value__value'>"
+		+ (today
+			? attendanceStatus(today) + " " + esc(fmtClock(today.in_time)) + " → " + esc(fmtClock(today.out_time))
+				+ (today.hours ? " · " + esc(fmtHours(today.hours)) : "")
+			: checkin
+				// the day is not closed yet, so the punch is the only record there is
+				? esc(t("admin_attendance_checkin")) + ": "
+					+ esc(checkin.log_type === "OUT" ? t("admin_attendance_out") : t("admin_attendance_in"))
+					+ " " + esc(fmtClock(checkin.time))
+				: esc(t("admin_attendance_no_records")))
+		+ "</div>";
+
+	var days = recent.length
+		? recent.map(function (row) {
+			return "<tr>"
+				+ "<td style='font-weight:700;' dir='ltr'>" + esc(row.date || "—") + "</td>"
+				+ "<td>" + attendanceStatus(row) + "</td>"
+				+ "<td style='direction:ltr;text-align:left;'>" + esc(fmtClock(row.in_time)) + " → " + esc(fmtClock(row.out_time)) + "</td>"
+				+ "<td style='text-align:center;'>" + (row.hours ? esc(fmtHours(row.hours)) : "—") + "</td>"
+				+ "<td style='text-align:center;'>" + (row.late_minutes ? esc(fmtMinutes(row.late_minutes)) : "—") + "</td>"
+				+ "</tr>";
+		}).join("")
+		: emptyRow(5, t("admin_attendance_no_records"));
+
+	return "<div class='saudi-detail-card__title'>" + esc(t("admin_attendance")) + "</div>"
+		+ todayRow
+		+ "<div style='font-size:13px;font-weight:700;color:var(--text-muted);margin-top:4px;'>"
+		+ esc(t("admin_attendance_month") + " · " + (attendance.month_label || "")) + "</div>"
+		+ attendanceTiles(attendance.month)
+		+ "<div style='font-size:13px;font-weight:700;color:var(--text-muted);margin-top:8px;'>"
+		+ esc(t("admin_attendance_recent")) + "</div>"
+		+ (attendance.truncated ? "<p class='saudi-table__note'>" + esc(t("admin_attendance_truncated")) + "</p>" : "")
+		+ "<div style='overflow-x:auto'><table class='saudi-table'><thead><tr>"
+		+ "<th>" + esc(t("admin_attendance_day")) + "</th>"
+		+ "<th>" + esc(t("admin_status")) + "</th>"
+		+ "<th>" + esc(t("admin_attendance_hours_label")) + "</th>"
+		+ "<th>" + esc(t("admin_attendance_hours")) + "</th>"
+		+ "<th>" + esc(t("admin_attendance_late_minutes")) + "</th>"
+		+ "</tr></thead><tbody>" + days + "</tbody></table></div>";
+}
+
+function fmtClock(value) {
+	return value || "—";
+}
+
+/* ═══ Company-wide attendance ══════════════════════════════════════════════ */
+function loadAttendance() {
+	return dedupe("attendance", function () {
+		return callAdmin("get_attendance_overview", { limit: 25 }).then(function (data) {
+			// kept so the language switch can re-render the tables from it
+			ADMIN_STATE.attendance = data;
+			renderAttendanceOverview(data);
+		}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+	});
+}
+
+function renderAttendanceOverview(data) {
+	var totals = document.getElementById("attendance-totals");
+	var rows = document.getElementById("attendance-rows");
+	var todayRows = document.getElementById("attendance-today-rows");
+	var window_ = document.getElementById("attendance-window");
+	var note = document.getElementById("attendance-note");
+	if (!totals || !rows) return;
+
+	if (!data) return;
+
+	if (window_) {
+		window_.textContent = t("admin_attendance_window") + ": " + (data.from_date || "") + " → " + (data.to_date || "");
+	}
+
+	if (data.readable === false) {
+		totals.innerHTML = "";
+		rows.innerHTML = emptyRow(8, t("admin_attendance_not_readable"));
+		if (todayRows) todayRows.innerHTML = emptyRow(4, t("admin_attendance_not_readable"));
+		return;
+	}
+
+	totals.innerHTML = attendanceTiles(data.totals);
+
+	var departments = data.departments || [];
+	rows.innerHTML = departments.length
+		? departments.map(function (row) {
+			return "<tr>"
+				+ "<td>" + esc(row.department || "—") + "</td>"
+				+ "<td style='text-align:center;'>" + esc(row.employees || 0) + "</td>"
+				+ "<td style='text-align:center;'>" + esc(row.present || 0) + "</td>"
+				+ "<td style='text-align:center;'>" + esc(row.absent || 0) + "</td>"
+				+ "<td style='text-align:center;'>" + esc(row.half_day || 0) + "</td>"
+				+ "<td style='text-align:center;'>" + esc(row.on_leave || 0) + "</td>"
+				+ "<td style='text-align:center;'>" + esc(row.late_days || 0) + "</td>"
+				+ "<td style='text-align:center;'>" + esc(fmtHours(row.hours || 0)) + "</td>"
+				+ "</tr>";
+		}).join("")
+		: emptyRow(8, t("admin_attendance_no_departments"));
+
+	if (note) {
+		note.textContent = data.truncated ? t("admin_attendance_truncated") : "";
+		note.hidden = !data.truncated;
+	}
+
+	var punches = data.today || [];
+	if (todayRows) {
+		todayRows.innerHTML = punches.length
+			? punches.map(function (row) {
+				return "<tr>"
+					+ "<td>" + esc(row.employee || "—") + "</td>"
+					+ "<td>" + esc(row.employee_name || row.employee || "—") + "</td>"
+					+ "<td>" + esc(row.log_type === "OUT" ? t("admin_attendance_out") : t("admin_attendance_in")) + "</td>"
+					+ "<td style='direction:ltr;text-align:left;'>" + esc(fmtClock(row.time)) + "</td>"
+					+ "</tr>";
+			}).join("")
+			: emptyRow(4, t("admin_attendance_no_punches"));
+	}
 }
 
 function openEmployeeDetail(name) {
@@ -1031,6 +1262,9 @@ SAUDI_LANG_RENDERERS.push(function () {
 		renderApprovalList();
 		renderApprovalDetail(null);
 	}
+	// the attendance tables are built from the last response rather than from
+	// markup, so they have to be rebuilt in the language just chosen
+	if (ADMIN_STATE.attendance) renderAttendanceOverview(ADMIN_STATE.attendance);
 });
 
 /* ═══ Per-panel loaders ═════════════════════════════════════════════════════ */
