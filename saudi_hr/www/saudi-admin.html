@@ -391,21 +391,54 @@ var ADMIN_WRITES = {
 };
 
 function callAdmin(method, args) {
-	return frappe.call({
-		type: ADMIN_WRITES[method] ? "POST" : "GET",
-		freeze: true,
-		freeze_message: t("admin_submitting"),
-		args: Object.assign({ method: "saudi_hr.saudi_hr.admin_api." + method }, args || {})
-	}).then(function (r) { return r.message; });
+	var path = "saudi_hr.saudi_hr.admin_api." + method;
+	// This page runs on the *website* bundle, whose frappe.call differs from the
+	// Desk one in two ways that both break the obvious implementation:
+	//   1. it posts to `url || "/"` and never derives /api/method/<cmd>, so the
+	//      request lands on the site root, comes back as HTML, and jQuery's
+	//      json parse rejects with a bare jqXHR that shows as a generic
+	//      "action failed" toast -> name the endpoint explicitly;
+	//   2. it has no `return`, so it hands back undefined and cannot be
+	//      chained -> drive it with callback/error and wrap in a Promise.
+	// `method` is still passed so the X-Frappe-CMD header and the Desk bundle
+	// path both stay correct.
+	return new Promise(function (resolve, reject) {
+		frappe.call({
+			method: path,
+			url: "/api/method/" + path,
+			type: ADMIN_WRITES[method] ? "POST" : "GET",
+			freeze: true,
+			freeze_message: t("admin_submitting"),
+			args: args || {},
+			callback: function (r) { resolve(r.message); },
+			error: function (err) { reject(err); }
+		});
+	});
 }
 
 function onApiError(err, fallback) {
 	showToast(serverErrorMessage(err, fallback), "error");
 }
 
+/* Restoring the saved panel already runs that panel's loader, and the block
+   below then refreshes every panel.  Without a guard the dashboard is fetched
+   twice on each page load, which double-counts requests and doubles the
+   freeze.  Sharing the in-flight promise keeps one request per query; the
+   entry is dropped as soon as it settles so a later click refetches. */
+var SAUDI_INFLIGHT = {};
+function dedupe(key, run) {
+	if (SAUDI_INFLIGHT[key]) return SAUDI_INFLIGHT[key];
+	var p = run();
+	SAUDI_INFLIGHT[key] = p;
+	var clear = function () { delete SAUDI_INFLIGHT[key]; };
+	p.then(clear, clear);
+	return p;
+}
+
 /* ═══ Dashboard ════════════════════════════════════════════════════════════ */
 function loadDashboard() {
-	callAdmin("get_admin_dashboard").then(function (d) {
+	return dedupe("dashboard", function () {
+		return callAdmin("get_admin_dashboard").then(function (d) {
 		var e = d.employees || {};
 		// a scoped user gets no headcount; hide those tiles rather than showing
 		// zeros that read as "this company has no employees"
@@ -422,7 +455,8 @@ function loadDashboard() {
 			badge.hidden = !d.actionable_total;
 		}
 		renderLeaveTables(d.leave || {}, d.truncated || []);
-	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+		}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+	});
 }
 
 function put(id, value) {
@@ -487,10 +521,12 @@ function emptyRow(span, text) {
 
 /* ═══ Approvals ═════════════════════════════════════════════════════════════ */
 function loadLeave() {
-	callAdmin("list_leave_requests", { limit: 200 }).then(function (r) {
-		ADMIN_STATE.leave = r.rows || [];
-		renderApprovalList();
-	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+	return dedupe("leave", function () {
+		return callAdmin("list_leave_requests", { limit: 200 }).then(function (r) {
+			ADMIN_STATE.leave = r.rows || [];
+			renderApprovalList();
+		}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+	});
 }
 
 function visibleRequests() {
@@ -519,6 +555,7 @@ function renderApprovalList() {
 	box.innerHTML = rows.map(function (row) {
 		var active = ADMIN_STATE.selected === row.doctype + "|" + row.name ? " saudi-list-item--active" : "";
 		var key = esc(row.doctype + "|" + row.name);
+		var desk = row.desk_url ? "<a class='saudi-btn saudi-btn--ghost' href='" + esc(row.desk_url) + "' target='_blank' rel='noopener' onclick='event.stopPropagation();'>" + esc(t("admin_view_in_desk")) + "</a>" : "";
 		return "<button type='button' role='listitem' class='saudi-list-item" + active + "' data-key='" + key + "'>"
 			+ "<div class='saudi-list-item__row'>"
 			+ "<span class='saudi-list-item__title'>" + esc(row.employee || "—") + "</span>"
@@ -529,6 +566,7 @@ function renderApprovalList() {
 			+ "<span class='saudi-chip saudi-chip--muted'>" + esc(row.name) + "</span>"
 			+ "<span class='saudi-chip saudi-chip--muted'>" + fmtDays(row.days) + "</span>"
 			+ "</div>"
+			+ "<div style='margin-top:8px;display:flex;justify-content:flex-end;'>" + desk + "</div>"
 			+ "</button>";
 	}).join("");
 
@@ -726,17 +764,19 @@ function renderEmployees(restricted) {
 
 function loadEmployeeOptions() {
 	if (!ADMIN_CFG.can_manage_employees) return;
-	callAdmin("get_employee_form_options").then(function (r) {
-		ADMIN_STATE.options = r.options || {};
-		fillSelect("emp-company", "company");
-		fillSelect("emp-department", "department");
-		fillSelect("emp-designation", "designation");
-		fillSelect("emp-branch", "branch");
-		fillSelect("emp-reports-to", "reports_to");
-		fillSelect("emp-gender", "gender");
-		fillSelect("emp-status", "status");
-		fillSelect("emp-id-type", "custom_id_type");
-	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+	return dedupe("emp-options", function () {
+		return callAdmin("get_employee_form_options").then(function (r) {
+			ADMIN_STATE.options = r.options || {};
+			fillSelect("emp-company", "company");
+			fillSelect("emp-department", "department");
+			fillSelect("emp-designation", "designation");
+			fillSelect("emp-branch", "branch");
+			fillSelect("emp-reports-to", "reports_to");
+			fillSelect("emp-gender", "gender");
+			fillSelect("emp-status", "status");
+			fillSelect("emp-id-type", "custom_id_type");
+		}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+	});
 }
 
 function fillSelect(id, key) {

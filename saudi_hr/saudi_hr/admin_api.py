@@ -207,6 +207,19 @@ def _clean_limit(limit, default=DEFAULT_LIMIT):
 	return max(1, min(value or default, MAX_LIMIT))
 
 
+def desk_route(doctype, name):
+	"""Deep link into the Desk form for ``doctype``/``name``.
+
+	The desk router keys its routes off ``frappe.router.slug``, which is a
+	lower-cased, dash-separated form of the doctype name (see
+	``frappe/public/js/frappe/router.js``).  Percent-encoding the spaces
+	instead, as this used to, produces a URL the SPA cannot resolve and the
+	click silently lands on "Page Not Found".
+	"""
+	slug = cstr(doctype).strip().lower().replace(" ", "-")
+	return "/app/{}/{}".format(slug, quote(cstr(name), safe=""))
+
+
 def _doctype_entry(entry):
 	doctype, label, start, end, days, kind, state = entry
 	return {
@@ -581,7 +594,7 @@ def _employee_row(row):
 		"id_number": row.get("custom_id_number"),
 		"modified": str(row.get("modified")) if row.get("modified") else None,
 		# a renamed employee is reachable under its number, so both routes open
-		"desk_url": "/app/employee/{}".format(row.get("name")),
+		"desk_url": desk_route("Employee", row.get("name")),
 	}
 
 
@@ -681,7 +694,7 @@ def create_employee(payload_json):
 	# a document inserted seconds ago cannot have any.  It also prints to stdout,
 	# which would put rename chatter in the web request log.
 
-	return {"name": employee_number, "created": True, "desk_url": "/app/employee/{}".format(employee_number)}
+	return {"name": employee_number, "created": True, "desk_url": desk_route("Employee", employee_number)}
 
 
 def _validate_employee_number(employee_number):
@@ -837,9 +850,7 @@ def list_leave_requests(state=None, doctype=None, limit=None):
 					# level check still refuses; the UI greys these out
 					"can_read": can_read,
 					"created_at": str(record.get("creation")) if record.get("creation") else None,
-					"desk_url": "/app/{}/{}".format(
-						quote(leave_doctype, safe=""), quote(cstr(record.get("name")), safe="")
-					),
+					"desk_url": desk_route(leave_doctype, record.get("name")),
 				}
 			)
 
@@ -928,6 +939,9 @@ def get_leave_request(doctype, name):
 		"raw_state": doc.get("workflow_state") or doc.get("status"),
 		"has_workflow": bool(get_workflow_name(leave_doctype)),
 		"actions": _dedupe_actions(transitions),
+		# the detail panel's "open in Desk" button reads this; without it the
+		# link renders as "#" and the click goes nowhere
+		"desk_url": desk_route(leave_doctype, doc.name),
 		"fields": {
 			key: _jsonable(value)
 			for key, value in doc.as_dict().items()

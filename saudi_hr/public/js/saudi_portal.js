@@ -610,18 +610,32 @@ function showToast(msg, type) {
 
 /* Pull a clean, unstyled message out of a frappe error response. */
 function serverErrorMessage(err, fallback) {
-	if (err && err._server_messages && err._server_messages.length) {
-		var raw = (err._server_messages[0] + "").replace(/\\?"/g, "").replace(/<[^>]+>/g, "").trim();
-		if (raw) return raw;
+	if (!err) return fallback;
+	if (err._server_messages && err._server_messages.length) {
+		try {
+			var raw = err._server_messages[0];
+			if (typeof raw === 'string') {
+				var t = raw.trim();
+				if (t.startsWith('{') || t.startsWith('[')) {
+					var parsed = JSON.parse(t);
+					if (parsed && parsed.message) {
+						return String(parsed.message).replace(/<[^>]+>/g, '').trim();
+					}
+				}
+				var cleaned = raw.replace(/\"/g, '"').replace(/\\n/g, ' ').replace(/<[^>]+>/g, '').trim();
+				if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+					cleaned = cleaned.slice(1, -1);
+				}
+				if (cleaned) return cleaned;
+			} else if (typeof raw === 'object' && raw.message) {
+				return String(raw.message).replace(/<[^>]+>/g, '').trim();
+			}
+		} catch (e) {}
 	}
+	if (err.message) return String(err.message).replace(/<[^>]+>/g, '').trim();
+	if (err.exc) return String(err.exc).replace(/<[^>]+>/g, '').trim();
 	return fallback;
 }
-
-function showSessionBanner() {
-	var el = document.getElementById("session-banner");
-	if (el) el.style.display = "flex";
-}
-
 function logoutUser() {
 	if (!confirm(t("logout_confirm"))) return;
 	try { localStorage.removeItem(SAUDI_PANEL_STORE_KEY); } catch(e) {}
