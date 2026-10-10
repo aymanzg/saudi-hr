@@ -35,7 +35,7 @@
   "description",
   "legacy_reference",
   "amended_from"
-   ],
+ ],
  "fields": [
   {
    "fieldname": "naming_series",
@@ -180,7 +180,7 @@
    "read_only": 1
   },
   {
-    "default": "Draft",
+   "default": "Draft",
    "fieldname": "workflow_state",
    "fieldtype": "Link",
    "in_list_view": 1,
@@ -264,6 +264,11 @@
    "share": 1
   },
   {
+   "role": "General Manager",
+   "read": 1,
+   "write": 1
+  },
+  {
    "role": "Department Approver",
    "read": 1,
    "write": 1,
@@ -275,19 +280,19 @@
    "role": "Accounts Manager",
    "read": 1,
    "write": 1,
-    "submit": 1,
+   "submit": 1,
    "print": 1,
    "email": 1,
    "report": 1
   },
   {
-    "role": "Employee",
-    "read": 1,
-    "write": 1,
-    "create": 1,
-    "print": 1
-    },
-    {
+   "role": "Employee",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "print": 1
+  },
+  {
    "role": "Employee Self Service",
    "read": 1,
    "write": 1,

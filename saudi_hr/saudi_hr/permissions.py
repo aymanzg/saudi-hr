@@ -5,7 +5,9 @@ ELEVATED_ROLES = {"HR Manager", "HR User", "System Manager", "Leave Approver"}
 DEPARTMENT_APPROVER_ROLE = "Department Approver"
 DIRECT_MANAGER_FIELDS = ("leave_approver", "expense_approver")
 ANNUAL_LEAVE_FINANCE_ROLE = "Accounts Manager"
-ANNUAL_LEAVE_FINANCE_VISIBLE_STATES = {"Pending Finance Approval", "Approved"}
+ANNUAL_LEAVE_FINANCE_VISIBLE_STATES = {"GM Approved", "Completed"}
+GENERAL_MANAGER_ROLE = "General Manager"
+GENERAL_MANAGER_VISIBLE_STATES = {"Pending GM Review", "GM Approved", "Completed", "Rejected by GM"}
 
 
 def _has_elevated_access(user=None):
@@ -180,6 +182,15 @@ def get_saudi_annual_leave_query(user=None):
 	if finance_scope:
 		conditions.append(finance_scope)
 
+	gm_scope = _workflow_role_query(
+		"Saudi Annual Leave",
+		GENERAL_MANAGER_ROLE,
+		GENERAL_MANAGER_VISIBLE_STATES,
+		user,
+	)
+	if gm_scope:
+		conditions.append(gm_scope)
+
 	return "(" + " OR ".join(conditions) + ")" if conditions else "1=0"
 
 
@@ -187,10 +198,18 @@ def has_saudi_annual_leave_permission(doc, user=None, permission_type=None):
 	if _employee_or_approver_permission(doc, DIRECT_MANAGER_FIELDS, user):
 		return True
 
-	return _workflow_role_permission(
+	if _workflow_role_permission(
 		doc,
 		ANNUAL_LEAVE_FINANCE_ROLE,
 		ANNUAL_LEAVE_FINANCE_VISIBLE_STATES,
+		user,
+	):
+		return True
+
+	return _workflow_role_permission(
+		doc,
+		GENERAL_MANAGER_ROLE,
+		GENERAL_MANAGER_VISIBLE_STATES,
 		user,
 	)
 

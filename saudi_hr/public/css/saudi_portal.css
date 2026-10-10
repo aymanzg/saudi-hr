@@ -648,6 +648,27 @@
 .saudi-table__note { margin: 10px 14px 0; font-size: 12px; color: var(--text-muted); }
 .saudi-table__note[hidden] { display: none; }
 
+/* ─── Attendance report controls ──────────────────────────────────────────────
+   The panel carries up to five controls at once: search, report scope, report
+   type, and either a month or a pair of dates. The wrapping flex row the rest
+   of the page uses gives each of them a fifth of the width -- too narrow for a
+   date input, and the second date ends up alone on a row of its own -- so these
+   sit on a grid. auto-fit collapses the empty tracks, which is why one control
+   can be shown or hidden without leaving a hole behind it. */
+#attendance-form {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 12px;
+	align-items: end;
+	margin-bottom: 16px;
+}
+#attendance-form .saudi-field { margin-bottom: 0; }
+#attendance-form .saudi-field > label { font-size: 12px; }
+/* A select, a text box and a date box come out 7px apart at the same padding,
+   which staggers their labels on a shared row; one height for all three. */
+#attendance-form select,
+#attendance-form input { height: 44px; }
+
 /* Two-column form layout on desktop */
 .saudi-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
 .saudi-form-grid .saudi-field--wide { grid-column: 1 / -1; }
@@ -817,11 +838,37 @@
 	transition: background 0.15s ease, border-color 0.15s ease;
 }
 .saudi-btn:hover { background: var(--app-primary-light); }
+.saudi-btn--tiny {
+	padding: 3px 8px;
+	font-size: 12px;
+	font-weight: 700;
+	border-radius: 7px;
+}
 .saudi-btn--primary { background: #0b5d4b; border-color: #0b5d4b; color: #ffffff; }
 .saudi-btn--primary:hover { background: #094d3e; }
 .saudi-btn--danger { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
 .saudi-btn--danger:hover { background: #fee2e2; }
 .saudi-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* A two-option picker, e.g. which punch to correct in the correction form. */
+.saudi-segmented { display: flex; gap: 8px; }
+.saudi-segmented__btn {
+	flex: 1;
+	padding: 10px 8px;
+	border: 1px solid var(--border-color);
+	border-radius: 10px;
+	background: #ffffff;
+	color: var(--text-main);
+	font-family: inherit;
+	font-size: 13px;
+	font-weight: 800;
+	line-height: 1.2;
+	cursor: pointer;
+	transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.saudi-segmented__btn:hover { background: var(--app-primary-light); }
+.saudi-segmented__btn--active,
+.saudi-segmented__btn--active:hover { background: var(--app-primary); border-color: var(--app-primary); color: #ffffff; }
 
 /* Keyboard focus must be visible on every interactive element, including
    the ones the design system paints with a border-only resting state. */
@@ -893,3 +940,166 @@ body.saudi-modal-open { overflow: hidden; }
 	.saudi-rail__brand { width: 100%; }
 	.saudi-rail__spacer { display: none; }
 }
+
+/* ─── Financial Clearance Sheet ─── */
+.saudi-clearance-sheet {
+	background: #ffffff;
+	border: 1px solid var(--border-color);
+	border-radius: 18px;
+	padding: 24px;
+	margin-top: 14px;
+	box-shadow: 0 4px 16px rgba(0,0,0,0.03);
+}
+.saudi-clearance-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-bottom: 16px;
+	border-bottom: 2px solid var(--border-color);
+	gap: 16px;
+}
+.saudi-clearance-header__brand {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+.saudi-clearance-logo {
+	width: 48px;
+	height: 48px;
+	border-radius: 12px;
+	background: #0b5d4b;
+	color: #ffffff;
+	font-size: 18px;
+	font-weight: 900;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.saudi-highlight-banner {
+	margin: 16px 0;
+	padding: 16px 20px;
+	background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+	border: 1px solid #bbf7d0;
+	border-radius: 14px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+.saudi-breakdown-tables {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 16px;
+	margin: 16px 0;
+}
+@media (max-width: 768px) {
+	.saudi-breakdown-tables { grid-template-columns: 1fr; }
+}
+.saudi-net-banner {
+	background: linear-gradient(135deg, #0b5d4b 0%, #13795f 100%);
+	color: #ffffff;
+	border-radius: 16px;
+	padding: 20px 24px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	box-shadow: 0 8px 24px rgba(11, 93, 75, 0.25);
+	margin-top: 16px;
+}
+.saudi-signatures-grid {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 16px;
+	margin-top: 24px;
+	padding-top: 16px;
+	border-top: 1px dashed var(--border-color);
+	text-align: center;
+}
+@media (max-width: 650px) {
+	.saudi-signatures-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+}
+.saudi-signature-box {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	font-size: 12px;
+	color: var(--text-muted);
+}
+.saudi-signature-box strong {
+	color: var(--text-main);
+	margin-bottom: 30px;
+}
+.saudi-signature-line {
+	width: 80%;
+	border-bottom: 1px dashed #cbd5e1;
+	margin-bottom: 6px;
+}
+
+/* ─── Documents & Letters Grid ─── */
+.saudi-doc-grid {
+	display: grid;
+	grid-template-columns: repeat(5, 1fr);
+	gap: 14px;
+	margin-bottom: 24px;
+}
+@media (max-width: 1200px) {
+	.saudi-doc-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 768px) {
+	.saudi-doc-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+	.saudi-doc-grid { grid-template-columns: 1fr; }
+}
+.saudi-doc-card {
+	background: #ffffff;
+	border: 1px solid var(--border-color);
+	border-radius: 16px;
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	transition: all 0.2s ease;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+}
+.saudi-doc-card:hover {
+	transform: translateY(-3px);
+	border-color: #0b5d4b;
+	box-shadow: 0 8px 20px rgba(11, 93, 75, 0.12);
+}
+.saudi-doc-card__header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 10px;
+}
+.saudi-doc-card__icon {
+	font-size: 22px;
+}
+.saudi-doc-card__title {
+	font-size: 15px;
+	font-weight: 800;
+	color: var(--text-main);
+	margin-bottom: 6px;
+}
+.saudi-doc-card__desc {
+	font-size: 12px;
+	color: var(--text-muted);
+	line-height: 1.4;
+	margin-bottom: 14px;
+	flex-grow: 1;
+}
+.saudi-doc-card__footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-top: 10px;
+	border-top: 1px solid #f3f4f6;
+	font-size: 11px;
+	color: var(--text-muted);
+}
+@media print {
+	.saudi-rail, .saudi-toolbar, .saudi-section-header { display: none !important; }
+	.saudi-shell { grid-template-columns: 1fr; }
+	.saudi-clearance-sheet { border: none; box-shadow: none; padding: 0; }
+}
+

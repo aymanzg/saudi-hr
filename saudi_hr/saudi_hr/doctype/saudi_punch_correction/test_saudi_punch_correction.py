@@ -32,7 +32,7 @@ class TestSaudiPunchCorrection(FrappeTestCase):
 		self.day = add_days(nowdate(), -1)
 		self._assign_nine_o_morning_shift()
 		self.punch = self._punch("IN", f"{self.day} 09:40:00")
-		self._punch("OUT", f"{self.day} 17:30:00")
+		self.punch_out = self._punch("OUT", f"{self.day} 17:30:00")
 
 	def _assign_nine_o_morning_shift(self):
 		"""A submitted shift so 09:40 is genuinely late and 08:05 is not."""
@@ -92,7 +92,7 @@ class TestSaudiPunchCorrection(FrappeTestCase):
 	def _approve(self, doc):
 		"""Approve through the workflow, the way an approver would.
 
-		Submitting is enough here: the workflow moves the request to Approved
+		Submitting is enough here: the workflow moves the request to Completed
 		because this user may perform every transition. A plain save that set
 		``workflow_state`` directly is refused by design.
 		"""
@@ -109,6 +109,13 @@ class TestSaudiPunchCorrection(FrappeTestCase):
 		self.assertEqual(_hhmm(doc.corrected_in_time), "08:05:00")
 		self.assertEqual(doc.applied, 0)
 
+	def test_the_request_records_the_original_check_out(self):
+		doc = self._insert(corrected_out_time="17:45:00")
+
+		self.assertEqual(doc.punch_out, self.punch_out)
+		self.assertEqual(_hhmm(doc.original_out_time), "17:30:00")
+		self.assertEqual(_hhmm(doc.corrected_out_time), "17:45:00")
+
 	def test_a_draft_request_changes_nothing(self):
 		self._insert()
 
@@ -119,7 +126,7 @@ class TestSaudiPunchCorrection(FrappeTestCase):
 		doc = self._insert()
 		approved = self._approve(doc)
 
-		self.assertEqual(approved.workflow_state, "Approved")
+		self.assertEqual(approved.workflow_state, "Completed")
 		self.assertEqual(approved.applied, 1)
 		self.assertTrue(approved.applied_on)
 		self.assertEqual(self._punch_time(), "08:05:00")
@@ -147,6 +154,86 @@ class TestSaudiPunchCorrection(FrappeTestCase):
 		# working hours are derived on save, so they follow the corrected check-in
 		self.assertEqual(daily.working_hours, 9.42)
 
+	def test_approval_moves_the_out_punch_to_the_corrected_time(self):
+		doc = self._insert(corrected_out_time="17:45:00")
+		approved = self._approve(doc)
+
+		self.assertEqual(approved.applied, 1)
+		self.assertEqual(self._punch_time(self.punch_out), "17:45:00")
+		# the original is still on the request, so the change is auditable
+		self.assertEqual(
+			_hhmm(frappe.db.get_value("Saudi Punch Correction", doc.name, "original_out_time")), "17:30:00"
+		)
+
+	def test_approval_updates_the_daily_attendance_out_time(self):
+		attendance = frappe.get_doc(
+			{
+				"doctype": "Saudi Daily Attendance",
+				"employee": self.employee,
+				"attendance_date": self.day,
+				"in_time": f"{self.day} 08:05:00",
+				"out_time": f"{self.day} 17:30:00",
+			}
+		).insert(ignore_permissions=True)
+		self.assertEqual(attendance.working_hours, 9.42)
+
+		self._approve(self._insert(corrected_out_time="18:15:00"))
+
+		daily = frappe.get_doc("Saudi Daily Attendance", attendance.name)
+		self.assertEqual(_hhmm(daily.out_time), "18:15:00")
+		# out moved without touching the already-corrected check-in
+		self.assertEqual(_hhmm(daily.in_time), "08:05:00")
+		self.assertEqual(daily.working_hours, 10.17)
+
+	def test_the_early_exit_minutes_are_recalculated_for_the_out_punch(self):
+		"""An out correction that changes punctuality has to change the penalty too."""
+		self.assertEqual(
+			frappe.db.get_value("Saudi Employee Checkin", self.punch_out, "early_exit_minutes"),
+			0,
+			"17:30 against a 17:00 shift end is not an early exit",
+		)
+
+		self._approve(self._insert(corrected_out_time="16:30:00"))
+
+		self.assertEqual(
+			frappe.db.get_value("Saudi Employee Checkin", self.punch_out, "early_exit_minutes"),
+			30,
+			"16:30 against a 17:00 shift end is 30 minutes early",
+		)
+
+	def test_an_out_correction_without_an_out_punch_registers_it(self):
+		"""A date with no check-out punch is corrected by registering one: the
+		approved request is the documented, auditable equivalent of a punch."""
+		frappe.db.delete("Saudi Employee Checkin", self.punch_out)
+		doc = self._approve(self._insert(corrected_in_time="", corrected_out_time="17:45:00"))
+
+		created = frappe.db.get_value(
+			"Saudi Employee Checkin",
+			{"employee": self.employee, "log_type": "OUT"},
+			"name",
+		)
+		self.assertTrue(created)
+		self.assertEqual(_hhmm(frappe.db.get_value("Saudi Employee Checkin", created, "time")), "17:45:00")
+		self.assertIn(
+			doc.name,
+			frappe.db.get_value("Saudi Employee Checkin", created, "verification_note"),
+			"the audit trail says this punch was registered from the request",
+		)
+		# the registered check-out surfaces as a complete day
+		daily_name = frappe.db.get_value(
+			"Saudi Daily Attendance", {"employee": self.employee, "attendance_date": self.day}, "name"
+		)
+		self.assertTrue(daily_name)
+		self.assertEqual(
+			_hhmm(frappe.db.get_value("Saudi Daily Attendance", daily_name, "out_time")), "17:45:00"
+		)
+
+	def test_a_request_must_move_a_punch(self):
+		with self.assertRaises(frappe.exceptions.ValidationError) as error:
+			self._insert(corrected_in_time="", corrected_out_time="")
+
+		self.assertIn("corrected", str(error.exception).lower())
+
 	def test_a_correction_is_applied_only_once(self):
 		self._approve(self._insert())
 
@@ -156,12 +243,42 @@ class TestSaudiPunchCorrection(FrappeTestCase):
 
 		self.assertEqual(self._punch_time(), "08:05:00")
 
-	def test_a_day_with_no_check_in_punch_cannot_be_corrected(self):
-		"""Correcting a punch that does not exist would fabricate attendance."""
-		with self.assertRaises(frappe.exceptions.ValidationError) as error:
-			self._insert(attendance_date=add_days(self.day, -3))
+	def test_a_day_with_no_check_in_punch_is_registered(self):
+		"""No punch that day is not a refusal: approving the request registers the
+		forgotten check-in, tagged with the request for the audit trail."""
+		day = add_days(self.day, -3)
+		doc = self._insert(attendance_date=day)
+		self.assertIsNone(doc.punch)
+		self.assertIsNone(doc.original_in_time)
 
-		self.assertIn("No check-in punch was found", str(error.exception))
+		approved = self._approve(doc)
+
+		created = frappe.db.get_value(
+			"Saudi Employee Checkin",
+			{
+				"employee": self.employee,
+				"log_type": "IN",
+				"time": ["between", [f"{day} 00:00:00", f"{day} 23:59:59"]],
+			},
+			"name",
+		)
+		self.assertTrue(created)
+		self.assertEqual(_hhmm(frappe.db.get_value("Saudi Employee Checkin", created, "time")), "08:05:00")
+		self.assertIn(
+			approved.name,
+			frappe.db.get_value("Saudi Employee Checkin", created, "verification_note"),
+			"the audit trail says this punch was registered from the request",
+		)
+		# the registered check-in surfaces as a day in the reports
+		daily_name = frappe.db.get_value(
+			"Saudi Daily Attendance", {"employee": self.employee, "attendance_date": day}, "name"
+		)
+		self.assertTrue(daily_name)
+		self.assertEqual(
+			_hhmm(frappe.db.get_value("Saudi Daily Attendance", daily_name, "in_time")), "08:05:00"
+		)
+		self.assertTrue(frappe.db.get_value("Saudi Punch Correction", doc.name, "created_daily_attendance"))
+		self.assertEqual(frappe.db.get_value("Saudi Punch Correction", doc.name, "daily_attendance"), daily_name)
 
 	def test_the_first_check_in_of_the_day_is_the_one_corrected(self):
 		second_in = self._punch("IN", f"{self.day} 10:15:00")
@@ -225,8 +342,39 @@ class TestSaudiPunchCorrection(FrappeTestCase):
 
 		self.assertEqual(self._punch_time(), "09:40:00")
 
-	def test_the_form_context_shows_the_current_check_in(self):
-		"""The form shows the punch it would correct rather than asking for trust."""
+	def test_cancelling_a_registration_removes_the_created_punch_and_day(self):
+		"""Reverting a registration is a true revert: the created check-in and the
+		day's attendance row it surfaced go back to not existing."""
+		day = add_days(self.day, -3)
+		doc = self._approve(self._insert(attendance_date=day))
+		created_in = frappe.db.get_value(
+			"Saudi Employee Checkin",
+			{
+				"employee": self.employee,
+				"log_type": "IN",
+				"time": ["between", [f"{day} 00:00:00", f"{day} 23:59:59"]],
+			},
+			"name",
+		)
+		daily_name = frappe.db.get_value(
+			"Saudi Daily Attendance", {"employee": self.employee, "attendance_date": day}, "name"
+		)
+		self.assertTrue(created_in)
+		self.assertTrue(daily_name)
+
+		frappe.get_doc(doc.doctype, doc.name).cancel()
+
+		self.assertFalse(
+			frappe.db.exists("Saudi Employee Checkin", created_in),
+			"the registered check-in is deleted on cancel",
+		)
+		self.assertFalse(
+			frappe.db.exists("Saudi Daily Attendance", daily_name),
+			"the day's attendance row created by the request is deleted on cancel",
+		)
+
+	def test_the_form_context_shows_the_current_check_in_and_check_out(self):
+		"""The form shows both punches it would correct rather than asking for trust."""
 		frappe.set_user(self.employee_email)
 		try:
 			context = get_punch_correction_context(attendance_date=self.day)
@@ -236,6 +384,9 @@ class TestSaudiPunchCorrection(FrappeTestCase):
 		self.assertEqual(context["correctable"], 1)
 		self.assertEqual(context["punch"], self.punch)
 		self.assertEqual(_hhmm(context["current_in_time"]), "09:40:00")
+		self.assertEqual(context["has_out_punch"], 1)
+		self.assertEqual(context["punch_out"], self.punch_out)
+		self.assertEqual(_hhmm(context["current_out_time"]), "17:30:00")
 		self.assertEqual(context["future_date"], 0)
 
 	def test_the_form_context_reports_a_day_with_no_punch(self):
@@ -246,9 +397,11 @@ class TestSaudiPunchCorrection(FrappeTestCase):
 		finally:
 			frappe.set_user("Administrator")
 
-		self.assertEqual(context["correctable"], 0)
+		self.assertEqual(context["correctable"], 1)
+		self.assertEqual(context["has_in_punch"], 0)
 		self.assertIsNone(context["current_in_time"])
 		self.assertEqual(future["future_date"], 1)
+		self.assertEqual(future["correctable"], 0)
 
 	def test_the_form_context_is_scoped_to_the_employee(self):
 		other = make_qa_employee(self.company, f"punch-other-{frappe.generate_hash(length=6)}")

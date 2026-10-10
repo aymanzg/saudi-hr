@@ -164,7 +164,6 @@
 					<option value="special" data-i18n-key="leave_special">إجازة خاصة</option>
 					<option value="maternity_paternity" data-i18n-key="leave_maternity">إجازة أمومة وأبوة</option>
 					<option value="emergency_leave" data-i18n-key="leave_emergency">إجازة طارئة</option>
-					<option value="punch_correction" data-i18n-key="leave_punch_correction">تصحيح البصمة</option>
 				</select>
 			</div>
 			<div class="saudi-field" id="leave-subtype-field" style="display:none;">
@@ -181,15 +180,11 @@
 			</div>
 			<div class="saudi-field" id="leave-emergency-field" style="display:none;">
 				<label data-i18n-key="emergency_remaining">المتاح من الإجازة الطارئة</label>
-				<div class="saudi-card-lite"><strong id="leave-emergency-balance">--</strong></div>
+				<div class="saudi-card-lite" style="display:flex;align-items:center;justify-content:space-between;">
+					<span data-i18n-key="emergency_balance">رصيد الإجازة الطارئة</span>
+					<strong id="leave-emergency-balance">--</strong>
+				</div>
 				<div class="saudi-hint" id="leave-emergency-warning" style="display:none;"></div>
-			</div>
-			<div class="saudi-field" id="punch-correction-field" style="display:none;">
-				<label data-i18n-key="current_checkin">وقت الحضور المسجل</label>
-				<div class="saudi-card-lite"><strong id="punch-current-time">—</strong></div>
-				<label data-i18n-key="corrected_time_label">وقت الحضور الصحيح</label>
-				<input type="time" id="punch-corrected-time">
-				<div class="saudi-hint" id="punch-correction-warning" style="display:none;"></div>
 			</div>
 			<div class="saudi-field">
 				<label data-i18n-key="reason_label">مبرر الطلب</label>
@@ -275,6 +270,45 @@
 		</div>
 		<div id="requests-list-container">
 			<div class="saudi-empty"><p data-i18n-key="loading">جاري التحميل...</p></div>
+		</div>
+	</section>
+
+	<!-- ============ PANEL: PUNCH CORRECTION ============ -->
+	<section class="saudi-panel" id="panel-punch-correction">
+		<div class="saudi-section-header">
+			<div class="saudi-section-header__title" data-i18n-key="leave_punch_correction">تصحيح البصمة</div>
+			<div class="saudi-section-header__back" onclick="navigate('requests')">‹ <span data-i18n-key="back">رجوع</span></div>
+		</div>
+		<div class="saudi-form">
+			<div class="saudi-field">
+				<label data-i18n-key="punch_select_target">اختر ما تريد تصحيحه</label>
+				<div class="saudi-segmented" role="group" id="punch-target-toggle">
+					<button type="button" class="saudi-segmented__btn saudi-segmented__btn--active" id="punch-target-in" onclick="selectPunchTarget('IN')" data-i18n-key="punch_target_in">تصحيح الدخول</button>
+					<button type="button" class="saudi-segmented__btn" id="punch-target-out" onclick="selectPunchTarget('OUT')" data-i18n-key="punch_target_out">تصحيح الخروج</button>
+				</div>
+			</div>
+			<div class="saudi-field">
+				<label data-i18n-key="from_date">من تاريخ</label>
+				<input type="date" id="punch-correction-date" onchange="refreshPunchContext()">
+			</div>
+			<div class="saudi-field" id="punch-in-field" style="display:none;">
+				<label data-i18n-key="current_checkin">وقت الحضور المسجل</label>
+				<div class="saudi-card-lite"><strong id="punch-current-time">—</strong></div>
+				<label data-i18n-key="corrected_time_label">وقت الحضور الصحيح</label>
+				<input type="time" id="punch-corrected-time">
+			</div>
+			<div class="saudi-field" id="punch-out-field" style="display:none;">
+				<label data-i18n-key="current_checkout">وقت الخروج المسجل</label>
+				<div class="saudi-card-lite"><strong id="punch-current-out-time">—</strong></div>
+				<label data-i18n-key="corrected_out_time_label">وقت الخروج الصحيح</label>
+				<input type="time" id="punch-corrected-out-time">
+			</div>
+			<div class="saudi-hint" id="punch-correction-warning" style="display:none;"></div>
+			<div class="saudi-field">
+				<label data-i18n-key="reason_label">مبرر الطلب</label>
+				<textarea id="punch-correction-reason" data-i18n-key="leave_reason_placeholder" placeholder="أضف وصفًا مختصرًا للطلب"></textarea>
+			</div>
+			<button class="saudi-submit-btn" onclick="submitPunchCorrection()" id="punch-correction-submit-btn" data-i18n-key="submit_request">تقديم الطلب</button>
 		</div>
 	</section>
 
@@ -364,6 +398,11 @@
 						<div class="saudi-request-choice__title"><span data-i18n-key="service_request">طلب خدمة</span></div>
 						<div class="saudi-request-choice__hint" data-i18n-key="new_req_service_hint">سلفة، قرض، شهادات، رخص، إقامات</div>
 					</div>
+					<div class="saudi-request-choice__card" onclick="pickNewRequest('punch-correction')">
+						<div class="saudi-request-choice__icon" style="background:#f3e8ff; color:#7e22ce;">🕐</div>
+						<div class="saudi-request-choice__title"><span data-i18n-key="leave_punch_correction">تصحيح البصمة</span></div>
+						<div class="saudi-request-choice__hint" data-i18n-key="new_req_punch_hint">تصحيح وقت الدخول أو الخروج</div>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -440,6 +479,10 @@
 /* Page-specific behaviour, handed to the shared portal runtime. */
 SAUDI_PANEL_LOADERS["requests"] = loadMyRequests;
 SAUDI_PANEL_LOADERS["attendance"] = loadAttendanceLog;
+SAUDI_PANEL_LOADERS["punch-correction"] = function() {
+	selectPunchTarget("IN");
+	refreshPunchContext();
+};
 SAUDI_LANG_RENDERERS.push(function() {
 	if (window.myPortalData) {
 		renderQuickActions(window.myPortalData);
@@ -572,17 +615,12 @@ function updateLeaveForm() {
 	var isSpecial = requestType === "special";
 	var isMaternity = requestType === "maternity_paternity";
 	var isEmergency = requestType === "emergency_leave";
-	var isPunch = requestType === "punch_correction";
 	document.getElementById("leave-subtype-field").style.display = (isSpecial || isMaternity) ? "block" : "none";
 	document.getElementById("leave-balance-field").style.display = isAnnual ? "block" : "none";
 	document.getElementById("half-day-field").style.display = isAnnual ? "block" : "none";
 	document.getElementById("leave-emergency-field").style.display = isEmergency ? "block" : "none";
-	document.getElementById("punch-correction-field").style.display = isPunch ? "block" : "none";
-	// a correction is always about one day, so there is no end date to ask for
-	document.getElementById("leave-end-date-field").style.display = isPunch ? "none" : "block";
 	leaveBlocked = false;
 	if (isEmergency) { refreshEmergencyAvailability(); }
-	else if (isPunch) { refreshPunchContext(); }
 }
 
 function setLeaveHint(elId, message, tone) {
@@ -634,24 +672,28 @@ function refreshEmergencyAvailability() {
 }
 
 function refreshPunchContext() {
-	var el = document.getElementById("punch-current-time");
-	if (el) { el.textContent = "…"; }
+	var inEl = document.getElementById("punch-current-time");
+	var outEl = document.getElementById("punch-current-out-time");
+	if (inEl) { inEl.textContent = "…"; }
+	if (outEl) { outEl.textContent = "…"; }
 	leaveBlocked = false;
 	setLeaveHint("punch-correction-warning", "");
-	var date = document.getElementById("leave-start-date").value;
-	if (!date) { if (el) { el.textContent = "—"; } return; }
+	var date = document.getElementById("punch-correction-date").value;
+	if (!date) { if (inEl) { inEl.textContent = "—"; } if (outEl) { outEl.textContent = "—"; } return; }
 	frappe.call({
 		method: "saudi_hr.saudi_hr.doctype.saudi_punch_correction.saudi_punch_correction.get_punch_correction_context",
 		args: { attendance_date: date },
 		callback: function(r) {
 			var c = r.message || {};
-			if (el) { el.textContent = c.current_in_time ? c.current_in_time.slice(0, 5) : "—"; }
+			if (inEl) { inEl.textContent = c.current_in_time ? String(c.current_in_time).slice(0, 5) : "—"; }
+			if (outEl) { outEl.textContent = c.current_out_time ? String(c.current_out_time).slice(0, 5) : "—"; }
 			if (c.future_date) {
 				leaveBlocked = true;
 				setLeaveHint("punch-correction-warning", t("future_date_not_allowed"), "blocked");
-			} else if (!c.correctable) {
-				leaveBlocked = true;
-				setLeaveHint("punch-correction-warning", t("no_checkin_found"), "blocked");
+			} else if (!c.has_in_punch) {
+				// no check-in punch on the day: it can still be registered, so this
+				// is a hint, not a block
+				setLeaveHint("punch-correction-warning", t("no_checkin_found"));
 			}
 		}
 	});
@@ -660,7 +702,91 @@ function refreshPunchContext() {
 function onLeaveDatesChanged() {
 	var requestType = document.getElementById("leave-request-type").value;
 	if (requestType === "emergency_leave") { refreshEmergencyAvailability(); }
-	else if (requestType === "punch_correction") { refreshPunchContext(); }
+}
+
+/* Punch Correction (from My Requests) */
+var punchTarget = "IN";
+
+function selectPunchTarget(target) {
+	punchTarget = target === "OUT" ? "OUT" : "IN";
+	var inBtn = document.getElementById("punch-target-in");
+	var outBtn = document.getElementById("punch-target-out");
+	if (inBtn) inBtn.classList.toggle("saudi-segmented__btn--active", punchTarget === "IN");
+	if (outBtn) outBtn.classList.toggle("saudi-segmented__btn--active", punchTarget === "OUT");
+	var inField = document.getElementById("punch-in-field");
+	var outField = document.getElementById("punch-out-field");
+	if (inField) inField.style.display = punchTarget === "IN" ? "block" : "none";
+	if (outField) outField.style.display = punchTarget === "OUT" ? "block" : "none";
+}
+
+/* The portal page runs `frappe.call` from the older web bundle, whose default
+   statusCode map only knows 404/403/200 and NEVER calls the `error` option on a
+   server-side failure (e.g. HTTP 417). Such failures only reach the `always`
+   option via process_response, so every submit resets its button from `always`
+   (which fires on success and failure alike). */
+function finishSubmit(btn, r, btnKey) {
+	if (btn) {
+		btn.disabled = false;
+		btn.textContent = t(btnKey || "submit_request");
+	}
+	if (r && r.exc) {
+		var msg = t("submitted_err");
+		var sm = r._server_messages;
+		if (sm) {
+			try { if (typeof sm === "string") sm = JSON.parse(sm); } catch (e) { sm = null; }
+		}
+		if (sm && sm.length) {
+			var raw = (sm[0] + "").replace(/\?"/g, "").replace(/<[^>]+>/g, "").trim();
+			if (raw) msg = raw;
+		}
+		showToast(msg, "error");
+	}
+}
+
+function submitPunchCorrection() {
+	var btn = document.getElementById("punch-correction-submit-btn");
+	var date = document.getElementById("punch-correction-date").value;
+	if (!date) { showToast(t("start_date_required"), "error"); return; }
+	var correctedTime = "";
+	var correctedOutTime = "";
+	if (punchTarget === "IN") {
+		correctedTime = document.getElementById("punch-corrected-time").value || "";
+	} else {
+		correctedOutTime = document.getElementById("punch-corrected-out-time").value || "";
+	}
+	if (!correctedTime && !correctedOutTime) { showToast(t("corrected_time_required"), "error"); return; }
+	if (leaveBlocked) { showToast(t("future_date_not_allowed"), "error"); return; }
+	btn.disabled = true;
+	btn.textContent = t("submitting");
+	var args = {
+		request_type: "punch_correction",
+		start_date: date,
+		end_date: date,
+		reason: document.getElementById("punch-correction-reason").value.trim()
+	};
+	if (correctedTime) { args.corrected_time = correctedTime; }
+	if (correctedOutTime) { args.corrected_out_time = correctedOutTime; }
+	frappe.call({
+		method: "saudi_hr.saudi_hr.api.submit_mobile_leave_request",
+		args: args,
+		callback: function(r) {
+			btn.disabled = false;
+			btn.textContent = t("submit_request");
+			showToast(t("submitted_ok"), "success");
+			document.getElementById("punch-correction-date").value = "";
+			document.getElementById("punch-correction-reason").value = "";
+			document.getElementById("punch-corrected-time").value = "";
+			document.getElementById("punch-corrected-out-time").value = "";
+			leaveBlocked = false;
+			setLeaveHint("punch-correction-warning", "");
+			selectPunchTarget("IN");
+			refreshPunchContext();
+			loadMyRequests();
+		},
+		always: function(r) {
+			finishSubmit(btn, r);
+		}
+	});
 }
 
 function renderLeaveAttachments() {
@@ -678,11 +804,6 @@ function submitMobileLeaveRequest() {
 		showToast(t("subtype_required"), "error");
 		return;
 	}
-	var correctedTime = "";
-	if (requestType === "punch_correction") {
-		correctedTime = document.getElementById("punch-corrected-time").value || "";
-		if (!correctedTime) { showToast(t("corrected_time_required"), "error"); return; }
-	}
 	if (leaveBlocked) {
 		showToast((document.getElementById("leave-emergency-warning").textContent
 			|| document.getElementById("punch-correction-warning").textContent || t("emergency_gate_warning")), "error");
@@ -697,7 +818,6 @@ function submitMobileLeaveRequest() {
 		half_day: document.getElementById("leave-half-day").checked ? 1 : 0,
 		attachments_json: JSON.stringify(leaveAttachments)
 	};
-	if (correctedTime) { args.corrected_time = correctedTime; }
 	btn.disabled = true;
 	btn.textContent = t("submitting");
 	frappe.call({
@@ -714,20 +834,12 @@ function submitMobileLeaveRequest() {
 			document.getElementById("leave-subtype-select").innerHTML = "";
 			document.getElementById("leave-half-day").checked = false;
 			document.getElementById("leave-files-input").value = "";
-			document.getElementById("punch-corrected-time").value = "";
 			leaveAttachments = [];
 			renderLeaveAttachments();
 			updateLeaveForm();
 		},
-		error: function(err) {
-			btn.disabled = false;
-			btn.textContent = t("submit_request");
-			var msg = t("submitted_err");
-			if (err && err._server_messages && err._server_messages.length) {
-				var raw = (err._server_messages[0] + "").replace(/<[^>]+>/g, "").trim();
-				if (raw) msg = raw;
-			}
-			showToast(msg, "error");
+		always: function(r) {
+			finishSubmit(btn, r);
 		}
 	});
 }
@@ -769,15 +881,29 @@ function submitHrServiceRequest() {
 			document.getElementById("hr-service-amount").value = "";
 			document.getElementById("hr-service-new-value").value = "";
 		},
-		error: function() {
-			btn.disabled = false;
-			btn.textContent = t("submit_request");
-			showToast(t("submitted_err"), "error");
+		always: function(r) {
+			finishSubmit(btn, r);
 		}
 	});
 }
 
 /* My Requests */
+function sendForApproval(doctype, name, btn) {
+	if (!confirm(t("request_sent") + "?")) return;
+	btn.disabled = true;
+	frappe.call({
+		method: "saudi_hr.saudi_hr.api.apply_my_workflow_action",
+		args: { doctype: doctype, name: name, action: "Submit Request" },
+		callback: function(r) {
+			showToast((r.message && r.message.message) || t("request_sent"), "success");
+			loadMyRequests();
+		},
+		always: function(r) {
+			finishSubmit(btn, r);
+		}
+	});
+}
+
 function loadMyRequests(filter) {
 	var container = document.getElementById("requests-list-container");
 	container.innerHTML = '<div style="text-align:center;padding:20px;"><span class="saudi-spinner"></span></div>';
@@ -799,9 +925,10 @@ function loadMyRequests(filter) {
 				var category = item.doctype_label || "";
 				html += '<div class="saudi-request-card">' +
 					'<div class="saudi-request-card__top"><div><div class="saudi-request-card__type">' + (item.request_type_label || item.request_type) + '</div>' +
-					'<div class="saudi-request-card__date">' + (category ? category + " · " : "") + (item.creation || "").slice(0, 10) + '</div></div>' +
+					'<div class="saudi-request-card__date">' + (category ? category + " · " : "") + (item.request_type === "punch_correction" ? (item.from_date || "") : (item.creation || "").slice(0, 10)) + '</div></div>' +
 					'<span class="saudi-badge ' + badgeClass + '">' + t(item.status_code === "approved" ? "approved" : (item.status_code === "rejected" ? "rejected" : "pending")) + '</span></div>' +
 					(item.description ? '<div class="saudi-request-card__desc">' + item.description + '</div>' : '') +
+					(item.can_submit ? '<div style="margin-top:10px;"><button type="button" class="saudi-btn saudi-btn--primary" data-doctype="' + item.doctype + '" data-name="' + item.name + '" onclick="sendForApproval(this.dataset.doctype, this.dataset.name, this)">' + t("send_for_approval") + '</button></div>' : '') +
 					'</div>';
 			});
 			container.innerHTML = html;
@@ -1206,17 +1333,9 @@ function submitPunch() {
 			showToast(msg, "success");
 			loadAttendanceLog();
 		},
-		error: function(err) {
+		always: function(r) {
 			punchState.submitting = false;
-			btn.disabled = false;
-			btn.textContent = t("confirm");
-			var msg = t("submitted_err");
-			if (err && err._server_messages && err._server_messages.length) {
-				var raw = err._server_messages[0] + "";
-				raw = raw.replace(/\\?"/g, "").replace(/<[^>]+>/g, "").trim();
-				if (raw) msg = raw;
-			}
-			showToast(msg, "error");
+			finishSubmit(btn, r, "confirm");
 		}
 	});
 }
@@ -1256,13 +1375,16 @@ document.addEventListener("DOMContentLoaded", function() {
 				if (data.employee) {
 					if (data.employee.employee_name) {
 						var n = data.employee.employee_name;
-						document.getElementById("user-name").textContent = n;
-						document.getElementById("hero-user-name").textContent = n;
-						document.getElementById("profile-name").textContent = n;
+						["user-name", "hero-user-name", "profile-name"].forEach(function(id) {
+							var el = document.getElementById(id);
+							if (el) el.textContent = n;
+						});
 					}
 					if (data.employee.designation) {
-						document.getElementById("user-role").textContent = data.employee.designation;
-						document.getElementById("profile-designation").textContent = data.employee.designation;
+						["user-role", "profile-designation"].forEach(function(id) {
+							var el = document.getElementById(id);
+							if (el) el.textContent = data.employee.designation;
+						});
 					}
 					if (data.employee.image) {
 						var imgHtml = '<img src="' + data.employee.image + '" alt="Profile">';

@@ -80,7 +80,7 @@
    "options": "Open / مفتوح\nUnder Review / قيد المراجعة\nHearing Scheduled / تم تحديد الجلسة\nDecided / تم البت\nClosed / مغلق"
   },
   {
-    "description": "Record the appeal type, submission date, assignee, and hearing schedule.",
+   "description": "Record the appeal type, submission date, assignee, and hearing schedule.",
    "fieldname": "appeal_section",
    "fieldtype": "Section Break",
    "label": "Appeal Details / تفاصيل الاعتراض"
@@ -120,7 +120,7 @@
    "label": "Decision Date / تاريخ القرار"
   },
   {
-    "description": "Capture the grounds, committee review notes, and final appeal decision.",
+   "description": "Capture the grounds, committee review notes, and final appeal decision.",
    "fieldname": "details_section",
    "fieldtype": "Section Break",
    "label": "Review Details / تفاصيل المراجعة"
@@ -173,8 +173,13 @@
    "email": 1,
    "print": 1,
    "read": 1,
-    "report": 1,
+   "report": 1,
    "role": "HR User",
+   "write": 1
+  },
+  {
+   "role": "General Manager",
+   "read": 1,
    "write": 1
   }
  ],

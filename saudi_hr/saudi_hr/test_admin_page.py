@@ -193,9 +193,15 @@ class TestAdminPageUsesTheSharedRuntime(FrappeTestCase):
 
 	def test_registers_its_panels_rather_than_hardcoding_them(self):
 		js = page_js(self.html)
-		for panel in ("dashboard", "approvals", "employees", "report"):
+		for panel in ("dashboard", "approvals", "employees", "attendance", "report"):
 			self.assertIn(f'SAUDI_PANEL_LOADERS["{panel}"]', js, panel)
 		self.assertIn("SAUDI_LANG_RENDERERS.push", js)
+
+	def test_the_attendance_panel_has_a_menu_item(self):
+		"""A panel with no rail item is unreachable from the keyboard or the
+		mobile nav, which only renders rail items."""
+		self.assertIn('data-panel="attendance"', self.html)
+		self.assertIn('data-i18n-key="admin_nav_attendance"', self.html)
 
 	def test_calls_only_admin_api_methods(self):
 		"""The page must not reach into the employee-scoped API."""
@@ -206,7 +212,7 @@ class TestAdminPageUsesTheSharedRuntime(FrappeTestCase):
 			self.assertNotIn(forbidden, js)
 
 	def test_all_markup_is_addressed_by_a_registered_panel(self):
-		for panel in ("dashboard", "approvals", "employees", "report"):
+		for panel in ("dashboard", "approvals", "employees", "attendance", "report"):
 			self.assertIn(f'id="panel-{panel}"', self.html)
 
 	def test_every_i18n_key_exists_in_both_languages(self):
@@ -218,10 +224,56 @@ class TestAdminPageUsesTheSharedRuntime(FrappeTestCase):
 		self.assertEqual(arabic, english, "label parity is broken")
 
 		used = set(re.findall(r'data-i18n-key="(\w+)"', self.html))
+		used |= set(re.findall(r'data-i18n-placeholder="(\w+)"', self.html))
 		used |= set(re.findall(r'(?<![A-Za-z0-9_.])t\("([\w]+)"\)', self.html))
 		missing = sorted(key for key in used if key not in arabic)
 		self.assertEqual(missing, [], f"page uses labels the runtime does not define: {missing}")
 		self.assertGreater(len(used), 40, "the page should be fully translated")
+
+	def test_the_markup_reads_the_same_as_the_label_it_carries(self):
+		"""The baked text is what the page shows before the runtime swaps it.
+
+		When the two disagree the page visibly changes wording on load, and a
+		screen reader is handed the Arabic one on the first pass.
+		"""
+		shared = open(
+			frappe.get_app_path("saudi_hr", "public", "js", "saudi_portal.js")
+		).read()
+		arabic = dict(
+			re.findall(
+				r'^\t\t(\w+): "((?:[^"\\]|\\.)*)",$',
+				shared.split("\tar: {")[1].split("\n\t},")[0],
+				re.M,
+			)
+		)
+
+		drift = []
+		for match in re.finditer(r'data-i18n-key="(\w+)"[^>]*>([^<>]*)<', self.html):
+			key, baked = match.group(1), " ".join(match.group(2).split())
+			if key in arabic and baked and baked != arabic[key]:
+				drift.append(f"{key}: markup says {baked!r}, the label says {arabic[key]!r}")
+		for match in re.finditer(r'data-i18n-placeholder="(\w+)"[^>]*placeholder="([^"]*)"', self.html):
+			key, baked = match.group(1), match.group(2)
+			if key in arabic and baked != arabic[key]:
+				drift.append(f"{key}: placeholder says {baked!r}, the label says {arabic[key]!r}")
+		self.assertEqual(drift, [], "the markup and its labels have drifted apart")
+
+	def test_every_word_on_the_page_comes_from_a_label(self):
+		"""A word typed straight into the script cannot be translated."""
+		js = page_js(self.html)
+		for match in re.finditer(r'CURRENT_LANG === "ar" \? [^:]+: [^,]+', js):
+			self.fail(f"language written into the script rather than a label: {match.group(0)}")
+
+	def test_the_attendance_controls_sit_on_a_grid(self):
+		"""Five controls in a wrapping flex row each get a fifth of the width,
+		and the second date lands on a row of its own."""
+		css = open(
+			os.path.join(frappe.get_app_path("saudi_hr"), "public", "css", "saudi_portal.css")
+		).read()
+		block = css[css.index("#attendance-form {") : css.index("}", css.index("#attendance-form {"))]
+		self.assertIn("display: grid", block)
+		self.assertIn("repeat(auto-fit, minmax(150px, 1fr))", block)
+		self.assertIn('id="attendance-form"', self.html)
 
 	def test_rail_items_are_data_driven_not_inline_onclick(self):
 		"""Inline handlers are not CSP friendly and cannot be delegated."""
@@ -336,7 +388,7 @@ class TestAdminPageSafety(FrappeTestCase):
 		every list, detail and dashboard call.
 		"""
 		self.assertIn('ADMIN_WRITES[method] ? "POST" : "GET"', self.js)
-		for method in ("create_employee", "apply_leave_action", "submit_leave_request"):
+		for method in ("create_employee", "apply_leave_action", "submit_leave_request", "correct_attendance_day"):
 			self.assertIn(method, self.js, method)
 
 	def test_the_write_set_matches_the_server(self):
@@ -525,6 +577,49 @@ class TestAdminPageBehaviour(FrappeTestCase):
 				"check('fallback', () => actionLabel('Escalate') === 'Escalate');"
 				"check('confirm', () => { const s = confirmText('approve', 'SAL-1');"
 				" return s.includes('SAL-1') && !s.includes('{action}') && !s.includes('{name}'); });"
+			),
+			[],
+		)
+
+	def test_the_corrected_day_row_is_tagged_and_its_date_escaped(self):
+		"""The row tells the reader the day was corrected, and a hostile value
+		never reaches the DOM raw. The row is addressed by its date, because the
+		same table also holds days that have no record name yet."""
+		self.assertEqual(
+			self._run(
+				"var row = { name: 'ATD-<img>', date: 'ATD-<img>', status: 'present',"
+				" in_time: '07:00:00', out_time: '15:00:00', hours: 8, late_minutes: 0, corrected: true };"
+				"var html = attendanceDayRow(row);"
+				"check('edit button', function() {"
+				" return html.includes(\"data-action='open-attendance-day-correction'\"); });"
+				"check('escaped date', function() {"
+				" return html.includes(\"data-date='ATD-&lt;img&gt;'\"); });"
+				"check('no raw tag', function() { return !html.includes('<img'); });"
+				"check('no record name', function() { return !html.includes('data-name'); });"
+				"check('corrected chip', function() {"
+				" return html.includes('saudi-chip--muted'); });"
+				"check('time trimmed', function() { return toTimeValue('07:00:00') === '07:00'; });"
+			),
+			[],
+		)
+
+	def test_the_correction_modal_offers_a_time_only_when_it_is_still_editable(self):
+		"""A corrected day keeps its time; the manager can only write a note."""
+		self.assertEqual(
+			self._run(
+				"ADMIN_STATE.attendance = { days: [{ name: 'ATD-1', date: '2026-10-07',"
+				" status: 'present', in_time: '07:00:00', out_time: '15:00:00',"
+				" hours: 8, late_minutes: 0, corrected: false }],"
+				" employee: { employee_name: 'Amina' } };"
+				"var time = document.getElementById('attendance-correct-time');"
+				"time.value = '';"
+				"openAttendanceDayCorrection('2026-10-07');"
+				"check('time editable', function() { return time.disabled === false; });"
+				"check('time seeded', function() { return time.value === '07:00'; });"
+				"closeAttendanceDayCorrection();"
+				"ADMIN_STATE.attendance.days[0].corrected = true;"
+				"openAttendanceDayCorrection('2026-10-07');"
+				"check('time locked', function() { return time.disabled === true; });"
 			),
 			[],
 		)
@@ -770,14 +865,332 @@ class TestAdminPageBehaviour(FrappeTestCase):
 		self.assertEqual(
 			self._run(
 				"var seen = null; frappe.call = function(o) { seen = o; o.callback({ message:"
-				" { readable: false, departments: [], today: [] } }); };"
-				"loadAttendance();"
+				" { readable: false, scope: 'departments', departments: [], today: [] } }); };"
+				"attendanceMonthOptions(); loadAttendance();"
 				"check('endpoint', function() { return seen.url ==="
-				" '/api/method/saudi_hr.saudi_hr.admin_api.get_attendance_overview'; });"
+				" '/api/method/saudi_hr.saudi_hr.admin_api.get_attendance_report'; });"
 				"check('read sent as get', function() { return seen.type === 'GET'; });"
 			),
 			[],
 		)
+
+	def test_the_month_report_sends_the_month_the_picker_holds(self):
+		self.assertEqual(
+			self._run(
+				"var seen = null; frappe.call = function(o) { seen = o; o.callback({ message:"
+				" { readable: false, scope: 'departments', departments: [], today: [] } }); };"
+				"attendanceMonthOptions();"
+				"document.getElementById('attendance-month').value = '2026-03';"
+				"loadAttendance();"
+				"check('month sent', function() { return seen.args.month === '2026-03'; });"
+				"check('no range sent with it', function() {"
+				" return !seen.args.from_date && !seen.args.to_date; });"
+			),
+			[],
+		)
+
+	def test_the_date_range_report_sends_the_dates_and_not_a_month(self):
+		self.assertEqual(
+			self._run(
+				"var seen = null; frappe.call = function(o) { seen = o; o.callback({ message:"
+				" { readable: false, scope: 'departments', departments: [], today: [] } }); };"
+				"attendanceMonthOptions(); attendanceSyncPeriod();"
+				"document.getElementById('attendance-period').value = 'range';"
+				"attendanceSyncPeriod();"
+				"check('range mode shows the dates', function() {"
+				" return document.getElementById('attendance-from-field').hidden === false"
+				" && document.getElementById('attendance-to-field').hidden === false; });"
+				"check('range mode hides the month', function() {"
+				" return document.getElementById('attendance-month-field').hidden === true; });"
+				"document.getElementById('attendance-from').value = '2026-03-01';"
+				"document.getElementById('attendance-to').value = '2026-03-31';"
+				"loadAttendance();"
+				"check('range sent', function() { return seen.args.from_date === '2026-03-01'"
+				" && seen.args.to_date === '2026-03-31'; });"
+				"check('no month with it', function() { return !seen.args.month; });"
+			),
+			[],
+		)
+
+	def test_choosing_an_employee_sends_it_with_the_report(self):
+		self.assertEqual(
+			self._run(
+				"frappe.call = function(o) { if (o.url.indexOf('list_employees') > -1)"
+				" o.callback({ message: { rows: [ { name: '855', employee_number: '855',"
+				" full_name: 'Jane Doe' } ], restricted: false } });"
+				" else o.callback({ message: { readable: false, scope: 'departments',"
+				" departments: [], today: [] } }); };"
+				"attendanceMonthOptions();"
+				"loadAttendanceEmployees().then(function () {"
+				" var select = document.getElementById('attendance-employee');"
+				" check('all employees offered first', function() {"
+				" return select.innerHTML.indexOf(t('admin_attendance_all_employees')) === 0"
+				" && select.innerHTML.indexOf(\"value=''\") === 0; });"
+				" check('employee offered', function() {"
+				" return select.innerHTML.includes(\"value='855'\"); });"
+				" select.value = '855';"
+				" var seen = null; var call = frappe.call;"
+				" frappe.call = function(o) { seen = o; call(o); };"
+				" loadAttendance();"
+				" check('employee sent', function() { return seen.args.employee === '855'; });"
+				" });"
+			),
+			[],
+		)
+
+	def test_an_employee_report_lists_its_days_and_names_the_employee(self):
+		self.assertEqual(
+			self._run(
+				"renderAttendanceOverview({ readable: true, scope: 'employee',"
+				" employee: { name: '855', employee_name: 'Jane Doe' },"
+				" from_date: '2026-03-01', to_date: '2026-03-31',"
+				" totals: { days: 2, present: 1, absent: 1, half_day: 0, on_leave: 0,"
+				" late_days: 0, late_minutes: 0, hours: 11.5 }, truncated: false,"
+				" days: [ { name: 'A', date: '2026-03-31', status: 'Present / حاضر',"
+				" status_key: 'present', in_time: '08:00', out_time: '16:00', hours: 8 },"
+				" { name: 'B', date: '2026-03-30', status: 'Absent / غائب',"
+				" status_key: 'absent', in_time: null, out_time: null } ],"
+				" departments: [], today: [] });"
+				"var rows = document.getElementById('attendance-rows').innerHTML;"
+				"var head = document.getElementById('attendance-table-head').innerHTML;"
+				"var title = document.getElementById('attendance-scope-title').textContent;"
+				"check('named in the heading', function() { return title.includes('Jane Doe'); });"
+				"check('day rows', function() { return rows.includes('2026-03-31')"
+				" && rows.includes('2026-03-30'); });"
+				"check('day columns', function() {"
+				" return head.includes(t('admin_attendance_hours_label'))"
+				" && !head.includes(t('admin_attendance_department')); });"
+				"check('status translated', function() {"
+				" return rows.includes(t('admin_attendance_status_absent')); });"
+			),
+			[],
+		)
+
+	def test_the_attendance_listeners_are_bound_once(self):
+		"""The loader runs on every visit to the panel, so an unguarded
+		addEventListener would fetch one report per visit after the first."""
+		self.assertEqual(
+			self._run(
+				"var bound = 0;"
+				"document.getElementById('attendance-period').addEventListener"
+				"  = function () { bound++; };"
+				"attendanceBind(); attendanceBind(); attendanceBind();"
+				"check('one handler after three visits', function() { return bound === 1; });"
+			),
+			[],
+		)
+
+	def test_the_report_column_that_totals_is_not_labelled_as_a_status(self):
+		"""The last report column sums the row, so after the runtime swaps the
+		text it must not read "Status"."""
+		report = self.html[self.html.index('id="panel-report"') :]
+		head = report[: report.index("</thead>")]
+		self.assertNotIn("admin_col_status", head)
+		self.assertIn("admin_col_total", head)
+		self.assertIn('admin_col_total: "Total"', self.shared)
+		self.assertIn('admin_col_total: "الإجمالي"', self.shared)
+
+	def test_the_units_are_labels_and_not_written_into_the_page(self):
+		for key in ("day", "days", "hour", "hours", "minute", "minutes"):
+			self.assertIn(f"admin_unit_{key}", self.shared)
+		js = page_js(self.html)
+		self.assertIn('function fmtUnit(', js)
+		for formatter, keys in (
+			("fmtDays", ("admin_unit_day", "admin_unit_days")),
+			("fmtHours", ("admin_unit_hour", "admin_unit_hours")),
+			("fmtMinutes", ("admin_unit_minute", "admin_unit_minutes")),
+		):
+			head = f"function {formatter}("
+			block = js[js.index(head) : js.index("}", js.index(head))]
+			self.assertIn(keys[0], block, formatter)
+			self.assertIn(keys[1], block, formatter)
+
+	def test_units_are_translated_and_pluralised(self):
+		self.assertEqual(
+			self._run(
+				"check('arabic hours', function() { return fmtHours(1) === '1 ساعة'"
+				" && fmtHours(5) === '5 ساعات'; });"
+				"check('arabic days', function() { return fmtDays(1) === '1 يوم'"
+				" && fmtDays(12) === '12 أيام'; });"
+				"check('arabic minutes', function() { return fmtMinutes(1) === '1 دقيقة'"
+				" && fmtMinutes(30) === '30 دقائق'; });"
+				"toggleLang();"
+				"check('english hours', function() { return fmtHours(1) === '1 hour'"
+				" && fmtHours(5) === '5 hours'; });"
+				"check('english days', function() { return fmtDays(1) === '1 day'"
+				" && fmtDays(12) === '12 days'; });"
+				"check('english minutes', function() { return fmtMinutes(1) === '1 minute'"
+				" && fmtMinutes(30) === '30 minutes'; });"
+			),
+			[],
+		)
+
+	def test_a_lost_session_points_back_at_the_login_form(self):
+		"""A session error has to surface rather than raise.
+
+		Both pages call showSessionBanner() from their error handlers while the
+		runtime owns the definition, so losing it turns every expired session
+		into a ReferenceError and the banner never appears.
+		"""
+		self.assertEqual(
+			self._run(
+				"showSessionBanner();"
+				"check('the session banner is shown', function() { return"
+				" document.getElementById('session-banner').style.display === 'flex'; });"
+			),
+			[],
+		)
+
+	def test_logging_out_lands_on_the_login_page(self):
+		"""The logout endpoint answers with a JSON body.
+
+		Navigating to it ends the session and leaves the user reading a
+		response instead of the login form, so the session has to be ended
+		over the api and the browser redirected afterwards.
+		"""
+		self.assertEqual(
+			self._run(
+				"var asked = [];"
+				"window.location = { href: '' };"
+				# a thenable rather than a promise, so the redirect is
+				# assertable without waiting for a microtask
+				"window.fetch = function (url, opts) {"
+				"  asked.push(url + ' ' + (opts || {}).method);"
+				"  return { then: function (ok) { ok({}); } }; };"
+				"logoutUser();"
+				"check('the session ends over the api', function() { return"
+				" asked.length === 1 && asked[0] === '/api/method/logout POST'; });"
+				"check('redirected to the login page', function() { return"
+				" window.location.href === '/login'; });"
+				"window.location.href = '';"
+				"window.fetch = function () { return { then: function (ok, bad) { bad({}); } }; };"
+				"logoutUser();"
+				"check('a failed request still leaves the json behind', function() { return"
+				" window.location.href === '/login'; });"
+				"window.location.href = '';"
+				"window.fetch = undefined;"
+				"logoutUser();"
+				"check('without fetch it goes to a page, not a response', function() { return"
+				" window.location.href === '/api/method/web_logout'; });"
+			),
+			[],
+		)
+
+	def test_the_two_headings_match_the_scope_being_shown(self):
+		"""The markup carries one of them, so the renderer has to swap rather than
+		leave the department wording over an employee's own days."""
+		self.assertIn("admin_attendance_department_overview", self.shared)
+		self.assertIn('admin_attendance_department_overview: "Attendance by Department"', self.shared)
+		self.assertIn(
+			'id="attendance-scope-title" data-i18n-key="admin_attendance_department_overview"', self.html
+		)
+		self.assertEqual(
+			self._run(
+				"renderAttendanceOverview({ readable: true, scope: 'departments',"
+				" departments: [], days: [], totals: null, today: [] });"
+				"check('departments', function() { return document"
+				" .getElementById('attendance-scope-title').textContent"
+				" === t('admin_attendance_department_overview'); });"
+				"renderAttendanceOverview({ readable: true, scope: 'employee',"
+				" employee: { name: '855', employee_name: 'Jane Doe' },"
+				" departments: [], days: [], totals: null, today: [] });"
+				"check('one employee', function() { return document"
+				" .getElementById('attendance-scope-title').textContent"
+				" === t('admin_attendance_of_employee').replace('{name}', 'Jane Doe'); });"
+			),
+			[],
+		)
+
+	def test_narrowing_the_search_keeps_the_employee_the_report_is_about(self):
+		"""A select that loses its selection falls back to everyone, which
+		would report the whole company under a heading naming one person.
+
+		So the search narrows the list while the chosen employee is pinned back
+		into it, still carrying the wording it had when it was chosen.
+		"""
+		self.assertEqual(
+			self._run(
+				"ADMIN_STATE.attendance_employees = [ { name: '855',"
+				" employee_number: '855', full_name: 'Jane Doe' } ];"
+				"renderAttendanceEmployeeOptions();"
+				"var select0 = document.getElementById('attendance-employee');"
+				"select0.value = '855';"
+				"ADMIN_STATE.attendance_chosen = { name: '855', label: '855 — Jane Doe' };"
+				"ADMIN_STATE.attendance_employees = [ { name: '174',"
+				" employee_number: '174', full_name: 'Hamdan' } ];"
+				"renderAttendanceEmployeeOptions();"
+				"var select = document.getElementById('attendance-employee');"
+				"check('the subject is still in the list', function() { return"
+				" select.innerHTML.includes(\"value='855'\") && select.innerHTML.includes('Jane Doe'); });"
+				"check('the narrowed list is still there', function() { return"
+				" select.innerHTML.includes('Hamdan'); });"
+				"check('everyone stays the first row, the pin the second', function() { return"
+				" select.innerHTML.indexOf(t('admin_attendance_all_employees'))"
+				"   < select.innerHTML.indexOf(\"value='855'\")"
+				" && select.innerHTML.indexOf(\"value='855'\")"
+				"   < select.innerHTML.indexOf(\"value='174'\"); });"
+			),
+			[],
+		)
+
+	def test_only_the_control_in_use_is_shown(self):
+		"""Month and range are one choice, so a month left on screen next to
+		the dates would silently override them."""
+		self.assertEqual(
+			self._run(
+				"attendanceSyncPeriod();"
+				"var month = document.getElementById('attendance-month-field');"
+				"var from = document.getElementById('attendance-from-field');"
+				"var to = document.getElementById('attendance-to-field');"
+				"check('month mode shows the picker', function() { return month.hidden === false"
+				" && from.hidden === true && to.hidden === true; });"
+				"document.getElementById('attendance-period').value = 'range';"
+				"attendanceSyncPeriod();"
+				"check('range mode shows the dates', function() { return month.hidden === true"
+				" && from.hidden === false && to.hidden === false; });"
+			),
+			[],
+		)
+
+	def test_switching_language_rewords_the_attendance_selects(self):
+		"""Both selects are filled from the current language, so a switch that
+		only redrew the tables would leave Arabic options under English ones.
+
+		Month names are formatted rather than looked up, so the expectation is
+		built from the translated heading plus the same three month names taken
+		from the Arabic rendering -- a switch that reused them would not match.
+		"""
+		self.assertEqual(
+			self._run(
+				"ADMIN_STATE.attendance_employees = [ { name: '855',"
+				" employee_number: '855', full_name: 'Jane Doe' } ];"
+				"attendanceMonthOptions();"
+				"renderAttendanceEmployeeOptions();"
+				"var monthsAr = document.getElementById('attendance-month').innerHTML"
+				"   .replace(/<[^>]*>/g, '');"
+				"toggleLang();"
+				"check('month names follow the language', function() { return"
+				" document.getElementById('attendance-month').innerHTML"
+				"   .replace(/<[^>]*>/g, '') !== monthsAr"
+				" && monthsAr.length > 0; });"
+				"check('all-employees option follows the language', function() { return"
+				" document.getElementById('attendance-employee').innerHTML.includes('All Employees'); });"
+				"check('employee names are data, not wording', function() { return"
+				" document.getElementById('attendance-employee').innerHTML.includes('Jane Doe')"
+				" && monthsAr.length > 0; });"
+			),
+			[],
+		)
+
+	def test_the_attendance_search_box_is_translated(self):
+		"""The placeholder is separate from the label, so it needs its own key
+		and must not stay on the Arabic text from the markup.  Both languages
+		defining the key is covered by the parity test above."""
+		self.assertIn('data-i18n-placeholder="admin_attendance_search_employee"', self.html)
+		shared = open(
+			frappe.get_app_path("saudi_hr", "public", "js", "saudi_portal.js")
+		).read()
+		self.assertIn("data-i18n-placeholder", shared)
 
 	def test_switching_language_rebuilds_the_attendance_tables(self):
 		"""They are built from the last response, not from markup, so a switch

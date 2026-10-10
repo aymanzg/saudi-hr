@@ -81,7 +81,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Request Type / نوع الطلب",
-   "options": "work_permit_issuance\nwork_permit_renewal\nresidency_issuance\nresidency_renewal\nservice_transfer\nexit_and_return\nfinal_exit\nprofession_modification\nemployee_data_update\nvisa_issuance\nadvance_salary\nsalary_certificate\nexperience_certificate\nemployee_loan",
+   "options": "work_permit_issuance\nwork_permit_renewal\nresidency_issuance\nresidency_renewal\nservice_transfer\nexit_and_return\nfinal_exit\nprofession_modification\nemployee_data_update\nvisa_issuance\nadvance_salary\nsalary_certificate\nexperience_certificate\nemployee_loan\njob_confirmation\ncontract_copy\npayslip\nsalary_benefits_statement\naddressed_letter\nsalary_transfer_letter\nclearance\nend_of_service_cert",
    "reqd": 1
   },
   {
@@ -193,6 +193,11 @@
    "export": 1,
    "share": 1,
    "submit": 1
+  },
+  {
+   "role": "General Manager",
+   "read": 1,
+   "write": 1
   },
   {
    "role": "Department Approver",

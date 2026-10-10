@@ -169,6 +169,11 @@
    "submit": 1
   },
   {
+   "role": "General Manager",
+   "read": 1,
+   "write": 1
+  },
+  {
    "role": "Department Approver",
    "read": 1,
    "write": 1,

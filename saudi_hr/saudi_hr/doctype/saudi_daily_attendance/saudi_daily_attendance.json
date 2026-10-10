@@ -23,9 +23,10 @@
   "expected_end_time",
   "late_entry",
   "late_minutes",
-  "early_exit",
-  "early_exit_minutes",
-  "amended_from"
+"early_exit",
+   "early_exit_minutes",
+   "note",
+   "amended_from"
  ],
  "fields": [
   {
@@ -144,6 +145,11 @@
    "fieldtype": "Int",
    "label": "Early Exit Minutes / دقائق الخروج المبكر",
    "read_only": 1
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "Note / ملاحظة"
   },
   {
    "fieldname": "amended_from",

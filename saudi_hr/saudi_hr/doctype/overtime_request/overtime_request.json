@@ -328,8 +328,8 @@
   },
   {
    "fieldname": "payroll_period",
-    "fieldtype": "Data",
-    "label": "Payroll Reference / مرجع الرواتب"
+   "fieldtype": "Data",
+   "label": "Payroll Reference / مرجع الرواتب"
   },
   {
    "fieldname": "amended_from",
@@ -376,6 +376,11 @@
    "export": 1,
    "share": 1,
    "submit": 1
+  },
+  {
+   "role": "General Manager",
+   "read": 1,
+   "write": 1
   },
   {
    "role": "Department Approver",

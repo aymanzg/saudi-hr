@@ -53,6 +53,27 @@ def defined_functions(source):
 	return set(re.findall(r"^\s*function\s+([A-Za-z_$][\w$]*)\s*\(", source, re.M))
 
 
+def declared_parameters(source):
+	"""Names any signature binds, so they are locals rather than calls.
+
+	Callback parameters are the common case: ``new Promise(function (resolve,
+	reject) {...})``, ``function dedupe(key, run)`` and ``.then((row) => ...)``
+	all bind names that the page then invokes. A scanner that cannot tell those
+	apart reports every helper that takes a callback as undefined, which is
+	noise nobody will act on.
+	"""
+	params = set()
+	signatures = re.findall(
+		r"function\s*(?:[A-Za-z_$][\w$]*\s*)?\(([^)]*)\)", source
+	) + re.findall(r"\(([^)]*)\)\s*=>", source)
+	for signature in signatures:
+		for name in signature.split(","):
+			name = name.strip().split("=")[0].strip()
+			if re.fullmatch(r"[A-Za-z_$][\w$]*", name):
+				params.add(name)
+	return params
+
+
 def strip_js_literals(source):
 	"""Blank out comments, strings and regex literals, keeping line structure.
 
@@ -165,7 +186,12 @@ class TestPortalSharedAssets(unittest.TestCase):
 		)
 
 	def test_runtime_is_balanced(self):
-		js = read(JS)
+		"""Literals are stripped first: the label book is full of braces.
+
+		``"Attendance — {name}"`` and ``"{action}"`` are template text, not
+		code, so counting raw braces reports an imbalance that is not there.
+		"""
+		js = strip_js_literals(read(JS))
 		self.assertEqual(js.count("{"), js.count("}"), "unbalanced braces in shared JS")
 		self.assertEqual(js.count("("), js.count(")"), "unbalanced parens in shared JS")
 
@@ -260,9 +286,32 @@ class TestPortalSharedAssets(unittest.TestCase):
 			page_js = page_script(source)
 			called = set(re.findall(r"(?<![.\w$:])([a-z_$][\w$]*)\s*\(", page_js))
 			own = defined_functions(page_js)
-			missing = sorted(called - known - own)
+			# a name that some signature declares is a local, not a call into a
+			# shared function: `new Promise(function (resolve, reject) {` and
+			# `dedupe(key, run)` both look like calls to the scanner
+			locals = declared_parameters(page_js)
+			missing = sorted(called - known - own - locals)
 			with self.subTest(page=name):
 				self.assertEqual(missing, [], f"{name} calls undefined: {missing}")
+
+	def test_the_session_banner_caller_and_definition_agree(self):
+		"""The runtime and the pages must name the banner the same way.
+
+		showSessionBanner() looks an id up by hand, so a page that renders the
+		markup under a different id would raise a TypeError inside its own
+		error handler: the one path that must not fail.
+		"""
+		js = read(JS)
+		start = js.index("function showSessionBanner(")
+		body = js[start : js.index("\n}\n", start)]
+		shown = re.findall(r'id\s*==?=?\s*"([\w-]+)"', body) or re.findall(
+			r'getElementById\("([\w-]+)"\)', body
+		)
+		self.assertTrue(shown, "the session banner id could not be read from the runtime")
+		for name, source in portal_pages():
+			if "showSessionBanner(" in source:
+				with self.subTest(page=name):
+					self.assertIn(f'id="{shown[0]}"', source, f"{name} renders no #{shown[0]}")
 
 	def test_pages_register_their_hooks(self):
 		"""A page with panel loaders must hand them to the runtime, and the

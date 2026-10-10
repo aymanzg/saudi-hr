@@ -2563,12 +2563,14 @@ def create_final_settlement_from_termination(doc, method=None):
 		applicable_days,
 	) if doc.notice_end_date else None
 	document_due = add_days(doc.notice_end_date, applicable_days) if doc.notice_end_date else None
+	exit_clearance = frappe.db.get_value("Exit Clearance", {"termination_notice": doc.name}, "name")
 	frappe.get_doc(
 		{
 			"doctype": "Final Settlement SLA",
 			"termination_notice": doc.name,
 			"employee": doc.employee,
 			"company": doc.company,
+			"exit_clearance": exit_clearance,
 			"last_working_day": doc.notice_end_date,
 			"termination_initiated_by": termination_initiated_by,
 			"settlement_due_date": settlement_due,

@@ -219,6 +219,11 @@
    "print": 1,
    "email": 1,
    "report": 1
+  },
+  {
+   "role": "General Manager",
+   "read": 1,
+   "write": 1
   }
  ],
  "sort_field": "modified",

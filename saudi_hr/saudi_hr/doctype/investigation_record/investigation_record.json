@@ -85,7 +85,7 @@
    "options": "Open / مفتوح\nIn Progress / قيد التحقيق\nFindings Issued / صدرت النتائج\nClosed / مغلق"
   },
   {
-    "description": "Identify the source case, allegation date, and assigned investigator.",
+   "description": "Identify the source case, allegation date, and assigned investigator.",
    "fieldname": "reference_section",
    "fieldtype": "Section Break",
    "label": "Reference / المرجع"
@@ -132,7 +132,7 @@
    "options": "User"
   },
   {
-    "description": "Track the lifecycle of the investigation from opening to closure.",
+   "description": "Track the lifecycle of the investigation from opening to closure.",
    "fieldname": "timeline_section",
    "fieldtype": "Section Break",
    "label": "Timeline / التسلسل الزمني"
@@ -153,7 +153,7 @@
    "label": "Closure Date / تاريخ الإغلاق"
   },
   {
-    "description": "Write the allegation, employee statement, findings, and recommended outcome.",
+   "description": "Write the allegation, employee statement, findings, and recommended outcome.",
    "fieldname": "details_section",
    "fieldtype": "Section Break",
    "label": "Investigation Details / تفاصيل التحقيق"
@@ -217,8 +217,13 @@
    "email": 1,
    "print": 1,
    "read": 1,
-    "report": 1,
+   "report": 1,
    "role": "HR User",
+   "write": 1
+  },
+  {
+   "role": "General Manager",
+   "read": 1,
    "write": 1
   }
  ],

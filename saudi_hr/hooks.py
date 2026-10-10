@@ -217,10 +217,6 @@ fixtures = [
 		"doctype": "Property Setter",
 		"filters": [["module", "=", "Saudi HR"]],
 	},
-	{
-		"doctype": "Workflow",
-		"filters": [["module", "=", "Saudi HR"]],
-	},
 	"Attendance Location",
 ]
 

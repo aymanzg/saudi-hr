@@ -45,9 +45,23 @@
 			<span class="saudi-rail__icon" aria-hidden="true">👥</span>
 			<span data-i18n-key="admin_nav_employees">الموظفون</span>
 		</button>
+		<button class="saudi-rail__item" data-panel="attendance" type="button">
+			<span class="saudi-rail__icon" aria-hidden="true">🗓️</span>
+			<span data-i18n-key="admin_nav_attendance">الحضور</span>
+		</button>
 		<button class="saudi-rail__item" data-panel="report" type="button">
 			<span class="saudi-rail__icon" aria-hidden="true">📈</span>
 			<span data-i18n-key="admin_nav_report">التقارير</span>
+		</button>
+		<button class="saudi-rail__item" data-panel="clearance" type="button">
+			<span class="saudi-rail__icon" aria-hidden="true">🧾</span>
+			<span data-i18n-key="admin_nav_clearance">إنهاء الخدمة</span>
+			<span class="saudi-chip saudi-chip--approved" style="font-size:10px;padding:2px 6px;" data-i18n-key="admin_badge_new">جديد</span>
+		</button>
+		<button class="saudi-rail__item" data-panel="documents" type="button">
+			<span class="saudi-rail__icon" aria-hidden="true">✉️</span>
+			<span data-i18n-key="admin_nav_documents">مستندات وخطابات</span>
+			<span class="saudi-chip saudi-chip--approved" style="font-size:10px;padding:2px 6px;" data-i18n-key="admin_badge_new">جديد</span>
 		</button>
 
 		<span class="saudi-rail__spacer"></span>
@@ -66,7 +80,7 @@
 				<div class="saudi-section-header">
 					<div>
 						<div class="saudi-section-header__title" data-i18n-key="admin_welcome">مرحباً</div>
-						<div style="font-size:13px;color:var(--text-muted);" data-i18n-key="admin_welcome_subtitle">ملخص الحضور</div>
+						<div style="font-size:13px;color:var(--text-muted);" data-i18n-key="admin_welcome_subtitle">ملخص الحضور ومستحقات الإجازات</div>
 					</div>
 					<div style="font-size:13px;color:var(--text-muted);">{{ full_name | e }}</div>
 				</div>
@@ -98,7 +112,7 @@
 							<tr>
 								<th data-i18n-key="admin_leave_type">نوع الطلب</th>
 								<th data-i18n-key="admin_col_actions">إجراءات</th>
-								<th style="text-align:center;" data-i18n-key="admin_state_pending">بانتظار</th>
+								<th style="text-align:center;" data-i18n-key="admin_state_pending">بانتظار الموافقة</th>
 								<th style="text-align:center;" data-i18n-key="admin_col_status">الحالة</th>
 							</tr>
 						</thead>
@@ -113,12 +127,12 @@
 			<section class="saudi-panel" id="panel-approvals">
 				<div class="saudi-toolbar">
 					<div class="saudi-field saudi-toolbar__search">
-						<label class="sr-only" for="approvals-search" data-i18n-key="admin_search_leave">بحث</label>
+						<label class="sr-only" for="approvals-search" data-i18n-key="admin_search_leave">ابحث بالموظف أو رقم الطلب...</label>
 						<input type="search" id="approvals-search" autocomplete="off"
-							data-i18n-key="admin_search_leave" placeholder="ابحث...">
+							data-i18n-key="admin_search_leave" placeholder="ابحث بالموظف أو رقم الطلب...">
 					</div>
 					<button class="saudi-btn saudi-btn--primary" type="button" id="approvals-scope"
-						data-scope="actionable" data-i18n-key="admin_approvals_pending">بانتظار إجراء</button>
+						data-scope="actionable" data-i18n-key="admin_approvals_pending">طلبات بانتظار إجراء</button>
 					<button class="saudi-btn" type="button" id="approvals-scope-all"
 						data-scope="all" data-i18n-key="admin_approvals_all">كل الطلبات</button>
 				</div>
@@ -135,9 +149,9 @@
 			<section class="saudi-panel" id="panel-employees">
 				<div class="saudi-toolbar">
 					<div class="saudi-field saudi-toolbar__search">
-						<label class="sr-only" for="employees-search" data-i18n-key="admin_search_employees">بحث</label>
+						<label class="sr-only" for="employees-search" data-i18n-key="admin_search_employees">ابحث بالاسم أو الرقم أو الهوية...</label>
 						<input type="search" id="employees-search" autocomplete="off"
-							data-i18n-key="admin_search_employees" placeholder="ابحث...">
+							data-i18n-key="admin_search_employees" placeholder="ابحث بالاسم أو الرقم أو الهوية...">
 					</div>
 <button class="saudi-btn saudi-btn--primary" type="button" data-action="open-employee-form"
 					id="employee-add-btn" data-i18n-key="admin_add_employee">إضافة موظف</button>
@@ -150,7 +164,7 @@
 								<th data-i18n-key="admin_col_number">الرقم</th>
 								<th data-i18n-key="admin_col_name">الاسم</th>
 								<th class="saudi-col--desktop" data-i18n-key="admin_col_department">القسم</th>
-								<th class="saudi-col--desktop" data-i18n-key="admin_col_designation">المسمى</th>
+								<th class="saudi-col--desktop" data-i18n-key="admin_col_designation">المسمى الوظيفي</th>
 								<th data-i18n-key="admin_col_status">الحالة</th>
 								<th class="saudi-col--desktop" data-i18n-key="admin_col_actions">إجراءات</th>
 							</tr>
@@ -160,50 +174,51 @@
 				</div>
 			</section>
 
-			<!-- ============ PANEL: REPORT ============ -->
-			<section class="saudi-panel" id="panel-report">
+			<!-- ============ PANEL: ATTENDANCE ============ -->
+			<section class="saudi-panel" id="panel-attendance">
 				<div class="saudi-section-header">
-					<div class="saudi-section-header__title" data-i18n-key="admin_nav_report">التقارير</div>
-				</div>
-				<div class="saudi-table-wrap">
-					<table class="saudi-table">
-						<thead>
-							<tr>
-								<th data-i18n-key="admin_leave_type">نوع الطلب</th>
-								<th style="text-align:center;" data-i18n-key="admin_state_pending">بانتظار</th>
-								<th style="text-align:center;" data-i18n-key="admin_state_approved">معتمدة</th>
-								<th style="text-align:center;" data-i18n-key="admin_state_rejected">مرفوضة</th>
-								<th style="text-align:center;" data-i18n-key="admin_state_cancelled">ملغاة</th>
-								<th style="text-align:center;" data-i18n-key="admin_col_status">الإجمالي</th>
-							</tr>
-						</thead>
-						<tbody id="report-rows"></tbody>
-					</table>
-					<p class="saudi-table__note" id="report-note" hidden></p>
+					<div class="saudi-section-header__title" data-i18n-key="admin_attendance">الحضور</div>
 				</div>
 
-				<!-- ============ ATTENDANCE OVERVIEW ============ -->
-				<div class="saudi-section-header" style="margin-top:22px;">
-					<div>
-						<div class="saudi-section-header__title" data-i18n-key="admin_attendance_overview">ملخص الحضور</div>
-						<div style="font-size:13px;color:var(--text-muted);" id="attendance-window"></div>
+				<form class="saudi-toolbar" id="attendance-form" autocomplete="off">
+					<div class="saudi-field">
+						<label for="attendance-employee-search" data-i18n-key="admin_attendance_employee">الموظف</label>
+						<input type="text" id="attendance-employee-search" class="saudi-input"
+							data-i18n-placeholder="admin_attendance_search_employee" placeholder="رقم الموظف أو الاسم">
 					</div>
+					<div class="saudi-field">
+						<label for="attendance-employee" data-i18n-key="admin_attendance_scope">نطاق التقرير</label>
+						<select id="attendance-employee" class="saudi-select"></select>
+					</div>
+					<div class="saudi-field">
+						<label for="attendance-period" data-i18n-key="admin_attendance_period">نوع التقرير</label>
+						<select id="attendance-period" class="saudi-select">
+							<option value="month" data-i18n-key="admin_attendance_period_month">تقرير شهري</option>
+							<option value="range" data-i18n-key="admin_attendance_period_range">تقرير بنطاق تاريخ</option>
+						</select>
+					</div>
+					<div class="saudi-field" id="attendance-month-field">
+						<label for="attendance-month" data-i18n-key="admin_attendance_month">هذا الشهر</label>
+						<select id="attendance-month" class="saudi-select" dir="ltr"></select>
+					</div>
+					<div class="saudi-field" id="attendance-from-field" hidden>
+						<label for="attendance-from" data-i18n-key="admin_attendance_from">من تاريخ</label>
+						<input type="date" id="attendance-from" class="saudi-input" dir="ltr">
+					</div>
+					<div class="saudi-field" id="attendance-to-field" hidden>
+						<label for="attendance-to" data-i18n-key="admin_attendance_to">إلى تاريخ</label>
+						<input type="date" id="attendance-to" class="saudi-input" dir="ltr">
+					</div>
+				</form>
+
+				<div class="saudi-section-header" style="margin-top:8px;">
+					<div class="saudi-section-header__title" id="attendance-scope-title" data-i18n-key="admin_attendance_department_overview">ملخص الحضور حسب القسم</div>
+					<div style="font-size:13px;color:var(--text-muted);" id="attendance-window"></div>
 				</div>
 				<div class="saudi-stats" id="attendance-totals"></div>
 				<div class="saudi-table-wrap">
 					<table class="saudi-table">
-						<thead>
-							<tr>
-								<th data-i18n-key="admin_field_department">القسم</th>
-								<th style="text-align:center;" data-i18n-key="admin_attendance_employees">الموظفون</th>
-								<th style="text-align:center;" data-i18n-key="admin_attendance_present">حاضر</th>
-								<th style="text-align:center;" data-i18n-key="admin_attendance_absent">غائب</th>
-								<th style="text-align:center;" data-i18n-key="admin_attendance_half_day">نصف يوم</th>
-								<th style="text-align:center;" data-i18n-key="admin_attendance_on_leave">في إجازة</th>
-								<th style="text-align:center;" data-i18n-key="admin_attendance_late_days">أيام تأخير</th>
-								<th style="text-align:center;" data-i18n-key="admin_attendance_hours">ساعات العمل</th>
-							</tr>
-						</thead>
+						<thead id="attendance-table-head"></thead>
 						<tbody id="attendance-rows"></tbody>
 					</table>
 					<p class="saudi-table__note" id="attendance-note" hidden></p>
@@ -223,6 +238,294 @@
 							</tr>
 						</thead>
 						<tbody id="attendance-today-rows"></tbody>
+					</table>
+				</div>
+			</section>
+
+			<!-- ============ PANEL: REPORT ============ -->
+			<section class="saudi-panel" id="panel-report">
+				<div class="saudi-section-header">
+					<div class="saudi-section-header__title" data-i18n-key="admin_nav_report">التقارير</div>
+				</div>
+				<div class="saudi-table-wrap">
+					<table class="saudi-table">
+						<thead>
+							<tr>
+								<th data-i18n-key="admin_leave_type">نوع الطلب</th>
+								<th style="text-align:center;" data-i18n-key="admin_state_pending">بانتظار الموافقة</th>
+								<th style="text-align:center;" data-i18n-key="admin_state_approved">معتمدة</th>
+								<th style="text-align:center;" data-i18n-key="admin_state_rejected">مرفوضة</th>
+								<th style="text-align:center;" data-i18n-key="admin_state_cancelled">ملغاة</th>
+								<th style="text-align:center;" data-i18n-key="admin_col_total">الإجمالي</th>
+							</tr>
+						</thead>
+						<tbody id="report-rows"></tbody>
+					</table>
+					<p class="saudi-table__note" id="report-note" hidden></p>
+				</div>
+			</section>
+
+			<!-- ============ PANEL: OFFBOARDING / EXIT CLEARANCE ============ -->
+			<section class="saudi-panel" id="panel-clearance">
+				<div class="saudi-section-header">
+					<div class="saudi-section-header__title" data-i18n-key="admin_offboarding_title">إنهاء الخدمة / إخلاء الطرف</div>
+				</div>
+
+				<form class="saudi-toolbar" id="offboarding-start-form" autocomplete="off">
+					<div class="saudi-field">
+						<label for="offboarding-employee" data-i18n-key="admin_attendance_employee">الموظف</label>
+						<select id="offboarding-employee" class="saudi-select"></select>
+					</div>
+					<div class="saudi-field">
+						<label for="offboarding-reason" data-i18n-key="admin_offboarding_reason">سبب انتهاء الخدمة</label>
+						<select id="offboarding-reason" class="saudi-select"></select>
+					</div>
+					<div class="saudi-field">
+						<label for="offboarding-salary-type" data-i18n-key="admin_offboarding_salary_type">نوع دفع الأجر</label>
+						<select id="offboarding-salary-type" class="saudi-select"></select>
+					</div>
+					<div class="saudi-field">
+						<label for="offboarding-notice-start" data-i18n-key="admin_offboarding_notice_start">تاريخ بدء الإشعار</label>
+						<input type="date" id="offboarding-notice-start" class="saudi-input" dir="ltr">
+					</div>
+					<div style="display:flex;gap:8px;align-self:flex-end;margin-bottom:16px;">
+						<button class="saudi-btn saudi-btn--primary" type="button" data-action="start-offboarding" data-i18n-key="admin_offboarding_start">ابدأ إخلاء الطرف</button>
+					</div>
+				</form>
+
+				<div class="saudi-section-header" style="margin-top:4px;">
+					<div class="saudi-section-header__title" data-i18n-key="admin_offboarding_cases">حالات إخلاء الطرف</div>
+				</div>
+				<div class="saudi-table-wrap">
+					<table class="saudi-table">
+						<thead>
+							<tr>
+								<th data-i18n-key="admin_col_number">الرقم</th>
+								<th data-i18n-key="admin_col_name">الاسم</th>
+								<th data-i18n-key="admin_offboarding_status_label">الحالة</th>
+								<th data-i18n-key="admin_offboarding_progress">نسبة الإنجاز</th>
+								<th data-i18n-key="admin_col_actions">إجراءات</th>
+							</tr>
+						</thead>
+						<tbody id="offboarding-case-rows"></tbody>
+					</table>
+					<p class="saudi-table__note" id="offboarding-cases-note" hidden></p>
+				</div>
+
+				<div class="saudi-clearance-sheet" id="offboarding-case" style="margin-top:16px;">
+					<!-- Rendered dynamically -->
+				</div>
+			</section>
+
+			<!-- ============ PANEL: DOCUMENTS ============ -->
+			<section class="saudi-panel" id="panel-documents">
+				<div class="saudi-section-header">
+					<div class="saudi-section-header__title" data-i18n-key="admin_documents_title">مستندات وخطابات</div>
+				</div>
+
+				<div class="saudi-toolbar">
+					<div class="saudi-field saudi-toolbar__search">
+						<label class="sr-only" for="doc-employee-search" data-i18n-key="admin_attendance_employee">الموظف</label>
+						<input type="search" id="doc-employee-search" autocomplete="off" placeholder="ابحث بالاسم أو الرقم الوظيفي...">
+					</div>
+					<div class="saudi-field">
+						<label class="sr-only" for="doc-type-filter" data-i18n-key="admin_leave_type">نوع الطلب</label>
+						<select id="doc-type-filter" class="saudi-select">
+							<option value="">نوع المستند: الكل</option>
+							<option value="salary_certificate">تعريف بالراتب</option>
+							<option value="job_confirmation">مشهد وظيفي</option>
+							<option value="experience_certificate">شهادة خبرة</option>
+							<option value="addressed_letter">خطاب موجه لجهة</option>
+							<option value="contract_copy">نسخة من عقد العمل</option>
+							<option value="payslip">مسير راتب</option>
+							<option value="salary_benefits_statement">بيان الراتب والمزايا</option>
+							<option value="salary_transfer_letter">خطاب تحويل راتب</option>
+							<option value="clearance">إخلاء طرف</option>
+							<option value="end_of_service_cert">شهادة نهاية الخدمة</option>
+						</select>
+					</div>
+					<div class="saudi-field">
+						<label class="sr-only" for="doc-status-filter" data-i18n-key="admin_col_status">الحالة</label>
+						<select id="doc-status-filter" class="saudi-select">
+							<option value="">الحالة: الكل</option>
+							<option value="pending">بانتظار الاعتماد</option>
+							<option value="approved">صادر / معتمد</option>
+							<option value="rejected">مرفوض</option>
+						</select>
+					</div>
+					<button class="saudi-btn saudi-btn--primary" type="button" data-action="open-doc-request-modal" data-i18n-key="admin_doc_new_request">طلب جديد</button>
+				</div>
+
+				<div class="saudi-stats">
+					<div class="saudi-stat">
+						<div class="saudi-stat__value" id="doc-stat-pending">4</div>
+						<div class="saudi-stat__label" data-i18n-key="admin_doc_pending">بانتظار الاعتماد</div>
+					</div>
+					<div class="saudi-stat">
+						<div class="saudi-stat__value" id="doc-stat-progress">2</div>
+						<div class="saudi-stat__label" data-i18n-key="admin_doc_progress">قيد الإجراء</div>
+					</div>
+					<div class="saudi-stat">
+						<div class="saudi-stat__value" id="doc-stat-issued">37</div>
+						<div class="saudi-stat__label" data-i18n-key="admin_doc_issued">صادرة هذا الشهر</div>
+					</div>
+					<div class="saudi-stat saudi-stat--alert">
+						<div class="saudi-stat__value" id="doc-stat-rejected">1</div>
+						<div class="saudi-stat__label" data-i18n-key="admin_doc_rejected">مرفوضة</div>
+					</div>
+				</div>
+
+				<div style="font-size:13px;color:var(--text-muted);margin-bottom:14px;">
+					اختر الموظف ثم نوع المستند، وتُعبَّأ البيانات من ملفه تلقائياً
+				</div>
+
+				<div class="saudi-section-header" style="padding:0 0 10px;">
+					<div class="saudi-section-header__title" style="font-size:16px;">إصدار مستند</div>
+				</div>
+
+				<div class="saudi-doc-grid">
+					<div class="saudi-doc-card">
+						<div class="saudi-doc-card__header">
+							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_auto">إصدار تلقائي</span>
+							<span class="saudi-doc-card__icon">📄</span>
+						</div>
+						<div class="saudi-doc-card__title">تعريف بالراتب</div>
+						<div class="saudi-doc-card__desc">يوضح الراتب الشامل والمسمى وتاريخ المباشرة</div>
+						<div class="saudi-doc-card__footer">
+							<span>مدة الإصدار: فوري</span>
+							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="salary_certificate" data-i18n-key="admin_doc_issue">إصدار</button>
+						</div>
+					</div>
+					<div class="saudi-doc-card">
+						<div class="saudi-doc-card__header">
+							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_auto">إصدار تلقائي</span>
+							<span class="saudi-doc-card__icon">📑</span>
+						</div>
+						<div class="saudi-doc-card__title">مشهد وظيفي</div>
+						<div class="saudi-doc-card__desc">يثبت أن الموظف على رأس العمل، دون ذكر الراتب</div>
+						<div class="saudi-doc-card__footer">
+							<span>مدة الإصدار: فوري</span>
+							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="job_confirmation" data-i18n-key="admin_doc_issue">إصدار</button>
+						</div>
+					</div>
+					<div class="saudi-doc-card">
+						<div class="saudi-doc-card__header">
+							<span class="saudi-chip saudi-chip--pending" data-i18n-key="admin_doc_approval">يتطلب اعتماد</span>
+							<span class="saudi-doc-card__icon">🎓</span>
+						</div>
+						<div class="saudi-doc-card__title">شهادة خبرة</div>
+						<div class="saudi-doc-card__desc">المسمى الوظيفي ومدة الخدمة</div>
+						<div class="saudi-doc-card__footer">
+							<span>مدة الإصدار: يوم عمل</span>
+							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="experience_certificate" data-i18n-key="admin_doc_issue">إصدار</button>
+						</div>
+					</div>
+					<div class="saudi-doc-card">
+						<div class="saudi-doc-card__header">
+							<span class="saudi-chip saudi-chip--pending" data-i18n-key="admin_doc_approval">يتطلب اعتماد</span>
+							<span class="saudi-doc-card__icon">🏛️</span>
+						</div>
+						<div class="saudi-doc-card__title">خطاب موجه لجهة</div>
+						<div class="saudi-doc-card__desc">بنك، سفارة، جهة حكومية - يُحدد اسم الجهة</div>
+						<div class="saudi-doc-card__footer">
+							<span>مدة الإصدار: يوم عمل</span>
+							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="addressed_letter" data-i18n-key="admin_doc_issue">إصدار</button>
+						</div>
+					</div>
+					<div class="saudi-doc-card">
+						<div class="saudi-doc-card__header">
+							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_auto">إصدار تلقائي</span>
+							<span class="saudi-doc-card__icon">📜</span>
+						</div>
+						<div class="saudi-doc-card__title">نسخة من عقد العمل</div>
+						<div class="saudi-doc-card__desc">نسخة مختومة من العقد الموقع</div>
+						<div class="saudi-doc-card__footer">
+							<span>مدة الإصدار: فوري</span>
+							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="contract_copy" data-i18n-key="admin_doc_issue">إصدار</button>
+						</div>
+					</div>
+					<div class="saudi-doc-card">
+						<div class="saudi-doc-card__header">
+							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_auto">إصدار تلقائي</span>
+							<span class="saudi-doc-card__icon">📊</span>
+						</div>
+						<div class="saudi-doc-card__title">مسير راتب</div>
+						<div class="saudi-doc-card__desc">كشف رواتب لشهر أو عدة أشهر</div>
+						<div class="saudi-doc-card__footer">
+							<span>مدة الإصدار: فوري</span>
+							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="payslip" data-i18n-key="admin_doc_issue">إصدار</button>
+						</div>
+					</div>
+					<div class="saudi-doc-card">
+						<div class="saudi-doc-card__header">
+							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_auto">إصدار تلقائي</span>
+							<span class="saudi-doc-card__icon">💰</span>
+						</div>
+						<div class="saudi-doc-card__title">بيان الراتب والمزايا</div>
+						<div class="saudi-doc-card__desc">تفصيل الأساسي والبدلات والتأمين</div>
+						<div class="saudi-doc-card__footer">
+							<span>مدة الإصدار: فوري</span>
+							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="salary_benefits_statement" data-i18n-key="admin_doc_issue">إصدار</button>
+						</div>
+					</div>
+					<div class="saudi-doc-card">
+						<div class="saudi-doc-card__header">
+							<span class="saudi-chip saudi-chip--pending" data-i18n-key="admin_doc_approval">يتطلب اعتماد</span>
+							<span class="saudi-doc-card__icon">🏦</span>
+						</div>
+						<div class="saudi-doc-card__title">خطاب تحويل راتب</div>
+						<div class="saudi-doc-card__desc">موجه للبنك لتحويل الراتب لحساب جديد</div>
+						<div class="saudi-doc-card__footer">
+							<span>مدة الإصدار: يوم عمل</span>
+							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="salary_transfer_letter" data-i18n-key="admin_doc_issue">إصدار</button>
+						</div>
+					</div>
+					<div class="saudi-doc-card">
+						<div class="saudi-doc-card__header">
+							<span class="saudi-chip saudi-chip--draft" data-i18n-key="admin_doc_termination">عند انتهاء الخدمة</span>
+							<span class="saudi-doc-card__icon">🚪</span>
+						</div>
+						<div class="saudi-doc-card__title">إخلاء طرف</div>
+						<div class="saudi-doc-card__desc">استلام العهد من الأقسام قبل المخالصة</div>
+						<div class="saudi-doc-card__footer">
+							<span>مدة الإصدار: 3 أيام</span>
+							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="clearance" data-i18n-key="admin_doc_issue">إصدار</button>
+						</div>
+					</div>
+					<div class="saudi-doc-card">
+						<div class="saudi-doc-card__header">
+							<span class="saudi-chip saudi-chip--draft" data-i18n-key="admin_doc_termination">عند انتهاء الخدمة</span>
+							<span class="saudi-doc-card__icon">🏁</span>
+						</div>
+						<div class="saudi-doc-card__title">شهادة نهاية الخدمة</div>
+						<div class="saudi-doc-card__desc">تثبت انتهاء العلاقة الوظيفية وتاريخها</div>
+						<div class="saudi-doc-card__footer">
+							<span>مدة الإصدار: يوم عمل</span>
+							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="end_of_service_cert" data-i18n-key="admin_doc_issue">إصدار</button>
+						</div>
+					</div>
+				</div>
+
+				<div class="saudi-section-header" style="margin-top:24px;padding:0 0 10px;">
+					<div class="saudi-section-header__title" style="font-size:16px;">آخر الطلبات</div>
+				</div>
+
+				<div class="saudi-table-wrap">
+					<table class="saudi-table">
+						<thead>
+							<tr>
+								<th>رقم الطلب</th>
+								<th>الموظف</th>
+								<th>المستند</th>
+								<th>الجهة الموجه إليها</th>
+								<th>التاريخ</th>
+								<th>الحالة</th>
+								<th style="text-align:center;">إجراء</th>
+							</tr>
+						</thead>
+						<tbody id="documents-requests-rows">
+							<!-- Populated via JS -->
+						</tbody>
 					</table>
 				</div>
 			</section>
@@ -351,6 +654,52 @@
 	</div>
 </div>
 
+<!-- ============ ATTENDANCE DAY CORRECTION DIALOG ============ -->
+<div class="saudi-modal saudi-modal--center" id="attendance-day-correction-modal" style="display:none;" role="dialog"
+	aria-modal="true" aria-labelledby="attendance-day-correction-title">
+	<div class="saudi-modal__dialog">
+		<div class="saudi-modal__header">
+			<div class="saudi-modal__title" id="attendance-day-correction-title" data-i18n-key="admin_attendance_correct_title">
+				تصحيح حضور
+			</div>
+			<button class="saudi-btn saudi-btn--ghost" type="button" data-action="close-attendance-day-correction"
+				data-i18n-key="cancel">إلغاء</button>
+		</div>
+
+		<div class="saudi-modal__body">
+			<div id="attendance-correction-summary"></div>
+			<div style="font-size:13px;color:var(--text-muted);" id="attendance-correction-already" hidden
+				data-i18n-key="admin_attendance_corrected_hint"></div>
+			<div id="attendance-correction-fields">
+				<div class="saudi-field" style="margin-top:8px;">
+					<label for="attendance-correct-time" data-i18n-key="admin_attendance_correct_new_checkin">وقت الدخول الجديد</label>
+					<input type="time" id="attendance-correct-time" dir="ltr">
+					<div style="font-size:13px;color:var(--text-muted);" data-i18n-key="admin_attendance_correct_hint">
+						سيتم نقل تسجيل الدخول الفعلي لهذا اليوم إلى الوقت الجديد
+					</div>
+				</div>
+				<div class="saudi-field" style="margin-top:8px;">
+					<label for="attendance-correct-out-time" data-i18n-key="admin_attendance_correct_new_checkout">وقت الخروج الجديد</label>
+					<input type="time" id="attendance-correct-out-time" dir="ltr">
+					<div style="font-size:13px;color:var(--text-muted);" data-i18n-key="admin_attendance_correct_out_hint">
+						سيتم نقل تسجيل الخروج الفعلي لهذا اليوم إلى الوقت الجديد
+					</div>
+				</div>
+				<div class="saudi-field" style="margin-top:8px;">
+					<label for="attendance-correct-note" data-i18n-key="admin_attendance_correct_note">الملاحظة</label>
+					<textarea id="attendance-correct-note" rows="3"></textarea>
+				</div>
+			</div>
+		</div>
+
+		<div class="saudi-modal__footer">
+			<button class="saudi-btn" type="button" data-action="close-attendance-day-correction" data-i18n-key="cancel">إلغاء</button>
+			<button class="saudi-btn saudi-btn--primary" type="button" data-action="save-attendance-day-correction"
+				data-i18n-key="save">حفظ</button>
+		</div>
+	</div>
+</div>
+
 <div class="saudi-toast" id="saudi-toast" role="status" aria-live="polite"></div>
 {% endblock %}
 
@@ -370,7 +719,13 @@ var ADMIN_STATE = {
 	lastFocus: null,
 	trapping: false,
 	employees_restricted: false,
-	attendance: null
+	attendance: null,
+	attendance_bound: false,
+	attendance_chosen: null,
+	attendance_employees: [],
+	attendance_employees_restricted: false,
+	attendance_months: null,
+	attendance_correction: null
 };
 
 /* ═══ Boot ═════════════════════════════════════════════════════════════════ */
@@ -391,6 +746,23 @@ document.addEventListener("DOMContentLoaded", function () {
 			case "close-employee-form": closeEmployeeForm(); break;
 			case "close-employee-detail": closeEmployeeDetail(); break;
 			case "save-employee": saveEmployee(); break;
+			case "open-attendance-day-correction": openAttendanceDayCorrection(trigger.getAttribute("data-date")); break;
+			case "close-attendance-day-correction": closeAttendanceDayCorrection(); break;
+			case "save-attendance-day-correction": saveAttendanceDayCorrection(); break;
+			case "start-offboarding": startOffboarding(); break;
+			case "open-offboarding-case": openOffboardingCase(trigger.getAttribute("data-name")); break;
+			case "apply-offboarding-action": applyOffboardingAction(trigger.getAttribute("data-doctype"), trigger.getAttribute("data-name"), trigger.getAttribute("data-action-name")); break;
+			case "save-offboarding-checklist": saveOffboardingChecklist(); break;
+			case "create-offboarding-eosb": createOffboardingEosb(); break;
+			case "submit-offboarding-eosb": submitOffboardingEosb(trigger.getAttribute("data-name")); break;
+			case "create-offboarding-interview": createOffboardingInterview(); break;
+			case "create-offboarding-leave": createOffboardingLeave(); break;
+			case "settle-offboarding-sla": settleOffboardingSla(); break;
+			case "print-offboarding": printClearance(); break;
+			case "open-doc-request-modal": openDocRequestModal(); break;
+			case "close-doc-request-modal": closeDocRequestModal(); break;
+			case "save-doc-request": saveDocRequest(); break;
+			case "issue-document": triggerIssueDocument(trigger.getAttribute("data-doc-type")); break;
 		}
 	});
 
@@ -427,6 +799,12 @@ document.addEventListener("DOMContentLoaded", function () {
 			var detail = document.getElementById("employee-detail-modal");
 			if (detail && detail.style.display === "flex") { closeEmployeeDetail(); return; }
 			if (document.getElementById("employee-modal").style.display === "flex") closeEmployeeForm();
+			if (document.getElementById("attendance-day-correction-modal").style.display === "flex") {
+				closeAttendanceDayCorrection();
+			}
+			if (document.getElementById("doc-request-modal").style.display === "flex") {
+				closeDocRequestModal();
+			}
 		}
 		handleFocusTrap(e);
 	});
@@ -455,7 +833,19 @@ function toggleScopeButtons() {
 var ADMIN_WRITES = {
 	create_employee: 1,
 	apply_leave_action: 1,
-	submit_leave_request: 1
+	submit_leave_request: 1,
+	correct_attendance_day: 1,
+	create_eosb_settlement: 1,
+	issue_hr_document: 1,
+	create_termination_notice: 1,
+	create_exit_clearance: 1,
+	apply_offboarding_action: 1,
+	save_exit_clearance: 1,
+	create_eosb_from_case: 1,
+	submit_eosb: 1,
+	create_exit_interview: 1,
+	create_leave_disbursement: 1,
+	settle_final_settlement: 1
 };
 
 function callAdmin(method, args) {
@@ -523,10 +913,7 @@ function loadDashboard() {
 			badge.hidden = !d.actionable_total;
 		}
 		renderLeaveTables(d.leave || {}, d.truncated || []);
-		}).catch(function (err) { onApiError(err, t("admin_action_failed")); })
-		// the report panel owns the attendance tables, so they ride along with
-		// the dashboard load rather than needing a second one
-		.then(loadAttendance);
+		}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
 	});
 }
 
@@ -652,9 +1039,14 @@ function renderApprovalList() {
 	});
 }
 
+/* The units are labels like every other word on the page: a translator has to
+   be able to change them, and Arabic needs a plural where English has one. */
+function fmtUnit(count, one, many) {
+	return Number(count || 0) + " " + t(Number(count || 0) === 1 ? one : many);
+}
+
 function fmtDays(days) {
-	var n = Number(days || 0);
-	return n + " " + (CURRENT_LANG === "ar" ? "يوم" : (n === 1 ? "day" : "days"));
+	return fmtUnit(days, "admin_unit_day", "admin_unit_days");
 }
 
 /* Leave types arrive as readable text, but HR Service Request stores raw
@@ -724,6 +1116,7 @@ function renderApprovalDetail(payload) {
 		}).join("")
 		+ "</div>"
 		+ periodRow(payload)
+		+ punchCorrectionRow(payload)
 		+ (payload.description ? "<div>" + esc(payload.description) + "</div>" : "")
 		+ "</div>"
 		+ "<div class='saudi-detail-card__actions'>"
@@ -745,15 +1138,46 @@ function actionClass(action) {
 
 function periodRow(payload) {
 	var f = payload.fields || {};
-	var start = f.leave_start_date || f.from_date;
-	var end = f.leave_end_date || f.to_date;
+	// a punch correction lands on one day, which is its own from and to
+	var start = f.leave_start_date || f.from_date || f.attendance_date;
+	var end = f.leave_end_date || f.to_date || f.attendance_date;
 	if (!start && !end) return "";
 	var days = f.total_leave_days || f.total_days || f.actual_days || f.entitled_days || 0;
 	return "<div class='saudi-key-value'>"
 		+ "<div class='saudi-key-value__key'>" + esc(t("admin_period")) + "</div>"
-		+ "<div class='saudi-key-value__value'>" + esc(start || "—") + " → " + esc(end || "—") + "</div>"
-		+ "<div class='saudi-key-value__key'>" + esc(t("admin_days")) + "</div>"
-		+ "<div class='saudi-key-value__value'>" + fmtDays(days) + "</div>"
+		+ "<div class='saudi-key-value__value'>" + esc(start || "—")
+		+ (f.attendance_date ? "" : " → " + esc(end || "—")) + "</div>"
+		+ (f.attendance_date ? "" : "<div class='saudi-key-value__key'>" + esc(t("admin_days")) + "</div>"
+			+ "<div class='saudi-key-value__value'>" + fmtDays(days) + "</div>")
+		+ "</div>";
+}
+
+function padTime(value) {
+	if (value == null || value === "") return "—";
+	return String(value).slice(0, 5);
+}
+
+function punchCorrectionRow(payload) {
+	var f = payload.fields || {};
+	if (payload.doctype !== "Saudi Punch Correction") return "";
+	var bits = "";
+	function side(key, original, corrected) {
+		if (corrected == null || corrected === "") return;
+		var line = esc(padTime(corrected));
+		if (original != null && original !== "") {
+			line += " (" + esc(t("admin_punch_original")) + ": " + esc(padTime(original)) + ")";
+		}
+		bits += "<div class='saudi-key-value__key'>" + esc(t(key)) + "</div>"
+			+ "<div class='saudi-key-value__value'>" + line + "</div>";
+	}
+	side("admin_punch_in", f.original_in_time, f.corrected_in_time);
+	side("admin_punch_out", f.original_out_time, f.corrected_out_time);
+	var reason = f.correction_reason;
+	if (!bits && !reason) return "";
+	return "<div class='saudi-key-value' style='margin-top:14px;'>"
+		+ bits
+		+ (reason ? "<div class='saudi-key-value__key'>" + esc(t("admin_punch_reason")) + "</div>"
+			+ "<div class='saudi-key-value__value'>" + esc(reason) + "</div>" : "")
 		+ "</div>";
 }
 
@@ -844,7 +1268,7 @@ function renderEmployees(restricted) {
 			// opens the in-panel profile, so reviewing someone never means
 			// leaving the portal; Desk stays available from inside that dialog
 			+ "<button class='saudi-btn' type='button' data-employee='" + esc(row.name) + "'>"
-			+ esc(CURRENT_LANG === "ar" ? "عرض" : "View") + "</button>"
+			+ esc(t("admin_view")) + "</button>"
 			+ "</div></td>"
 			+ "</tr>";
 	}).join("");
@@ -964,7 +1388,7 @@ function attendanceTone(key) {
 }
 
 function fmtHours(hours) {
-	return round2(hours) + " " + (CURRENT_LANG === "ar" ? "ساعة" : (round2(hours) === 1 ? "hour" : "hours"));
+	return fmtUnit(round2(hours), "admin_unit_hour", "admin_unit_hours");
 }
 
 /* The tile label already says what the number is, so the value stays bare. */
@@ -973,8 +1397,7 @@ function round2(value) {
 }
 
 function fmtMinutes(minutes) {
-	var n = Math.round(Number(minutes || 0));
-	return n + " " + (CURRENT_LANG === "ar" ? "دقيقة" : (n === 1 ? "minute" : "minutes"));
+	return fmtUnit(Math.round(Number(minutes || 0)), "admin_unit_minute", "admin_unit_minutes");
 }
 
 function attendanceTiles(counts) {
@@ -994,7 +1417,446 @@ function attendanceTiles(counts) {
 	}).join("") + "</div>";
 }
 
-/* The employee's own attendance: today's punch, the month's tally and the
+/* ─── The panel ───────────────────────────────────────────────────────────── */
+
+/* The last 18 months, newest first. A month picker with no history to pick from
+   would force the date range for anything older, and a fixed 12 would hide the
+   two months that still overlap a leave balance. */
+var ATTENDANCE_MONTHS = 18;
+
+function attendanceMonthOptions() {
+	var select = document.getElementById("attendance-month");
+	// tracked here rather than by inspecting the select: the language switch
+	// rebuilds the options, and a filled select cannot say why it is filled
+	if (!select || ADMIN_STATE.attendance_months === CURRENT_LANG) return;
+	var chosen = select.value;
+	var today = new Date();
+	var html = "";
+	for (var i = 0; i < ATTENDANCE_MONTHS; i++) {
+		var when = new Date(today.getFullYear(), today.getMonth() - i, 1);
+		var value = when.getFullYear() + "-" + ("0" + (when.getMonth() + 1)).slice(-2);
+		// the value is a date the server parses, so it is never translated; the
+		// month name beside it is, or the picker would be unreadable in English
+		var label = attendanceMonthLabel(when, value);
+		html += "<option value='" + esc(value) + "'>" + esc(label) + "</option>";
+	}
+	select.innerHTML = html;
+	if (chosen) select.value = chosen;
+	ADMIN_STATE.attendance_months = CURRENT_LANG;
+}
+
+/* "October 2026" beside a value of "2026-10". The value never changes with the
+   language, because the server parses it; only the name beside it does. */
+function attendanceMonthLabel(when, value) {
+	try {
+		return new Intl.DateTimeFormat(
+			CURRENT_LANG === "en" ? "en-GB" : "ar-SA-u-nu-latn",
+			{ month: "long", year: "numeric" }
+		).format(when);
+	} catch (e) {
+		// a build without the locale data still gets a usable picker
+		return value;
+	}
+}
+
+function attendancePeriod() {
+	var mode = (document.getElementById("attendance-period") || {}).value || "month";
+	var month = document.getElementById("attendance-month");
+	var from = document.getElementById("attendance-from");
+	var to = document.getElementById("attendance-to");
+	return {
+		month: mode === "month" ? (month ? month.value : "") : null,
+		from_date: mode === "range" && from ? from.value : null,
+		to_date: mode === "range" && to ? to.value : null
+	};
+}
+
+function attendanceEmployee() {
+	var select = document.getElementById("attendance-employee");
+	return select && select.value ? select.value : null;
+}
+
+function loadAttendance() {
+	return dedupe("attendance", function () {
+		attendanceMonthOptions();
+		var period = attendancePeriod();
+		return callAdmin("get_attendance_report", {
+			employee: attendanceEmployee(),
+			month: period.month,
+			from_date: period.from_date,
+			to_date: period.to_date,
+			limit: 25
+		}).then(function (data) {
+			// kept so the language switch can re-render the tables from it
+			ADMIN_STATE.attendance = data;
+			renderAttendanceOverview(data);
+		}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+	});
+}
+
+/* The employee list is the same directory the employees panel shows, so the
+   report can only ever be run for someone the caller can already see. */
+function loadAttendanceEmployees() {
+	return dedupe("attendance-employees", function () {
+		var box = document.getElementById("attendance-employee-search");
+		return callAdmin("list_employees", { search: (box && box.value || "").trim() || null, limit: 100 })
+			.then(function (r) {
+				// cached so a language switch can reword the options without
+				// spending another request on a list that has not changed
+				ADMIN_STATE.attendance_employees = r.rows || [];
+				ADMIN_STATE.attendance_employees_restricted = !!r.restricted;
+				renderAttendanceEmployeeOptions();
+				renderAttendanceOverview(ADMIN_STATE.attendance);
+			}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+	});
+}
+
+function renderAttendanceEmployeeOptions() {
+	var select = document.getElementById("attendance-employee");
+	if (!select) return;
+	if (ADMIN_STATE.attendance_employees_restricted) {
+		// the same withholding the employees panel does: no options
+		// rather than an empty report that reads as nobody worked
+		select.innerHTML = "<option value=''>" + esc(t("admin_employees_restricted")) + "</option>";
+		return;
+	}
+	var chosen = select.value;
+	var rows = ADMIN_STATE.attendance_employees || [];
+	// Remember how the current selection reads, because a narrowed search can
+	// drop the employee the report is about. A select that no longer holds the
+	// selection falls back to "everyone" on the next change event, which would
+	// report the whole company under a heading still naming one person, so the
+	// selection is pinned back into the list with the wording it had.
+	var remembered = ADMIN_STATE.attendance_chosen;
+	var label = remembered && remembered.name === chosen ? remembered.label : "";
+	rows.forEach(function (row) {
+		if (row.name === chosen) label = attendanceEmployeeLabel(row);
+	});
+	ADMIN_STATE.attendance_chosen = chosen ? { name: chosen, label: label || chosen } : null;
+
+	var pinned = chosen && !rows.some(function (row) { return row.name === chosen; }) && ADMIN_STATE.attendance_chosen;
+	var html = "<option value=''>" + esc(t("admin_attendance_all_employees")) + "</option>";
+	if (pinned) html += "<option value='" + esc(pinned.name) + "'>" + esc(pinned.label) + "</option>";
+	rows.forEach(function (row) {
+		html += "<option value='" + esc(row.name) + "'>" + esc(attendanceEmployeeLabel(row)) + "</option>";
+	});
+	select.innerHTML = html;
+	if (chosen) select.value = chosen;
+}
+
+function attendanceEmployeeLabel(row) {
+	return (row.employee_number || row.name) + " — " + (row.full_name || row.employee_name || "");
+}
+
+function attendanceDepartmentHead() {
+	var head = [
+		[t("admin_attendance_department"), ""],
+		[t("admin_attendance_employees"), "center"],
+		[t("admin_attendance_present"), "center"],
+		[t("admin_attendance_absent"), "center"],
+		[t("admin_attendance_half_day"), "center"],
+		[t("admin_attendance_on_leave"), "center"],
+		[t("admin_attendance_late_days"), "center"],
+		[t("admin_attendance_hours"), "center"]
+	];
+	return attendanceHead(head);
+}
+
+function attendanceDayHead() {
+	return attendanceHead([
+		[t("admin_attendance_day"), ""],
+		[t("admin_status"), ""],
+		[t("admin_attendance_hours_label"), ""],
+		[t("admin_attendance_hours"), "center"],
+		[t("admin_attendance_late_minutes"), "center"]
+	]);
+}
+
+function attendanceOverviewDayHead() {
+	return attendanceHead([
+		[t("admin_attendance_day"), ""],
+		[t("admin_status"), ""],
+		[t("admin_attendance_hours_label"), ""],
+		[t("admin_attendance_hours"), "center"],
+		[t("admin_attendance_late_minutes"), "center"],
+		[t("admin_attendance_day_note"), ""],
+		[t("admin_attendance_actions"), "center"]
+	]);
+}
+
+function attendanceHead(columns) {
+	return "<tr>" + columns.map(function (column) {
+		return "<th" + (column[1] ? " style='text-align:center;'" : "") + ">" + esc(column[0]) + "</th>";
+	}).join("") + "</tr>";
+}
+
+function renderAttendanceOverview(data) {
+	var totals = document.getElementById("attendance-totals");
+	var rows = document.getElementById("attendance-rows");
+	var head = document.getElementById("attendance-table-head");
+	var todayRows = document.getElementById("attendance-today-rows");
+	var window_ = document.getElementById("attendance-window");
+	var note = document.getElementById("attendance-note");
+	var title = document.getElementById("attendance-scope-title");
+	if (!totals || !rows || !data) return;
+
+	var perEmployee = data.scope === "employee";
+	if (title) title.textContent = perEmployee && data.employee
+		? t("admin_attendance_of_employee").replace("{name}", data.employee.employee_name || data.employee.name)
+		: t("admin_attendance_department_overview");
+	if (window_) {
+		window_.textContent = t("admin_attendance_window") + ": " + (data.from_date || "") + " → " + (data.to_date || "");
+	}
+
+	if (data.readable === false) {
+		totals.innerHTML = "";
+		if (head) head.innerHTML = attendanceDepartmentHead();
+		rows.innerHTML = emptyRow(perEmployee ? 5 : 8, t("admin_attendance_not_readable"));
+		if (todayRows) todayRows.innerHTML = emptyRow(4, t("admin_attendance_not_readable"));
+		return;
+	}
+
+	totals.innerHTML = attendanceTiles(data.totals);
+
+	var body = [];
+	if (head) head.innerHTML = perEmployee ? attendanceOverviewDayHead() : attendanceDepartmentHead();
+
+	if (perEmployee) {
+		var days = data.days || [];
+		body = days.length
+			? days.map(function (row) {
+				return row.missing ? missingAttendanceDayRow(row) : attendanceDayRow(row);
+			})
+			: [emptyRow(7, t("admin_attendance_no_records"))];
+	} else {
+		var departments = data.departments || [];
+		body = departments.length
+			? departments.map(function (row) {
+				return "<tr>"
+					+ "<td>" + esc(row.department || "—") + "</td>"
+					+ "<td style='text-align:center;'>" + esc(row.employees || 0) + "</td>"
+					+ "<td style='text-align:center;'>" + esc(row.present || 0) + "</td>"
+					+ "<td style='text-align:center;'>" + esc(row.absent || 0) + "</td>"
+					+ "<td style='text-align:center;'>" + esc(row.half_day || 0) + "</td>"
+					+ "<td style='text-align:center;'>" + esc(row.on_leave || 0) + "</td>"
+					+ "<td style='text-align:center;'>" + esc(row.late_days || 0) + "</td>"
+					+ "<td style='text-align:center;'>" + esc(fmtHours(row.hours || 0)) + "</td>"
+					+ "</tr>";
+			})
+			: [emptyRow(8, t("admin_attendance_no_departments"))];
+	}
+	rows.innerHTML = body.join("");
+
+	if (note) {
+		note.textContent = data.truncated ? t("admin_attendance_truncated") : "";
+		note.hidden = !data.truncated;
+	}
+
+	var punches = data.today || [];
+	if (todayRows) {
+		todayRows.innerHTML = punches.length
+			? punches.map(function (row) {
+				return "<tr>"
+					+ "<td>" + esc(row.employee || "—") + "</td>"
+					+ "<td>" + esc(row.employee_name || row.employee || "—") + "</td>"
+					+ "<td>" + esc(row.log_type === "OUT" ? t("admin_attendance_out") : t("admin_attendance_in")) + "</td>"
+					+ "<td style='direction:ltr;text-align:left;'>" + esc(fmtClock(row.time)) + "</td>"
+					+ "</tr>";
+			}).join("")
+			: emptyRow(4, t("admin_attendance_no_punches"));
+	}
+}
+
+/* A corrected day carries the "مصحح" tag under its status, and its last note
+   (or an invitation to write one) fills the note cell. The row is addressed by
+   its date, not its record name, because the same table also lists days that
+   have no record yet. */
+function attendanceDayRow(row) {
+	var noteCell = row.note
+		? "<span style='font-size:12px;color:var(--text-muted);'>" + esc(row.note) + "</span>"
+		: "<button class='saudi-btn saudi-btn--tiny' type='button' data-action='open-attendance-day-correction'"
+			+ " data-date='" + esc(row.date) + "'>" + esc(t("admin_attendance_correct_add_note")) + "</button>";
+	return "<tr>"
+		+ "<td style='font-weight:700;' dir='ltr'>" + esc(row.date || "—") + "</td>"
+		+ "<td>" + attendanceStatus(row) + (row.corrected ? " " + correctedChip() : "") + "</td>"
+		+ "<td style='direction:ltr;text-align:left;'>" + esc(fmtClock(row.in_time)) + " → " + esc(fmtClock(row.out_time)) + "</td>"
+		+ "<td style='text-align:center;'>" + (row.hours ? esc(fmtHours(row.hours)) : "—") + "</td>"
+		+ "<td style='text-align:center;'>" + (row.late_minutes ? esc(fmtMinutes(row.late_minutes)) : "—") + "</td>"
+		+ "<td>" + noteCell + "</td>"
+		+ "<td style='text-align:center;'><button class='saudi-btn saudi-btn--tiny saudi-btn--primary' type='button'"
+			+ " data-action='open-attendance-day-correction' data-date='" + esc(row.date) + "'>"
+			+ esc(t("admin_attendance_correct_edit")) + "</button></td>"
+		+ "</tr>";
+}
+
+/* A day the calendar lists but the employee has no record for: the times read
+   as "—" and the two actions offer to register the day by clicking تصحيح. A
+   day still ahead of today is not an absence to be filled in, so it carries no
+   actions at all. */
+function missingAttendanceDayRow(row) {
+	var canAdd = !row.future;
+	var addBtn = "<button class='saudi-btn saudi-btn--tiny' type='button' data-action='open-attendance-day-correction'"
+		+ " data-date='" + esc(row.date) + "'>" + esc(t("admin_attendance_add_missing")) + "</button>";
+	return "<tr>"
+		+ "<td style='font-weight:700;' dir='ltr'>" + esc(row.date || "—") + "</td>"
+		+ "<td>" + attendanceStatus(row) + "</td>"
+		+ "<td style='direction:ltr;text-align:left;'>— → —</td>"
+		+ "<td style='text-align:center;'>—</td>"
+		+ "<td style='text-align:center;'>—</td>"
+		+ "<td>" + (canAdd ? addBtn : "—") + "</td>"
+		+ "<td style='text-align:center;'>" + (canAdd
+			? "<button class='saudi-btn saudi-btn--tiny saudi-btn--primary' type='button'"
+				+ " data-action='open-attendance-day-correction' data-date='" + esc(row.date) + "'>"
+				+ esc(t("admin_attendance_correct_edit")) + "</button>"
+			: "—") + "</td>"
+		+ "</tr>";
+}
+
+function correctedChip() {
+	return "<span class='saudi-chip saudi-chip--muted'>" + esc(t("admin_attendance_corrected")) + "</span>";
+}
+
+function openAttendanceDayCorrection(dateKey) {
+	var days = (ADMIN_STATE.attendance && ADMIN_STATE.attendance.days) || [];
+	// the table addresses rows by their date, because a day the report lists as
+	// missing has no record name to carry in the trigger
+	var row = days.find(function (d) { return d.date === dateKey; });
+	if (!row) return;
+	ADMIN_STATE.attendance_correction = row;
+	var summary = document.getElementById("attendance-correction-summary");
+	var modal = document.getElementById("attendance-day-correction-modal");
+	var already = document.getElementById("attendance-correction-already");
+	var fields = document.getElementById("attendance-correction-fields");
+	var timeBox = document.getElementById("attendance-correct-time");
+	var outBox = document.getElementById("attendance-correct-out-time");
+	var noteBox = document.getElementById("attendance-correct-note");
+	if (!modal || !timeBox || !outBox || !noteBox || !already || !fields) return;
+
+	var employee = (ADMIN_STATE.attendance && ADMIN_STATE.attendance.employee) || {};
+	var displayed = String(employee.employee_name || employee.name || "").trim();
+	if (summary) {
+		summary.innerHTML = kvBlock([
+			[t("admin_attendance_day"), row.date || "—"],
+			[t("admin_attendance_employee"), displayed],
+			[t("admin_attendance_hours_label"), fmtClock(row.in_time) + " → " + fmtClock(row.out_time)]
+		]);
+	}
+	timeBox.value = toTimeValue(row.in_time);
+	timeBox.disabled = !!row.corrected;
+	outBox.value = toTimeValue(row.out_time);
+	outBox.disabled = !!row.corrected;
+	// after a correction only the note is still editable; the time is settled
+	already.hidden = !row.corrected;
+	if (row.corrected) already.textContent = t("admin_attendance_corrected_hint");
+	fields.style.display = "block";
+	noteBox.value = row.note || "";
+
+	// remember the trigger so focus can go back where it came from on close
+	ADMIN_STATE.lastFocus = document.activeElement;
+	modal.style.display = "flex";
+	document.body.classList.add("saudi-modal-open");
+	trappedFocus(true);
+	timeBox.focus();
+}
+
+function closeAttendanceDayCorrection() {
+	var modal = document.getElementById("attendance-day-correction-modal");
+	if (!modal) return;
+	modal.style.display = "none";
+	document.body.classList.remove("saudi-modal-open");
+	trappedFocus(false);
+	if (ADMIN_STATE.lastFocus && ADMIN_STATE.lastFocus.focus) ADMIN_STATE.lastFocus.focus();
+	ADMIN_STATE.lastFocus = null;
+}
+
+/* <input type="time"> wants "07:00", while the server sends "07:00:00". */
+function toTimeValue(value) {
+	var parts = String(value || "").split(":");
+	return parts.length >= 2 ? parts.slice(0, 2).join(":") : value;
+}
+
+function saveAttendanceDayCorrection() {
+	var row = ADMIN_STATE.attendance_correction;
+	if (!row) return;
+	var timeBox = document.getElementById("attendance-correct-time");
+	var outBox = document.getElementById("attendance-correct-out-time");
+	var noteBox = document.getElementById("attendance-correct-note");
+	var time = timeBox ? toTimeValue(timeBox.value) : "";
+	var outTime = outBox ? toTimeValue(outBox.value) : "";
+	// the server enforces the once-per-day rule anyway, but a corrected day
+	// offers no time to change, so nothing is sent for it
+	if (row.corrected) time = outTime = "";
+	var note = (noteBox && noteBox.value || "").trim();
+	var btn = document.querySelector("[data-action='save-attendance-day-correction']");
+	btn.disabled = true;
+	callAdmin("correct_attendance_day", {
+		attendance: row.name || "",
+		employee: row.employee,
+		date: row.date,
+		time: time,
+		out_time: outTime,
+		note: note
+	}).then(function () {
+		showToast(t("admin_attendance_correct_saved"), "success");
+		closeAttendanceDayCorrection();
+		return loadAttendance();
+	}).catch(function (err) {
+		onApiError(err, t("admin_action_failed"));
+	}).then(function () {
+		btn.disabled = false;
+	});
+}
+
+/* Month and date range are two controls for one choice, so only the one in use
+   is shown; leaving both on screen invites a month that silently overrides the
+   dates next to it. */
+function attendanceSyncPeriod() {
+	var mode = (document.getElementById("attendance-period") || {}).value || "month";
+	var grouped = { "attendance-month-field": "month", "attendance-from-field": "range", "attendance-to-field": "range" };
+	Object.keys(grouped).forEach(function (id) {
+		var el = document.getElementById(id);
+		if (el) el.hidden = grouped[id] !== mode;
+	});
+}
+
+/* The loader runs on every visit to the panel, and addEventListener stacks a
+   second handler on the same element each time, so the panel would fetch one
+   report per visit after the first. Bound once instead. */
+function attendanceBind() {
+	if (ADMIN_STATE.attendance_bound) return;
+	ADMIN_STATE.attendance_bound = true;
+	var period = document.getElementById("attendance-period");
+	if (period) period.addEventListener("change", function () { attendanceSyncPeriod(); loadAttendance(); });
+
+	["attendance-month", "attendance-from", "attendance-to"].forEach(function (id) {
+		var el = document.getElementById(id);
+		if (el) el.addEventListener("change", function () { loadAttendance(); });
+	});
+
+	var scope = document.getElementById("attendance-employee");
+	if (scope) {
+		scope.addEventListener("change", function () {
+			// read the wording off the picked option now: a later search can
+			// narrow it out of the list, and then there is nothing left to read
+			var option = scope.options[scope.selectedIndex];
+			ADMIN_STATE.attendance_chosen = scope.value
+				? { name: scope.value, label: (option && option.text || scope.value).trim() }
+				: null;
+			loadAttendance();
+		});
+	}
+
+	var search = document.getElementById("attendance-employee-search");
+	if (search) {
+		search.addEventListener("input", function () {
+			clearTimeout(ADMIN_STATE.searchTimer);
+			ADMIN_STATE.searchTimer = setTimeout(loadAttendanceEmployees, 280);
+		});
+	}
+	attendanceSyncPeriod();
+}
+
+/* The employee dialog's attendance: today's punch, this month's tally and the
    recent days. A caller with no read on attendance is told so rather than
    shown a set of zeros that would read as "never came to work". */
 function renderAttendance(attendance) {
@@ -1042,87 +1904,13 @@ function renderAttendance(attendance) {
 		+ "<div style='font-size:13px;font-weight:700;color:var(--text-muted);margin-top:8px;'>"
 		+ esc(t("admin_attendance_recent")) + "</div>"
 		+ (attendance.truncated ? "<p class='saudi-table__note'>" + esc(t("admin_attendance_truncated")) + "</p>" : "")
-		+ "<div style='overflow-x:auto'><table class='saudi-table'><thead><tr>"
-		+ "<th>" + esc(t("admin_attendance_day")) + "</th>"
-		+ "<th>" + esc(t("admin_status")) + "</th>"
-		+ "<th>" + esc(t("admin_attendance_hours_label")) + "</th>"
-		+ "<th>" + esc(t("admin_attendance_hours")) + "</th>"
-		+ "<th>" + esc(t("admin_attendance_late_minutes")) + "</th>"
-		+ "</tr></thead><tbody>" + days + "</tbody></table></div>";
+		+ "<div style='overflow-x:auto'><table class='saudi-table'><thead>"
+		+ attendanceDayHead()
+		+ "</thead><tbody>" + days + "</tbody></table></div>";
 }
 
 function fmtClock(value) {
 	return value || "—";
-}
-
-/* ═══ Company-wide attendance ══════════════════════════════════════════════ */
-function loadAttendance() {
-	return dedupe("attendance", function () {
-		return callAdmin("get_attendance_overview", { limit: 25 }).then(function (data) {
-			// kept so the language switch can re-render the tables from it
-			ADMIN_STATE.attendance = data;
-			renderAttendanceOverview(data);
-		}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
-	});
-}
-
-function renderAttendanceOverview(data) {
-	var totals = document.getElementById("attendance-totals");
-	var rows = document.getElementById("attendance-rows");
-	var todayRows = document.getElementById("attendance-today-rows");
-	var window_ = document.getElementById("attendance-window");
-	var note = document.getElementById("attendance-note");
-	if (!totals || !rows) return;
-
-	if (!data) return;
-
-	if (window_) {
-		window_.textContent = t("admin_attendance_window") + ": " + (data.from_date || "") + " → " + (data.to_date || "");
-	}
-
-	if (data.readable === false) {
-		totals.innerHTML = "";
-		rows.innerHTML = emptyRow(8, t("admin_attendance_not_readable"));
-		if (todayRows) todayRows.innerHTML = emptyRow(4, t("admin_attendance_not_readable"));
-		return;
-	}
-
-	totals.innerHTML = attendanceTiles(data.totals);
-
-	var departments = data.departments || [];
-	rows.innerHTML = departments.length
-		? departments.map(function (row) {
-			return "<tr>"
-				+ "<td>" + esc(row.department || "—") + "</td>"
-				+ "<td style='text-align:center;'>" + esc(row.employees || 0) + "</td>"
-				+ "<td style='text-align:center;'>" + esc(row.present || 0) + "</td>"
-				+ "<td style='text-align:center;'>" + esc(row.absent || 0) + "</td>"
-				+ "<td style='text-align:center;'>" + esc(row.half_day || 0) + "</td>"
-				+ "<td style='text-align:center;'>" + esc(row.on_leave || 0) + "</td>"
-				+ "<td style='text-align:center;'>" + esc(row.late_days || 0) + "</td>"
-				+ "<td style='text-align:center;'>" + esc(fmtHours(row.hours || 0)) + "</td>"
-				+ "</tr>";
-		}).join("")
-		: emptyRow(8, t("admin_attendance_no_departments"));
-
-	if (note) {
-		note.textContent = data.truncated ? t("admin_attendance_truncated") : "";
-		note.hidden = !data.truncated;
-	}
-
-	var punches = data.today || [];
-	if (todayRows) {
-		todayRows.innerHTML = punches.length
-			? punches.map(function (row) {
-				return "<tr>"
-					+ "<td>" + esc(row.employee || "—") + "</td>"
-					+ "<td>" + esc(row.employee_name || row.employee || "—") + "</td>"
-					+ "<td>" + esc(row.log_type === "OUT" ? t("admin_attendance_out") : t("admin_attendance_in")) + "</td>"
-					+ "<td style='direction:ltr;text-align:left;'>" + esc(fmtClock(row.time)) + "</td>"
-					+ "</tr>";
-			}).join("")
-			: emptyRow(4, t("admin_attendance_no_punches"));
-	}
 }
 
 function openEmployeeDetail(name) {
@@ -1210,6 +1998,7 @@ function handleFocusTrap(e) {
 	// whichever dialog is actually open owns the trap
 	var modal = document.getElementById("employee-detail-modal");
 	if (!modal || modal.style.display !== "flex") modal = document.getElementById("employee-modal");
+	if (!modal || modal.style.display !== "flex") modal = document.getElementById("attendance-day-correction-modal");
 	if (!modal || modal.style.display !== "flex") return;
 	var focusable = modal.querySelectorAll(
 		"a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"
@@ -1252,7 +2041,6 @@ function saveEmployee() {
 	});
 }
 
-/* ═══ Re-render on language change ═════════════════════════════════════════ */
 SAUDI_LANG_RENDERERS.push(function () {
 	toggleScopeButtons();
 	if (document.getElementById("panel-employees").classList.contains("saudi-panel--active")) {
@@ -1262,16 +2050,497 @@ SAUDI_LANG_RENDERERS.push(function () {
 		renderApprovalList();
 		renderApprovalDetail(null);
 	}
-	// the attendance tables are built from the last response rather than from
-	// markup, so they have to be rebuilt in the language just chosen
+	if (document.getElementById("panel-clearance").classList.contains("saudi-panel--active")) {
+		renderOffboardingCases();
+		if (ADMIN_STATE.offboarding_case) renderOffboardingCase(ADMIN_STATE.offboarding_case);
+	}
+	if (document.getElementById("panel-documents").classList.contains("saudi-panel--active")) {
+		fetchDocumentsData();
+	}
+	if (ADMIN_STATE.attendance_employees) renderAttendanceEmployeeOptions();
+	attendanceMonthOptions();
 	if (ADMIN_STATE.attendance) renderAttendanceOverview(ADMIN_STATE.attendance);
 });
+
+/* ═══ Offboarding Panel ═══════════════════════════════════════════════════ */
+var OB_CHECKLIST = [
+	["access_revoked", "admin_offboarding_check_access"],
+	["assets_returned", "admin_offboarding_check_assets"],
+	["final_attendance_verified", "admin_offboarding_check_attendance"],
+	["payroll_closed", "admin_offboarding_check_payroll"],
+	["eosb_completed", "admin_offboarding_check_eosb"],
+	["annual_leave_disbursement_completed", "admin_offboarding_check_leave"],
+	["exit_interview_completed", "admin_offboarding_check_interview"],
+	["handover_completed", "admin_offboarding_check_handover"]
+];
+
+function obFillSelect(id, values) {
+	var select = document.getElementById(id);
+	if (!select) return;
+	select.innerHTML = (values || []).map(function (value) {
+		return "<option value='" + esc(value) + "'>" + esc(value) + "</option>";
+	}).join("");
+}
+
+function obStatusLabel(status) {
+	var value = String(status || "").split(" / ")[0].trim().toLowerCase();
+	if (value === "cleared") return t("admin_offboarding_status_cleared");
+	if (value === "on hold") return t("admin_offboarding_status_hold");
+	if (value === "in progress") return t("admin_offboarding_status_progress");
+	return t("admin_offboarding_status_draft");
+}
+
+function obChipClass(state) {
+	if (state === "approved") return "saudi-chip--approved";
+	if (state === "pending") return "saudi-chip--pending";
+	if (state === "rejected") return "saudi-chip--rejected";
+	return "saudi-chip--muted";
+}
+
+function obInfoTile(label, value) {
+	return "<div class='saudi-stat'><div class='saudi-stat__label'>" + esc(label)
+		+ "</div><div style='font-size:14px;font-weight:800;'>" + esc(value) + "</div></div>";
+}
+
+function obSectionTitle(key) {
+	return "<div class='saudi-form-section' style='margin-top:12px;'>" + esc(t(key)) + "</div>";
+}
+
+function obLinkedChip(linked) {
+	if (linked) {
+		return "<span class='saudi-chip saudi-chip--approved'>" + esc(t("admin_offboarding_linked")) + "</span>";
+	}
+	return "<span class='saudi-chip saudi-chip--muted'>" + esc(t("admin_offboarding_not_linked")) + "</span>";
+}
+
+function obSlaSettled(sla) {
+	return !!sla && String(sla.status || "").indexOf("Settled") === 0;
+}
+
+function loadOffboardingPanel() {
+	var empSelect = document.getElementById("offboarding-employee");
+	var start = document.getElementById("offboarding-notice-start");
+	if (start && !start.value) {
+		start.value = new Date().toISOString().substring(0, 10);
+	}
+
+	callAdmin("get_offboarding_form_options").then(function (opts) {
+		obFillSelect("offboarding-reason", opts.termination_reasons);
+		obFillSelect("offboarding-salary-type", opts.salary_payment_types);
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+
+	if (empSelect && !empSelect.children.length) {
+		callAdmin("list_employees", { limit: 200 }).then(function (r) {
+			var emps = r.rows || [];
+			ADMIN_STATE.offboarding_employees = emps;
+			empSelect.innerHTML = emps.map(function (e) {
+				return "<option value='" + esc(e.name) + "'>" + esc(e.employee_number + " - " + e.full_name) + "</option>";
+			}).join("");
+		}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+	}
+
+	loadOffboardingCases();
+}
+
+function loadOffboardingCases() {
+	return callAdmin("list_exit_clearances", { limit: 50 }).then(function (d) {
+		ADMIN_STATE.offboarding_cases = d.rows || [];
+		renderOffboardingCases();
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function renderOffboardingCases() {
+	var tbody = document.getElementById("offboarding-case-rows");
+	var note = document.getElementById("offboarding-cases-note");
+	if (!tbody) return;
+	var rows = ADMIN_STATE.offboarding_cases || [];
+	if (!rows.length) {
+		tbody.innerHTML = "";
+		if (note) { note.hidden = false; note.textContent = t("admin_offboarding_no_cases"); }
+		return;
+	}
+	if (note) note.hidden = true;
+	tbody.innerHTML = rows.map(function (row) {
+		return "<tr>"
+			+ "<td>" + esc(row.employee) + "</td>"
+			+ "<td>" + esc(row.employee_name) + "</td>"
+			+ "<td><span class='saudi-chip " + obChipClass(row.state) + "'>" + esc(obStatusLabel(row.status)) + "</span></td>"
+			+ "<td>" + esc(String(row.clearance_percentage || 0)) + "%</td>"
+			+ "<td><button class='saudi-btn saudi-btn--tiny' type='button' data-action='open-offboarding-case'"
+			+ " data-name='" + esc(row.name) + "'>" + esc(t("admin_offboarding_open")) + "</button></td>"
+			+ "</tr>";
+	}).join("");
+}
+
+function startOffboarding() {
+	var empSelect = document.getElementById("offboarding-employee");
+	var reasonSelect = document.getElementById("offboarding-reason");
+	var salarySelect = document.getElementById("offboarding-salary-type");
+	var start = document.getElementById("offboarding-notice-start");
+	if (!empSelect || !empSelect.value) { showToast(t("admin_no_employees"), "error"); return; }
+
+	var employee = empSelect.value;
+	callAdmin("create_termination_notice", {
+		employee: employee,
+		termination_reason: reasonSelect ? reasonSelect.value : "",
+		salary_payment_type: salarySelect ? salarySelect.value : "",
+		notice_start_date: start ? start.value : ""
+	}).then(function (tn) {
+		return callAdmin("create_exit_clearance", { employee: employee, termination_notice: tn.name });
+	}).then(function (clearance) {
+		showToast(t("admin_offboarding_started"), "success");
+		return loadOffboardingCases().then(function () { return openOffboardingCase(clearance.name); });
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function openOffboardingCase(name) {
+	if (!name) return Promise.resolve();
+	ADMIN_STATE.offboarding_case_name = name;
+	return callAdmin("get_offboarding_case", { name: name }).then(function (d) {
+		ADMIN_STATE.offboarding_case = d;
+		renderOffboardingCase(d);
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function applyOffboardingAction(doctype, name, action) {
+	if (!doctype || !name || !action) return;
+	callAdmin("apply_offboarding_action", { doctype: doctype, name: name, action: action }).then(function () {
+		showToast(t("admin_offboarding_updated"), "success");
+		loadOffboardingCases();
+		return openOffboardingCase(ADMIN_STATE.offboarding_case_name);
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function saveOffboardingChecklist() {
+	var name = ADMIN_STATE.offboarding_case_name;
+	if (!name) return;
+	var checklist = {};
+	OB_CHECKLIST.forEach(function (pair) {
+		var input = document.getElementById("ob-check-" + pair[0]);
+		if (input) checklist[pair[0]] = input.checked ? 1 : 0;
+	});
+	var notesInput = document.getElementById("ob-notes");
+	callAdmin("save_exit_clearance", {
+		name: name,
+		checklist: JSON.stringify(checklist),
+		notes: notesInput ? notesInput.value : ""
+	}).then(function () {
+		showToast(t("admin_offboarding_saved"), "success");
+		return loadOffboardingCases().then(function () { return openOffboardingCase(name); });
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function createOffboardingEosb() {
+	var name = ADMIN_STATE.offboarding_case_name;
+	if (!name) return;
+	var preview = (ADMIN_STATE.offboarding_case || {}).eosb_preview || {};
+	var basic = preview.employee ? preview.employee.basic_salary : 0;
+	callAdmin("create_eosb_from_case", { exit_clearance: name, last_basic_salary: basic }).then(function () {
+		showToast(t("admin_offboarding_saved"), "success");
+		loadOffboardingCases();
+		return openOffboardingCase(name);
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function submitOffboardingEosb(eosbName) {
+	if (!eosbName) return;
+	callAdmin("submit_eosb", { name: eosbName }).then(function () {
+		showToast(t("admin_offboarding_saved"), "success");
+		loadOffboardingCases();
+		return openOffboardingCase(ADMIN_STATE.offboarding_case_name);
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function createOffboardingInterview() {
+	var name = ADMIN_STATE.offboarding_case_name;
+	if (!name) return;
+	callAdmin("create_exit_interview", { exit_clearance: name }).then(function () {
+		showToast(t("admin_offboarding_saved"), "success");
+		loadOffboardingCases();
+		return openOffboardingCase(name);
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function createOffboardingLeave() {
+	var name = ADMIN_STATE.offboarding_case_name;
+	if (!name) return;
+	callAdmin("create_leave_disbursement", { exit_clearance: name }).then(function () {
+		showToast(t("admin_offboarding_saved"), "success");
+		loadOffboardingCases();
+		return openOffboardingCase(name);
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function settleOffboardingSla() {
+	var settlement = (ADMIN_STATE.offboarding_case || {}).final_settlement;
+	if (!settlement || !settlement.name) return;
+	callAdmin("settle_final_settlement", { name: settlement.name }).then(function () {
+		showToast(t("admin_offboarding_saved"), "success");
+		return openOffboardingCase(ADMIN_STATE.offboarding_case_name);
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function renderOffboardingCase(d) {
+	var box = document.getElementById("offboarding-case");
+	if (!box) return;
+	if (!d) { box.innerHTML = ""; return; }
+
+	var preview = d.eosb_preview || {};
+	var emp = preview.employee || {};
+
+	var html = "<div class='saudi-clearance-header'>"
+		+ "<div><div style='font-size:18px;font-weight:900;color:var(--text-main);'>" + esc(d.employee_name) + "</div>"
+		+ "<div style='font-size:11px;color:var(--text-muted);'>" + esc(d.name) + "</div></div>"
+		+ "<div style='text-align:end;'>"
+		+ "<span class='saudi-chip " + obChipClass(d.state) + "'>" + esc(obStatusLabel(d.status)) + "</span>"
+		+ "<div style='font-size:12px;color:var(--text-muted);margin-top:4px;'>" + esc(String(d.clearance_percentage || 0)) + "%</div>"
+		+ "</div></div>";
+
+	html += "<div class='saudi-stats' style='grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:8px;margin-top:8px;'>"
+		+ obInfoTile(t("admin_field_number"), emp.employee_number || d.employee)
+		+ obInfoTile(t("admin_col_department"), emp.department || d.department || "—")
+		+ obInfoTile(t("admin_offboarding_last_working_day"), d.last_working_day || "—")
+		+ obInfoTile(t("admin_offboarding_company"), emp.company || d.company || "—")
+		+ "</div>";
+
+	html += obSectionTitle("admin_offboarding_notice");
+	var tn = d.termination_notice_doc;
+	if (tn) {
+		html += "<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;'>"
+			+ "<div style='font-size:13px;'>" + esc(tn.termination_reason || "—") + " • " + esc(tn.notice_start_date || "") + " → " + esc(tn.notice_end_date || "") + "</div>"
+			+ "<span class='saudi-chip " + obChipClass(tn.state) + "'>" + esc(tn.raw_state || tn.state) + "</span>"
+			+ "</div>";
+		var noticeActions = (tn.transitions || []).map(function (a) {
+			return "<button class='saudi-btn saudi-btn--tiny' type='button' data-action='apply-offboarding-action'"
+				+ " data-doctype='Termination Notice' data-name='" + esc(tn.name) + "'"
+				+ " data-action-name='" + esc(a.action) + "'>" + esc(actionLabel(a.action)) + "</button>";
+		}).join(" ");
+		if (noticeActions) {
+			html += "<div style='margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;'>" + noticeActions + "</div>";
+		}
+	} else {
+		html += "<div class='saudi-empty'>" + esc(t("admin_offboarding_no_notice")) + "</div>";
+	}
+
+	html += obSectionTitle("admin_offboarding_sla");
+	var sla = d.final_settlement;
+	if (sla) {
+		html += "<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;'>"
+			+ "<div style='font-size:13px;'>" + esc(sla.status || "—") + " • " + esc(t("admin_offboarding_due")) + ": " + esc(sla.settlement_due_date || "—") + "</div>"
+			+ (obSlaSettled(sla) ? "" : "<button class='saudi-btn saudi-btn--tiny' type='button' data-action='settle-offboarding-sla'>" + esc(t("admin_offboarding_settle")) + "</button>")
+			+ "</div>";
+	} else {
+		html += "<div class='saudi-empty'>" + esc(t("admin_offboarding_not_linked")) + "</div>";
+	}
+
+	html += obSectionTitle("admin_offboarding_settlement");
+	var eosb = d.end_of_service_benefit_doc;
+	var netValue = eosb && eosb.net_eosb != null ? eosb.net_eosb : (preview.net_settlement || 0);
+	html += "<div class='saudi-net-banner'><div>"
+		+ "<div style='font-size:12px;opacity:0.9;font-weight:700;'>" + esc(t("admin_offboarding_net_eosb")) + "</div>"
+		+ "<div style='font-size:24px;font-weight:900;'>" + Number(netValue).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2}) + " <span style='font-size:14px;'>ر.س</span></div>"
+		+ "</div><div>" + obLinkedChip(!!eosb) + "</div></div>";
+	if (eosb) {
+		if (Number(eosb.docstatus) !== 1) {
+			html += "<div style='margin-top:8px;'><button class='saudi-btn saudi-btn--primary saudi-btn--tiny' type='button' data-action='submit-offboarding-eosb' data-name='" + esc(eosb.name) + "'>" + esc(t("admin_offboarding_submit_eosb")) + "</button></div>";
+		}
+	} else {
+		html += "<div style='margin-top:8px;'><button class='saudi-btn saudi-btn--primary saudi-btn--tiny' type='button' data-action='create-offboarding-eosb'>" + esc(t("admin_offboarding_create_eosb")) + "</button></div>";
+	}
+
+	html += obSectionTitle("admin_offboarding_checklist");
+	html += "<div style='display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:6px;'>";
+	OB_CHECKLIST.forEach(function (pair) {
+		var checked = d.checklist && d.checklist[pair[0]] ? " checked" : "";
+		html += "<label style='display:flex;align-items:center;gap:8px;font-size:13px;'>"
+			+ "<input type='checkbox' id='ob-check-" + pair[0] + "'" + checked + ">"
+			+ "<span>" + esc(t(pair[1])) + "</span></label>";
+	});
+	html += "</div>";
+	html += "<div style='margin-top:10px;display:flex;gap:8px;'>"
+		+ "<button class='saudi-btn saudi-btn--primary saudi-btn--tiny' type='button' data-action='save-offboarding-checklist'>" + esc(t("admin_offboarding_save_checklist")) + "</button>"
+		+ "<button class='saudi-btn saudi-btn--tiny' type='button' data-action='print-offboarding'>" + esc(t("admin_offboarding_print")) + "</button>"
+		+ "</div>";
+
+	html += obSectionTitle("admin_offboarding_interview");
+	var interview = d.exit_interview_doc;
+	if (interview) {
+		html += "<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;'>"
+			+ "<div style='font-size:13px;'>" + esc(interview.status || "—") + " • " + esc(interview.interview_date || "—") + "</div>"
+			+ obLinkedChip(true) + "</div>";
+	} else {
+		html += "<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;'>"
+			+ "<div>" + obLinkedChip(false) + "</div>"
+			+ "<button class='saudi-btn saudi-btn--tiny' type='button' data-action='create-offboarding-interview'>" + esc(t("admin_offboarding_create_interview")) + "</button>"
+			+ "</div>";
+	}
+
+	html += obSectionTitle("admin_offboarding_leave");
+	var leave = d.leave_disbursement_doc;
+	if (leave) {
+		html += "<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;'>"
+			+ "<div style='font-size:13px;'>" + esc(leave.status || "—") + " • " + esc(String(leave.leave_days_to_pay || 0)) + "</div>"
+			+ obLinkedChip(true) + "</div>";
+	} else {
+		html += "<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;'>"
+			+ "<div>" + obLinkedChip(false) + "</div>"
+			+ "<button class='saudi-btn saudi-btn--tiny' type='button' data-action='create-offboarding-leave'>" + esc(t("admin_offboarding_create_leave")) + "</button>"
+			+ "</div>";
+	}
+
+	html += "<textarea id='ob-notes' class='saudi-input' rows='2' style='margin-top:10px;' placeholder='"
+		+ esc(t("admin_offboarding_notes_placeholder")) + "'>" + esc(d.notes || "") + "</textarea>";
+
+	box.innerHTML = html;
+}
+
+function printClearance() {
+	window.print();
+}
+
+/* ═══ Documents Panel ═════════════════════════════════════════════════════ */
+function loadDocumentsPanel() {
+	var empSelect = document.getElementById("doc-modal-employee");
+	if (empSelect && !empSelect.children.length) {
+		callAdmin("list_employees", { limit: 200 }).then(function (r) {
+			var emps = r.rows || [];
+			empSelect.innerHTML = emps.map(function (e) {
+				return "<option value='" + esc(e.name) + "'>" + esc(e.employee_number + " - " + e.full_name) + "</option>";
+			}).join("");
+		});
+	}
+
+	fetchDocumentsData();
+
+	var searchInput = document.getElementById("doc-employee-search");
+	var typeFilter = document.getElementById("doc-type-filter");
+	var statusFilter = document.getElementById("doc-status-filter");
+
+	if (searchInput && !searchInput._bound) {
+		searchInput._bound = true;
+		searchInput.addEventListener("input", function() {
+			clearTimeout(ADMIN_STATE.docSearchTimer);
+			ADMIN_STATE.docSearchTimer = setTimeout(fetchDocumentsData, 280);
+		});
+		if (typeFilter) typeFilter.addEventListener("change", fetchDocumentsData);
+		if (statusFilter) statusFilter.addEventListener("change", fetchDocumentsData);
+	}
+}
+
+function fetchDocumentsData() {
+	var searchInput = document.getElementById("doc-employee-search");
+	var typeFilter = document.getElementById("doc-type-filter");
+	var statusFilter = document.getElementById("doc-status-filter");
+
+	callAdmin("get_documents_and_letters", {
+		employee: searchInput ? searchInput.value : "",
+		document_type: typeFilter ? typeFilter.value : "",
+		status: statusFilter ? statusFilter.value : ""
+	}).then(function (d) {
+		var stats = d.stats || {};
+		put("doc-stat-pending", stats.pending);
+		put("doc-stat-progress", stats.in_progress);
+		put("doc-stat-issued", stats.issued_month);
+		put("doc-stat-rejected", stats.rejected);
+		renderDocumentsTable(d.rows || []);
+	}).catch(function (err) {
+		onApiError(err, t("admin_action_failed"));
+	});
+}
+
+function renderDocumentsTable(rows) {
+	var tbody = document.getElementById("documents-requests-rows");
+	if (!tbody) return;
+	if (!rows || !rows.length) {
+		tbody.innerHTML = emptyRow(7, t("admin_no_requests"));
+		return;
+	}
+
+	tbody.innerHTML = rows.map(function (r) {
+		var docLabel = requestKind(r.document_type) || r.document_type;
+		var actionBtn = r.state === "approved"
+			? "<a class='saudi-btn saudi-btn--tiny' href='" + esc(r.desk_url) + "' target='_blank' rel='noopener'>تحميل PDF</a>"
+			: "<a class='saudi-btn saudi-btn--ghost saudi-btn--tiny' href='" + esc(r.desk_url) + "' target='_blank' rel='noopener'>عرض</a>";
+
+		return "<tr>"
+			+ "<td><span class='saudi-chip saudi-chip--muted'>" + esc(r.name) + "</span></td>"
+			+ "<td><strong>" + esc(r.employee_name) + "</strong></td>"
+			+ "<td>" + esc(docLabel) + "</td>"
+			+ "<td>" + esc(r.addressed_to || "—") + "</td>"
+			+ "<td>" + esc(r.creation) + "</td>"
+			+ "<td>" + stateChip(r.state) + "</td>"
+			+ "<td style='text-align:center;'>" + actionBtn + "</td>"
+			+ "</tr>";
+	}).join("");
+}
+
+function openDocRequestModal() {
+	var modal = document.getElementById("doc-request-modal");
+	if (modal) modal.style.display = "flex";
+}
+
+function closeDocRequestModal() {
+	var modal = document.getElementById("doc-request-modal");
+	if (modal) modal.style.display = "none";
+}
+
+function saveDocRequest() {
+	var empSelect = document.getElementById("doc-modal-employee");
+	var typeSelect = document.getElementById("doc-modal-type");
+	var addressedInput = document.getElementById("doc-modal-addressed");
+
+	if (!empSelect || !empSelect.value) {
+		showToast(t("admin_no_employees"), "error");
+		return;
+	}
+
+	callAdmin("issue_hr_document", {
+		employee: empSelect.value,
+		document_type: typeSelect.value,
+		addressed_to: addressedInput ? addressedInput.value : ""
+	}).then(function () {
+		showToast(t("admin_action_done"), "success");
+		closeDocRequestModal();
+		fetchDocumentsData();
+	}).catch(function (err) {
+		onApiError(err, t("admin_action_failed"));
+	});
+}
+
+function triggerIssueDocument(docType) {
+	var searchInput = document.getElementById("doc-employee-search");
+	var empSelect = document.getElementById("doc-modal-employee");
+	var emp = (empSelect && empSelect.value) || (searchInput && searchInput.value);
+
+	if (!emp) {
+		openDocRequestModal();
+		var typeSelect = document.getElementById("doc-modal-type");
+		if (typeSelect && docType) typeSelect.value = docType;
+		return;
+	}
+
+	callAdmin("issue_hr_document", {
+		employee: emp,
+		document_type: docType
+	}).then(function () {
+		showToast(t("admin_action_done"), "success");
+		fetchDocumentsData();
+	}).catch(function (err) {
+		onApiError(err, t("admin_action_failed"));
+	});
+}
 
 /* ═══ Per-panel loaders ═════════════════════════════════════════════════════ */
 SAUDI_PANEL_LOADERS["dashboard"] = function () { loadDashboard(); };
 SAUDI_PANEL_LOADERS["employees"] = function () { loadEmployees(); };
 SAUDI_PANEL_LOADERS["approvals"] = function () { loadLeave(); };
 SAUDI_PANEL_LOADERS["report"] = function () { loadDashboard(); };
+SAUDI_PANEL_LOADERS["attendance"] = function () {
+	attendanceBind();
+	loadAttendanceEmployees().then(loadAttendance);
+};
+SAUDI_PANEL_LOADERS["clearance"] = function () { loadOffboardingPanel(); };
+SAUDI_PANEL_LOADERS["documents"] = function () { loadDocumentsPanel(); };
 
 /* ═══ Utilities ════════════════════════════════════════════════════════════ */
 function esc(value) {

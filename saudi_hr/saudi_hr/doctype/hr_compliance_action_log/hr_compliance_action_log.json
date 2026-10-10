@@ -73,7 +73,7 @@
    "options": "Open / مفتوح\nIn Progress / قيد التنفيذ\nBlocked / متعثر\nCompleted / مكتمل\nCancelled / ملغى"
   },
   {
-    "description": "Plan the action owner, date, priority, and deadline before execution starts.",
+   "description": "Plan the action owner, date, priority, and deadline before execution starts.",
    "fieldname": "action_section",
    "fieldtype": "Section Break",
    "label": "Action Planning / تخطيط الإجراء"
@@ -108,7 +108,7 @@
    "label": "Due Date / تاريخ الاستحقاق"
   },
   {
-    "description": "Link this action to the source record or employee that triggered the compliance work.",
+   "description": "Link this action to the source record or employee that triggered the compliance work.",
    "fieldname": "reference_section",
    "fieldtype": "Section Break",
    "label": "Reference / المرجع"
@@ -131,7 +131,7 @@
    "options": "Employee"
   },
   {
-    "description": "Document the corrective action, supporting evidence, and the final result.",
+   "description": "Document the corrective action, supporting evidence, and the final result.",
    "fieldname": "execution_section",
    "fieldtype": "Section Break",
    "label": "Execution / التنفيذ"
@@ -188,8 +188,13 @@
    "email": 1,
    "print": 1,
    "read": 1,
-    "report": 1,
+   "report": 1,
    "role": "HR User",
+   "write": 1
+  },
+  {
+   "role": "General Manager",
+   "read": 1,
    "write": 1
   }
  ],

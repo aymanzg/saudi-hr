@@ -6,7 +6,6 @@ Mobile attendance, employee insights, and self-service leave APIs.
 import base64
 import calendar
 import json
-from pathlib import Path
 
 import frappe
 from frappe import _
@@ -23,6 +22,7 @@ from frappe.utils import (
 	nowdate,
 	time_diff_in_hours,
 )
+from frappe.model.workflow import apply_workflow, get_transitions, get_workflow_name
 from frappe.utils.file_manager import save_file
 
 from saudi_hr.saudi_hr.attendance_policy import (
@@ -46,6 +46,12 @@ from saudi_hr.saudi_hr.voice_verification import (
 	get_voice_runtime_status,
 	issue_voice_challenge,
 	verify_checkin_voice,
+)
+from saudi_hr.saudi_hr.workflow_catalogue import (
+	SUBMIT_ACTIONS,
+	role_label,
+	state_bucket,
+	workflow_name,
 )
 
 
@@ -139,38 +145,38 @@ MOBILE_ATTENDANCE_API_ENDPOINTS = (
 WORKFLOW_AUDIT_TARGETS = (
 	{
 		"key": "annual_leave",
-		"workflow_name": "Annual Leave Approval Workflow",
-		"fixture": "workflow/annual_leave_approval_workflow/annual_leave_approval_workflow.json",
+		"workflow_name": workflow_name("Saudi Annual Leave"),
+		"document_type": "Saudi Annual Leave",
 	},
 	{
 		"key": "sick_leave",
-		"workflow_name": "Sick Leave Approval Workflow",
-		"fixture": "workflow/sick_leave_approval_workflow/sick_leave_approval_workflow.json",
+		"workflow_name": workflow_name("Saudi Sick Leave"),
+		"document_type": "Saudi Sick Leave",
 	},
 	{
 		"key": "overtime",
-		"workflow_name": "Overtime Approval Workflow",
-		"fixture": "workflow/overtime_approval_workflow/overtime_approval_workflow.json",
+		"workflow_name": workflow_name("Overtime Request"),
+		"document_type": "Overtime Request",
 	},
 	{
 		"key": "salary_adjustment",
-		"workflow_name": "Salary Adjustment Workflow",
-		"fixture": "workflow/salary_adjustment_workflow/salary_adjustment_workflow.json",
+		"workflow_name": workflow_name("Salary Adjustment"),
+		"document_type": "Salary Adjustment",
 	},
 	{
 		"key": "termination",
-		"workflow_name": "Termination Approval Workflow",
-		"fixture": "workflow/termination_approval_workflow/termination_approval_workflow.json",
+		"workflow_name": workflow_name("Termination Notice"),
+		"document_type": "Termination Notice",
 	},
 	{
 		"key": "mobile_leave_request",
-		"workflow_name": "Mobile Leave Request Approval Workflow",
-		"fixture": "workflow/mobile_leave_approval_workflow/mobile_leave_approval_workflow.json",
+		"workflow_name": workflow_name("Mobile Leave Request"),
+		"document_type": "Mobile Leave Request",
 	},
 	{
 		"key": "hr_service_request",
-		"workflow_name": "HR Service Request Approval Workflow",
-		"fixture": "workflow/hr_service_request_approval_workflow/hr_service_request_approval_workflow.json",
+		"workflow_name": workflow_name("HR Service Request"),
+		"document_type": "HR Service Request",
 	},
 )
 
@@ -344,10 +350,6 @@ def _build_mobile_attendance_api_reference(base_url=None):
 	return reference
 
 
-def _workflow_fixture_path(relative_path):
-	return Path(__file__).resolve().parent / relative_path
-
-
 def _load_workflow_snapshot(config):
 	workflow_name = config["workflow_name"]
 	if frappe.db.exists("Workflow", workflow_name):
@@ -360,10 +362,9 @@ def _load_workflow_snapshot(config):
 			"source": "database",
 		}
 
-	with _workflow_fixture_path(config["fixture"]).open(encoding="utf-8") as handle:
-		payload = json.load(handle)
-	payload["source"] = "fixture"
-	return payload
+	from saudi_hr.saudi_hr.workflow_catalogue import build_workflow
+
+	return build_workflow(config["document_type"]) | {"source": "catalogue"}
 
 
 def _is_negative_workflow_transition(transition):
@@ -408,6 +409,7 @@ def _build_workflow_route(snapshot):
 				"editable_by": state_meta.get("allow_edit"),
 				"action": selected_transition.get("action") if selected_transition else None,
 				"allowed_role": selected_transition.get("allowed") if selected_transition else None,
+				"allowed_role_label": role_label(selected_transition.get("allowed")) if selected_transition else None,
 				"next_state": selected_transition.get("next_state") if selected_transition else None,
 			}
 		)
@@ -425,6 +427,7 @@ def _build_workflow_route_audit_entry(config):
 			"state": transition.get("state"),
 			"action": transition.get("action"),
 			"allowed_role": transition.get("allowed"),
+			"allowed_role_label": role_label(transition.get("allowed")),
 			"next_state": transition.get("next_state"),
 		}
 		for transition in snapshot.get("transitions") or []
@@ -1012,10 +1015,13 @@ def _build_mobile_leave_doc(employee, profile, request_type, attachments, payloa
 	if request_type == "punch_correction":
 		# A Time field is pre-filled with the current clock on a new document, so
 		# a request with no time would quietly become "check in at right now".
-		if not cstr(payload.get("corrected_time") or "").strip():
+		corrected_in_time = cstr(payload.get("corrected_time") or "").strip()
+		corrected_out_time = cstr(payload.get("corrected_out_time") or "").strip()
+		if not (corrected_in_time or corrected_out_time):
 			frappe.throw(
-				_("Please choose the corrected check-in time.<br>الرجاء تحديد وقت الحضور الصحيح."),
-				title=_("Corrected Time Required / وقت الحضور الصحيح مطلوب"),
+				_("Please choose the corrected check-in or check-out time.<br>"
+				  "الرجاء تحديد وقت الحضور أو الخروج الصحيح."),
+				title=_("Corrected Time Required / الوقت الصحيح مطلوب"),
 			)
 
 		return frappe.get_doc(
@@ -1023,7 +1029,8 @@ def _build_mobile_leave_doc(employee, profile, request_type, attachments, payloa
 				"doctype": "Saudi Punch Correction",
 				**base_fields,
 				"attendance_date": payload["start_date"],
-				"corrected_in_time": payload.get("corrected_time"),
+				"corrected_in_time": corrected_in_time,
+				"corrected_out_time": corrected_out_time,
 				"correction_reason": payload.get("reason") or "",
 			}
 		)
@@ -1683,6 +1690,7 @@ def submit_mobile_leave_request(
 	actual_delivery_date=None,
 	half_day=0,
 	corrected_time=None,
+	corrected_out_time=None,
 	attachments_json=None,
 ):
 	employee, profile = _require_employee_context()
@@ -1705,6 +1713,7 @@ def submit_mobile_leave_request(
 			"actual_delivery_date": actual_delivery_date,
 			"half_day": half_day,
 			"corrected_time": corrected_time,
+			"corrected_out_time": corrected_out_time,
 		},
 	)
 
@@ -1736,6 +1745,14 @@ HR_SERVICE_REQUEST_TYPES = {
 	"salary_certificate": "Salary Certificate / شهادة تعريف بالراتب",
 	"experience_certificate": "Experience Certificate / شهادة خبرة",
 	"employee_loan": "Employee Loan / قرض موظف",
+	"job_confirmation": "Job Confirmation / خطاب تثبيت",
+	"contract_copy": "Contract Copy / نسخة عقد عمل",
+	"payslip": "Payslip / كشف راتب",
+	"salary_benefits_statement": "Salary & Benefits Statement / بيان الراتب والمزايا",
+	"addressed_letter": "Addressed Letter / خطاب موجه لجهة",
+	"salary_transfer_letter": "Salary Transfer Letter / خطاب تحويل راتب",
+	"clearance": "Financial Clearance / المخالصة المالية",
+	"end_of_service_cert": "End of Service Certificate / شهادة نهاية خدمة",
 }
 
 
@@ -1821,10 +1838,10 @@ def get_hr_service_requests(limit=20, request_type=None, status=None):
 
 
 def _workflow_state_to_status_code(workflow_state):
-	if workflow_state == "Approved":
-		return "approved"
-	if workflow_state == "Rejected":
-		return "rejected"
+	"""Three-value status for the mobile badges: drafts count as pending."""
+	bucket = state_bucket(workflow_state)
+	if bucket in ("approved", "rejected"):
+		return bucket
 	return "pending"
 
 
@@ -1845,6 +1862,13 @@ def _leave_status_code(status, docstatus=None):
 	return "pending"
 
 
+def _can_submit_draft(doctype, workflow_state):
+	"""A workflow Draft the applicant may send off from the mobile list."""
+	if not workflow_state or workflow_state != "Draft":
+		return False
+	return bool(get_workflow_name(doctype))
+
+
 @frappe.whitelist()
 def get_my_requests(limit=30, status=None):
 	employee, _profile = _require_employee_context()
@@ -1862,10 +1886,12 @@ def get_my_requests(limit=30, status=None):
 		st_code = "approved" if row.docstatus == 1 else "pending"
 		rows.append({
 			"name": row.name,
+			"doctype": "Mobile Leave Request",
 			"doctype_label": "Mobile Leave / إجازة من الجوال",
 			"request_type": row.request_type,
 			"request_type_label": MOBILE_LEAVE_REQUEST_LABELS.get(row.request_type, row.request_type),
 			"workflow_state": row.workflow_state,
+			"can_submit": _can_submit_draft("Mobile Leave Request", row.workflow_state),
 			"status_code": st_code,
 			"creation": str(row.creation),
 			"description": row.description,
@@ -1884,10 +1910,12 @@ def get_my_requests(limit=30, status=None):
 	for row in hsr_rows:
 		rows.append({
 			"name": row.name,
+			"doctype": "HR Service Request",
 			"doctype_label": "Service Request / طلب خدمة",
 			"request_type": row.request_type,
 			"request_type_label": HR_SERVICE_REQUEST_TYPES.get(row.request_type, row.request_type),
 			"workflow_state": row.workflow_state,
+			"can_submit": _can_submit_draft("HR Service Request", row.workflow_state),
 			"status_code": _workflow_state_to_status_code(row.workflow_state),
 			"creation": str(row.creation),
 			"description": row.description,
@@ -1908,6 +1936,8 @@ def get_my_requests(limit=30, status=None):
 			fields.append(subtype_field)
 		if status_field:
 			fields.append(status_field)
+		if frappe.db.has_column(doctype, "workflow_state"):
+			fields.append("workflow_state")
 
 		for row in frappe.get_all(doctype, filters={"employee": employee}, fields=fields, order_by="creation desc", limit=limit):
 			subtype = getattr(row, subtype_field, None) if subtype_field else None
@@ -1918,10 +1948,12 @@ def get_my_requests(limit=30, status=None):
 			)
 			rows.append({
 				"name": row.name,
+				"doctype": doctype,
 				"doctype_label": category,
 				"request_type": subtype or doctype,
 				"request_type_label": subtype or category,
-				"workflow_state": getattr(row, status_field, None) if status_field else None,
+				"workflow_state": getattr(row, "workflow_state", None) or (getattr(row, status_field, None) if status_field else None),
+				"can_submit": _can_submit_draft(doctype, getattr(row, "workflow_state", None)),
 				"status_code": st_code,
 				"creation": str(row.creation),
 				"description": None,
@@ -1939,10 +1971,12 @@ def get_my_requests(limit=30, status=None):
 	):
 		rows.append({
 			"name": row.name,
+			"doctype": "Saudi Emergency Leave",
 			"doctype_label": "Emergency Leave / إجازة طارئة",
 			"request_type": "emergency_leave",
 			"request_type_label": "Emergency Leave / إجازة طارئة",
 			"workflow_state": row.workflow_state,
+			"can_submit": _can_submit_draft("Saudi Emergency Leave", row.workflow_state),
 			"status_code": _workflow_state_to_status_code(row.workflow_state) if row.workflow_state else _leave_status_code(None, row.docstatus),
 			"creation": str(row.creation),
 			"description": row.reason,
@@ -1960,10 +1994,12 @@ def get_my_requests(limit=30, status=None):
 	):
 		rows.append({
 			"name": row.name,
+			"doctype": "Saudi Punch Correction",
 			"doctype_label": "Punch Correction / تصحيح البصمة",
 			"request_type": "punch_correction",
 			"request_type_label": "Punch Correction / تصحيح البصمة",
 			"workflow_state": row.workflow_state,
+			"can_submit": _can_submit_draft("Saudi Punch Correction", row.workflow_state),
 			"status_code": _workflow_state_to_status_code(row.workflow_state) if row.workflow_state else _leave_status_code(None, row.docstatus),
 			"creation": str(row.creation),
 			"description": row.correction_reason,
@@ -1978,6 +2014,44 @@ def get_my_requests(limit=30, status=None):
 		rows = [row for row in rows if row["status_code"] == status]
 
 	return rows[:limit]
+
+
+@frappe.whitelist(methods=["POST"])
+def apply_my_workflow_action(doctype, name, action):
+	"""An employee sending their own Draft request off through the chain.
+
+	Unlike the admin``apply_leave_action``, this endpoint runs from the mobile
+	list for the request owner and only ever advances a Draft or a resubmission
+	of a rejected request — approving is the approvers' job.
+	"""
+	employee, _profile = _require_employee_context()
+	action = cstr(action or "").strip()
+	if action not in SUBMIT_ACTIONS:
+		frappe.throw(_("إجراء غير مسموح من هذا الجهاز."), frappe.PermissionError)
+
+	doc = frappe.get_doc(cstr(doctype), cstr(name))
+	if cstr(doc.get("employee") or "") != employee:
+		frappe.throw(_("لا يمكنك إرسال طلب ليس خاصاً بك."), frappe.PermissionError)
+
+	permitted = get_transitions(doc, raise_exception=False)
+	match = next((t for t in permitted if t.get("action") == action), None)
+	if not match:
+		frappe.throw(
+			_("لا يمكنك إرسال هذا الطلب حالياً."),
+			frappe.PermissionError,
+		)
+
+	apply_workflow(doc, action)
+	frappe.db.commit()
+
+	return {
+		"doctype": doc.doctype,
+		"name": doc.name,
+		"action": action,
+		"workflow_state": doc.get("workflow_state"),
+		"status_code": _workflow_state_to_status_code(doc.get("workflow_state")),
+		"message": _("تم إرسال الطلب بنجاح وهو الآن بانتظار المراجعة."),
+	}
 
 
 @frappe.whitelist()

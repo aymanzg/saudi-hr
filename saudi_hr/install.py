@@ -3,9 +3,6 @@ install.py — تُنفَّذ عند تثبيت التطبيق لأوّل مرة
 تُنشئ: أنواع الإجازات السعودية، قواعد EOSB، إعدادات GOSI الافتراضية.
 """
 
-import json
-from pathlib import Path
-
 import frappe
 
 
@@ -20,6 +17,7 @@ def _get_existing_employee_approver_fields():
 def after_install():
 	create_workflow_states()
 	sync_workflow_configs()
+	backfill_workflow_states()
 	sync_compliance_controls()
 	sync_legal_rule_catalog()
 	sync_enterprise_defaults()
@@ -38,6 +36,7 @@ def after_migrate():
 	"""Called after every bench migrate — ensures workflow states always exist."""
 	create_workflow_states()
 	sync_workflow_configs()
+	backfill_workflow_states()
 	sync_compliance_controls()
 	sync_legal_rule_catalog()
 	sync_enterprise_defaults()
@@ -294,52 +293,32 @@ def create_workflow_states():
 
 
 def sync_workflow_configs():
-	workflow_dir = Path(frappe.get_app_path("saudi_hr", "saudi_hr", "workflow"))
-	if not workflow_dir.exists():
-		return
+	"""Reconcile the database with ``workflow_catalogue``.
 
-	for path in sorted(workflow_dir.glob("*/*.json")):
-		with path.open(encoding="utf-8") as workflow_file:
-			workflow_data = json.load(workflow_file)
+	Every migrate deletes stale workflow definitions for Saudi HR doctypes and
+	recreates them from the catalogue, so the app's workflows are always exactly
+	what the catalogue says.  Legacy per-doctype JSON fixtures no longer apply.
+	"""
+	from saudi_hr.saudi_hr.workflow_catalogue import (
+		ensure_workflow_actions,
+		ensure_workflow_roles,
+		ensure_workflow_states,
+		reconcile_workflows,
+		validate_workflow_catalogue,
+	)
 
-		if workflow_data.get("doctype") != "Workflow":
-			continue
-
-		for constant_field in ("creation", "modified", "modified_by", "owner", "idx"):
-			workflow_data.pop(constant_field, None)
-
-		workflow_name = workflow_data.get("name") or workflow_data.get("workflow_name")
-		if not workflow_name:
-			continue
-
-		workflow_data["name"] = workflow_name
-		workflow_data["workflow_name"] = workflow_name
-		workflow_data.setdefault("module", "Saudi HR")
-		ensure_workflow_actions(workflow_data)
-
-		try:
-			if frappe.db.exists("Workflow", workflow_name):
-				workflow = frappe.get_doc("Workflow", workflow_name)
-				workflow.update(workflow_data)
-				workflow.save(ignore_permissions=True)
-			else:
-				frappe.get_doc(workflow_data).insert(ignore_permissions=True)
-		except Exception:
-			frappe.log_error(frappe.get_traceback(), f"Saudi HR Workflow Sync Failed: {workflow_name}")
+	validate_workflow_catalogue()
+	ensure_workflow_roles()
+	ensure_workflow_states()
+	ensure_workflow_actions()
+	reconcile_workflows()
 
 
-def ensure_workflow_actions(workflow_data):
-	for transition in workflow_data.get("transitions", []):
-		action = transition.get("action")
-		if not action or frappe.db.exists("Workflow Action Master", action):
-			continue
+def backfill_workflow_states():
+	"""Remap legacy state values onto the canonical approval chain."""
+	from saudi_hr.saudi_hr.workflow_catalogue import backfill_workflow_states as run_backfill
 
-		frappe.get_doc(
-			{
-				"doctype": "Workflow Action Master",
-				"workflow_action_name": action,
-			}
-		).insert(ignore_permissions=True)
+	run_backfill()
 
 
 # ─── Saudi Shift Management ───────────────────────────────────────────────────

@@ -156,17 +156,23 @@ var LABELS = {
 		emergency_quota_warning: "استنفدت رصيد الإجازة الطارئة لهذا العام.",
 		emergency_days_short: "عدد الأيام المطلوبة يتجاوز الرصيد المتاح من الإجازة الطارئة.",
 		current_checkin: "وقت الحضور المسجل",
-		no_checkin_found: "لا توجد بصمة حضور في هذا التاريخ، لا يمكن التصحيح.",
+		current_checkout: "وقت الخروج المسجل",
+		no_checkin_found: "لا توجد بصمة تسجيل دخول في هذا التاريخ — أدخل وقت الحضور لتسجيله.",
 		corrected_time_label: "وقت الحضور الصحيح",
+		corrected_out_time_label: "وقت الخروج الصحيح",
 		corrected_time_required: "الرجاء تحديد وقت الحضور الصحيح",
 		future_date_not_allowed: "لا يمكن التصحيح لتاريخ لم يحدث بعد",
+		punch_select_target: "اختر ما تريد تصحيحه",
+		punch_target_in: "تصحيح الدخول",
+		punch_target_out: "تصحيح الخروج",
+		new_req_punch_hint: "تصحيح وقت الدخول أو الخروج",
 		half_day: "نصف يوم",
 		attachments_label: "مرفقات الطلب",
 		choose_subtype: "اختر النوع...",
 		subtype_required: "الرجاء اختيار نوع الإجازة",
 		start_date_required: "الرجاء تحديد تاريخ بداية الإجازة",
 		day_unit: "يوم",
-		loading: "جاري التحميل...",
+		loading: "جارٍ التحميل...",
 		view_details: "عرض التفاصيل",
 		select_type: "اختر النوع",
 		home_title: "الرئيسية",
@@ -219,6 +225,7 @@ var LABELS = {
 		admin_status: "الحالة",
 		admin_request_no: "رقم الطلب",
 		admin_view_in_desk: "عرض في Desk",
+		admin_view: "عرض",
 		admin_action_done: "تم تنفيذ الإجراء بنجاح",
 		admin_action_failed: "تعذر تنفيذ الإجراء",
 		admin_restricted_row: "لا تملك صلاحية فتح هذا الطلب",
@@ -228,6 +235,7 @@ var LABELS = {
 		admin_employee_requests_truncated: "يعرض أحدث الطلبات فقط",
 		admin_attendance: "الحضور",
 		admin_attendance_overview: "ملخص الحضور",
+		admin_attendance_department_overview: "ملخص الحضور حسب القسم",
 		admin_attendance_today: "حضور اليوم",
 		admin_attendance_month: "هذا الشهر",
 		admin_attendance_recent: "أيام الحضور الأخيرة",
@@ -254,12 +262,44 @@ var LABELS = {
 		admin_attendance_time: "الوقت",
 		admin_attendance_window: "الفترة",
 		admin_attendance_today_punches: "تسجيلات اليوم",
+		admin_nav_attendance: "الحضور",
+		admin_attendance_period: "نوع التقرير",
+		admin_attendance_period_month: "تقرير شهري",
+		admin_attendance_period_range: "تقرير بنطاق تاريخ",
+		admin_attendance_scope: "نطاق التقرير",
+		admin_attendance_all_employees: "كل الموظفين",
+		admin_attendance_search_employee: "رقم الموظف أو الاسم",
+		admin_attendance_of_employee: "حضور {name}",
+		admin_attendance_from: "من تاريخ",
+		admin_attendance_to: "إلى تاريخ",
+		admin_unit_day: "يوم",
+		admin_unit_days: "أيام",
+		admin_unit_hour: "ساعة",
+		admin_unit_hours: "ساعات",
+		admin_unit_minute: "دقيقة",
+		admin_unit_minutes: "دقائق",
+		admin_col_total: "الإجمالي",
 		admin_attendance_no_punches: "لا توجد تسجيلات اليوم",
 		admin_attendance_no_departments: "لا توجد سجلات حضور في هذه الفترة",
 		admin_attendance_status_present: "حاضر",
 		admin_attendance_status_absent: "غائب",
 		admin_attendance_status_half_day: "نصف يوم",
 		admin_attendance_status_on_leave: "في إجازة",
+		admin_attendance_status_missing: "لا يوجد سجل",
+		admin_attendance_day_note: "الملاحظة",
+		admin_attendance_actions: "إجراء",
+		admin_attendance_correct_title: "تصحيح حضور",
+		admin_attendance_correct_new_checkin: "وقت الدخول الجديد",
+		admin_attendance_correct_hint: "سيتم نقل تسجيل الدخول الفعلي لهذا اليوم إلى الوقت الجديد",
+		admin_attendance_correct_new_checkout: "وقت الخروج الجديد",
+		admin_attendance_correct_out_hint: "سيتم نقل تسجيل الخروج الفعلي لهذا اليوم إلى الوقت الجديد",
+		admin_attendance_corrected_hint: "تم تصحيح هذا اليوم بالفعل. يمكن تعديل الملاحظة فقط.",
+		admin_attendance_correct_note: "الملاحظة",
+		admin_attendance_correct_add_note: "إضافة ملاحظة",
+		admin_attendance_correct_edit: "تصحيح",
+		admin_attendance_add_missing: "إضافة الحضور",
+		admin_attendance_corrected: "مصحح",
+		admin_attendance_correct_saved: "تم حفظ التصحيح",
 		admin_field_joining_date: "تاريخ الالتحاق",
 		admin_field_leaving_date: "تاريخ المغادرة",
 		admin_field_personal_email: "البريد الشخصي",
@@ -288,6 +328,8 @@ var LABELS = {
 		admin_state_rejected: "مرفوضة",
 		admin_state_cancelled: "ملغاة",
 		admin_state_unknown: "غير محدد",
+		send_for_approval: "إرسال للموافقة",
+		request_sent: "تم إرسال الطلب",
 		admin_report_truncated: "الأرقام تشمل أحدث {types} فقط، وقد تكون هناك طلبات أقدم.",
 
 		admin_section_identity: "البيانات الأساسية",
@@ -321,6 +363,73 @@ var LABELS = {
 		admin_action_cancel: "إلغاء الطلب",
 		admin_employees_restricted: "لا تملك صلاحية عرض قائمة الموظفين",
 		admin_confirm_action: "هل تريد تنفيذ \"{action}\" على الطلب {name}؟",
+		admin_punch_original: "الأصلي",
+		admin_punch_reason: "مبرر التصحيح",
+		admin_nav_clearance: "إنهاء الخدمة",
+		admin_nav_documents: "مستندات وخطابات",
+		admin_badge_new: "جديد",
+		admin_clearance_title: "مخالصة مالية",
+		admin_documents_title: "مستندات وخطابات",
+		admin_doc_pending: "بانتظار الاعتماد",
+		admin_doc_progress: "قيد الإجراء",
+		admin_doc_issued: "صادرة هذا الشهر",
+		admin_doc_rejected: "مرفوضة",
+		admin_doc_new_request: "طلب جديد",
+		admin_doc_issue: "إصدار",
+		admin_doc_auto: "إصدار تلقائي",
+		admin_doc_approval: "يتطلب اعتماد",
+		admin_doc_termination: "عند انتهاء الخدمة",
+		admin_clearance_print: "طباعة",
+		admin_clearance_submit: "إرسال للاعتماد",
+		admin_clearance_net: "صافي مبلغ المخالصة",
+		admin_clearance_earnings: "المستحقات",
+		admin_clearance_deductions: "الخصومات",
+		admin_offboarding_title: "إنهاء الخدمة / إخلاء الطرف",
+		admin_offboarding_reason: "سبب انتهاء الخدمة",
+		admin_offboarding_salary_type: "نوع دفع الأجر",
+		admin_offboarding_notice_start: "تاريخ بدء الإشعار",
+		admin_offboarding_start: "ابدأ إخلاء الطرف",
+		admin_offboarding_cases: "حالات إخلاء الطرف",
+		admin_offboarding_status_label: "الحالة",
+		admin_offboarding_progress: "نسبة الإنجاز",
+		admin_offboarding_open: "فتح",
+		admin_offboarding_no_cases: "لا توجد حالات إخلاء طرف بعد",
+		admin_offboarding_status_draft: "مسودة",
+		admin_offboarding_status_progress: "قيد التنفيذ",
+		admin_offboarding_status_cleared: "مخلى طرفه",
+		admin_offboarding_status_hold: "موقوف",
+		admin_offboarding_notice: "إشعار الإنهاء",
+		admin_offboarding_no_notice: "لا يوجد إشعار إنهاء مرتبط",
+		admin_offboarding_sla: "تسوية نهاية الخدمة",
+		admin_offboarding_due: "تاريخ الاستحقاق",
+		admin_offboarding_settle: "إغلاق التسوية",
+		admin_offboarding_settlement: "المخالصة المالية",
+		admin_offboarding_net_eosb: "صافي المكافأة",
+		admin_offboarding_create_eosb: "إنشاء المخالصة",
+		admin_offboarding_submit_eosb: "اعتماد وصرف المكافأة",
+		admin_offboarding_checklist: "قائمة إخلاء الطرف",
+		admin_offboarding_check_access: "إيقاف الصلاحيات",
+		admin_offboarding_check_assets: "تسليم العهد",
+		admin_offboarding_check_attendance: "اعتماد الحضور النهائي",
+		admin_offboarding_check_payroll: "إغلاق الرواتب",
+		admin_offboarding_check_eosb: "اكتمال المكافأة",
+		admin_offboarding_check_leave: "اكتمال صرف الإجازة",
+		admin_offboarding_check_interview: "اكتمال مقابلة الخروج",
+		admin_offboarding_check_handover: "اكتمال التسليم",
+		admin_offboarding_save_checklist: "حفظ القائمة",
+		admin_offboarding_print: "طباعة",
+		admin_offboarding_interview: "مقابلة الخروج",
+		admin_offboarding_create_interview: "جدولة مقابلة الخروج",
+		admin_offboarding_leave: "صرف رصيد الإجازات",
+		admin_offboarding_create_leave: "صرف رصيد الإجازات",
+		admin_offboarding_last_working_day: "آخر يوم عمل",
+		admin_offboarding_company: "الشركة",
+		admin_offboarding_linked: "مرتبط",
+		admin_offboarding_not_linked: "غير مرتبط",
+		admin_offboarding_started: "تم بدء إخلاء الطرف",
+		admin_offboarding_saved: "تم الحفظ",
+		admin_offboarding_updated: "تم تحديث الحالة",
+		admin_offboarding_notes_placeholder: "ملاحظات إخلاء الطرف",
 	},
 	en: {
 		hero_greeting: "Hello, ",
@@ -458,10 +567,16 @@ var LABELS = {
 		emergency_quota_warning: "You have used all of this year's emergency leave.",
 		emergency_days_short: "The days requested are more than the emergency leave you have left.",
 		current_checkin: "Recorded check-in",
-		no_checkin_found: "There is no check-in punch on that date, so it cannot be corrected.",
+		current_checkout: "Recorded check-out",
+		no_checkin_found: "There is no check-in punch on that date — enter a time to register it.",
 		corrected_time_label: "Correct check-in time",
+		corrected_out_time_label: "Correct check-out time",
 		corrected_time_required: "Please choose the corrected check-in time",
 		future_date_not_allowed: "You cannot correct a day that has not happened yet",
+		punch_select_target: "Choose what to correct",
+		punch_target_in: "Correct check-in",
+		punch_target_out: "Correct check-out",
+		new_req_punch_hint: "Correct your check-in or check-out time",
 		half_day: "Half Day",
 		attachments_label: "Attachments",
 		choose_subtype: "Choose type...",
@@ -521,6 +636,7 @@ var LABELS = {
 		admin_status: "Status",
 		admin_request_no: "Request No",
 		admin_view_in_desk: "Open in Desk",
+		admin_view: "View",
 		admin_action_done: "Action completed",
 		admin_action_failed: "The action could not be completed",
 		admin_restricted_row: "You cannot open this request",
@@ -530,6 +646,7 @@ var LABELS = {
 		admin_employee_requests_truncated: "Showing the most recent requests only",
 		admin_attendance: "Attendance",
 		admin_attendance_overview: "Attendance Overview",
+		admin_attendance_department_overview: "Attendance by Department",
 		admin_attendance_today: "Today's Attendance",
 		admin_attendance_month: "This Month",
 		admin_attendance_recent: "Recent Attendance Days",
@@ -556,12 +673,44 @@ var LABELS = {
 		admin_attendance_time: "Time",
 		admin_attendance_window: "Period",
 		admin_attendance_today_punches: "Today's Punches",
+		admin_nav_attendance: "Attendance",
+		admin_attendance_period: "Report Type",
+		admin_attendance_period_month: "Monthly Report",
+		admin_attendance_period_range: "Date Range Report",
+		admin_attendance_scope: "Report Scope",
+		admin_attendance_all_employees: "All Employees",
+		admin_attendance_search_employee: "Employee number or name",
+		admin_attendance_of_employee: "Attendance — {name}",
+		admin_attendance_from: "From Date",
+		admin_attendance_to: "To Date",
+		admin_unit_day: "day",
+		admin_unit_days: "days",
+		admin_unit_hour: "hour",
+		admin_unit_hours: "hours",
+		admin_unit_minute: "minute",
+		admin_unit_minutes: "minutes",
+		admin_col_total: "Total",
 		admin_attendance_no_punches: "No punches today",
 		admin_attendance_no_departments: "No attendance records in this period",
 		admin_attendance_status_present: "Present",
 		admin_attendance_status_absent: "Absent",
 		admin_attendance_status_half_day: "Half Day",
 		admin_attendance_status_on_leave: "On Leave",
+		admin_attendance_status_missing: "No record",
+		admin_attendance_day_note: "Note",
+		admin_attendance_actions: "Action",
+		admin_attendance_correct_title: "Correct Attendance",
+		admin_attendance_correct_new_checkin: "New check-in time",
+		admin_attendance_correct_hint: "The real check-in punch for this day will be moved to the new time",
+		admin_attendance_correct_new_checkout: "New check-out time",
+		admin_attendance_correct_out_hint: "The real check-out punch for this day will be moved to the new time",
+		admin_attendance_corrected_hint: "This day has already been corrected. Only the note can be edited.",
+		admin_attendance_correct_note: "Note",
+		admin_attendance_correct_add_note: "Add note",
+		admin_attendance_correct_edit: "Correct",
+		admin_attendance_add_missing: "Add attendance",
+		admin_attendance_corrected: "Corrected",
+		admin_attendance_correct_saved: "Correction saved",
 		admin_field_joining_date: "Joining Date",
 		admin_field_leaving_date: "Leaving Date",
 		admin_field_personal_email: "Personal Email",
@@ -588,6 +737,8 @@ var LABELS = {
 		admin_state_rejected: "Rejected",
 		admin_state_cancelled: "Cancelled",
 		admin_state_unknown: "Unknown",
+		send_for_approval: "Send for approval",
+		request_sent: "Request sent",
 		admin_report_truncated: "Counts cover the newest {types} only; older requests exist.",
 
 		admin_section_identity: "Personal Details",
@@ -621,6 +772,73 @@ var LABELS = {
 		admin_action_cancel: "Cancel Request",
 		admin_employees_restricted: "You do not have permission to view the employee list",
 		admin_confirm_action: "Apply \"{action}\" to request {name}?",
+		admin_punch_original: "Original",
+		admin_punch_reason: "Correction reason",
+		admin_nav_clearance: "Offboarding",
+		admin_nav_documents: "Documents & Letters",
+		admin_badge_new: "NEW",
+		admin_clearance_title: "Financial Clearance",
+		admin_documents_title: "Documents & Letters",
+		admin_doc_pending: "Awaiting Approval",
+		admin_doc_progress: "In Progress",
+		admin_doc_issued: "Issued This Month",
+		admin_doc_rejected: "Rejected",
+		admin_doc_new_request: "New Request",
+		admin_doc_issue: "Issue",
+		admin_doc_auto: "Instant Auto-Issue",
+		admin_doc_approval: "Requires Approval",
+		admin_doc_termination: "Upon Service End",
+		admin_clearance_print: "Print",
+		admin_clearance_submit: "Submit for Approval",
+		admin_clearance_net: "Net Settlement Amount",
+		admin_clearance_earnings: "Earnings",
+		admin_clearance_deductions: "Deductions",
+		admin_offboarding_title: "Offboarding / Exit Clearance",
+		admin_offboarding_reason: "Termination reason",
+		admin_offboarding_salary_type: "Salary payment type",
+		admin_offboarding_notice_start: "Notice start date",
+		admin_offboarding_start: "Start exit clearance",
+		admin_offboarding_cases: "Exit clearance cases",
+		admin_offboarding_status_label: "Status",
+		admin_offboarding_progress: "Progress",
+		admin_offboarding_open: "Open",
+		admin_offboarding_no_cases: "No exit clearance cases yet",
+		admin_offboarding_status_draft: "Draft",
+		admin_offboarding_status_progress: "In progress",
+		admin_offboarding_status_cleared: "Cleared",
+		admin_offboarding_status_hold: "On hold",
+		admin_offboarding_notice: "Termination notice",
+		admin_offboarding_no_notice: "No termination notice linked",
+		admin_offboarding_sla: "Final settlement",
+		admin_offboarding_due: "Due date",
+		admin_offboarding_settle: "Settle",
+		admin_offboarding_settlement: "Financial settlement",
+		admin_offboarding_net_eosb: "Net end of service",
+		admin_offboarding_create_eosb: "Create settlement",
+		admin_offboarding_submit_eosb: "Submit settlement",
+		admin_offboarding_checklist: "Exit checklist",
+		admin_offboarding_check_access: "Access revoked",
+		admin_offboarding_check_assets: "Assets returned",
+		admin_offboarding_check_attendance: "Final attendance verified",
+		admin_offboarding_check_payroll: "Payroll closed",
+		admin_offboarding_check_eosb: "EOSB completed",
+		admin_offboarding_check_leave: "Leave disbursement completed",
+		admin_offboarding_check_interview: "Exit interview completed",
+		admin_offboarding_check_handover: "Handover completed",
+		admin_offboarding_save_checklist: "Save checklist",
+		admin_offboarding_print: "Print",
+		admin_offboarding_interview: "Exit interview",
+		admin_offboarding_create_interview: "Schedule exit interview",
+		admin_offboarding_leave: "Leave disbursement",
+		admin_offboarding_create_leave: "Pay leave balance",
+		admin_offboarding_last_working_day: "Last working day",
+		admin_offboarding_company: "Company",
+		admin_offboarding_linked: "Linked",
+		admin_offboarding_not_linked: "Not linked",
+		admin_offboarding_started: "Exit clearance started",
+		admin_offboarding_saved: "Saved",
+		admin_offboarding_updated: "Status updated",
+		admin_offboarding_notes_placeholder: "Exit clearance notes",
 	}
 };
 
@@ -638,9 +856,27 @@ function applyLang() {
 		if (!v) return;
 		if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
 			el.placeholder = v;
+		} else if (el.querySelector("*")) {
+			// keep embedded elements (e.g. <span id="hero-user-name"> in the
+			// home greeting) and only translate the leading text node
+			var nodes = el.childNodes;
+			for (var i = 0; i < nodes.length; i++) {
+				if (nodes[i].nodeType === 3 && nodes[i].nodeValue.trim()) {
+					nodes[i].nodeValue = v;
+					break;
+				}
+			}
 		} else {
 			el.textContent = v;
 		}
+	});
+
+	// a search box needs its own wording, not the label it sits under, and it
+	// must never fall back to the Arabic text baked into the markup
+	document.querySelectorAll("[data-i18n-placeholder]").forEach(function(el) {
+		var k = el.getAttribute("data-i18n-placeholder");
+		var v = LABELS[CURRENT_LANG] && LABELS[CURRENT_LANG][k];
+		if (v) el.placeholder = v;
 	});
 
 	var toggle = document.getElementById("lang-toggle");
@@ -722,6 +958,14 @@ function showToast(msg, type) {
 	setTimeout(function() { el.className = "saudi-toast"; }, 3000);
 }
 
+/* A failed admin call means the session is gone, so point at the login form
+   rather than leaving the page showing whatever loaded before. Pages without a
+   banner simply have nothing to show. */
+function showSessionBanner() {
+	var el = document.getElementById("session-banner");
+	if (el) el.style.display = "flex";
+}
+
 /* Pull a clean, unstyled message out of a frappe error response. */
 function serverErrorMessage(err, fallback) {
 	if (!err) return fallback;
@@ -753,5 +997,15 @@ function serverErrorMessage(err, fallback) {
 function logoutUser() {
 	if (!confirm(t("logout_confirm"))) return;
 	try { localStorage.removeItem(SAUDI_PANEL_STORE_KEY); } catch(e) {}
-	window.location.href = "/api/method/logout";
+	// /api/method/logout answers with a JSON body, so navigating to it leaves
+	// the user reading a response instead of the login form. The session ends
+	// over fetch and the browser is sent to /login afterwards; a failure goes
+	// there too, because a half-finished logout must not strand anyone on a
+	// response body. Without fetch, web_logout is a page rather than a body.
+	var toLogin = function () { window.location.href = "/login"; };
+	if (window.fetch) {
+		window.fetch("/api/method/logout", { method: "POST" }).then(toLogin, toLogin);
+	} else {
+		window.location.href = "/api/method/web_logout";
+	}
 }

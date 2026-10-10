@@ -79,7 +79,7 @@
    "options": "Open / مفتوح\nNotice Sent / تم إشعار الموظف\nEmployee Responded / تم الرد\nEscalated / تم التصعيد\nClosed / مغلق"
   },
   {
-    "description": "Record the absence period, its type, and any notice deadline sent to the employee.",
+   "description": "Record the absence period, its type, and any notice deadline sent to the employee.",
    "fieldname": "absence_section",
    "fieldtype": "Section Break",
    "label": "Absence Details / تفاصيل الغياب"
@@ -127,7 +127,7 @@
    "label": "Show Cause Deadline / مهلة طلب الإفادة"
   },
   {
-    "description": "Capture the employee response and any escalation or disciplinary linkage.",
+   "description": "Capture the employee response and any escalation or disciplinary linkage.",
    "fieldname": "details_section",
    "fieldtype": "Section Break",
    "label": "Case Handling / معالجة الحالة"
@@ -180,8 +180,13 @@
    "email": 1,
    "print": 1,
    "read": 1,
-    "report": 1,
+   "report": 1,
    "role": "HR User",
+   "write": 1
+  },
+  {
+   "role": "General Manager",
+   "read": 1,
    "write": 1
   }
  ],

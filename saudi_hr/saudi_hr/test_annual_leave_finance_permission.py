@@ -8,7 +8,7 @@ from saudi_hr.saudi_hr import permissions as permissions_module
 
 class TestAnnualLeaveFinancePermission(FrappeTestCase):
 	def test_accounts_manager_can_access_finance_stage_annual_leave(self):
-		doc = SimpleNamespace(employee="EMP-0001", workflow_state="Pending Finance Approval")
+		doc = SimpleNamespace(employee="EMP-0001", workflow_state="GM Approved")
 
 		with patch.object(permissions_module.frappe, "session", SimpleNamespace(user="finance@example.com")), patch.object(
 			permissions_module.frappe, "get_roles", return_value=["Accounts Manager"]
@@ -31,6 +31,6 @@ class TestAnnualLeaveFinancePermission(FrappeTestCase):
 		):
 			query = permissions_module.get_saudi_annual_leave_query(user="finance@example.com")
 
-		self.assertIn("Pending Finance Approval", query)
-		self.assertIn("Approved", query)
-		self.assertNotIn("Pending HR Approval", query)
+		self.assertIn("GM Approved", query)
+		self.assertIn("Completed", query)
+		self.assertNotIn("Pending HR Review", query)

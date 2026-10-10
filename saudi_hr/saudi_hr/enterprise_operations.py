@@ -16,6 +16,7 @@ from decimal import Decimal
 
 import frappe
 from frappe import _
+from saudi_hr.saudi_hr.workflow_catalogue import state_bucket
 from frappe.utils import cint, cstr, flt, getdate, now_datetime, nowdate
 
 from saudi_hr.saudi_hr.doctype.saudi_government_integration.saudi_government_integration import (
@@ -88,6 +89,14 @@ HR_SERVICE_REQUEST_LABELS = {
 	"salary_certificate": "شهادة تعريف بالراتب",
 	"experience_certificate": "شهادة خبرة",
 	"employee_loan": "قرض موظف",
+	"job_confirmation": "خطاب تثبيت",
+	"contract_copy": "نسخة عقد عمل",
+	"payslip": "كشف راتب",
+	"salary_benefits_statement": "بيان الراتب والمزايا",
+	"addressed_letter": "خطاب موجه لجهة",
+	"salary_transfer_letter": "خطاب تحويل راتب",
+	"clearance": "المخالصة المالية",
+	"end_of_service_cert": "شهادة نهاية خدمة",
 }
 
 
@@ -856,7 +865,7 @@ def get_self_service_portal():
 	team = frappe.get_all("Employee", filters={"reports_to": emp, "status": "Active"}, fields=["name", "employee_name", "designation", "department"], order_by="employee_name asc", limit_page_length=50)
 	team_ids = [row.name for row in team]
 	manager_pending = {
-		"annual_leave": _count("Saudi Annual Leave", {"employee": ["in", team_ids], "workflow_state": "Pending Manager Approval"}) if team_ids and frappe.db.has_column("Saudi Annual Leave", "workflow_state") else 0,
+		"annual_leave": _count("Saudi Annual Leave", {"employee": ["in", team_ids], "workflow_state": ["in", ["Pending Supervisor Review"]]}) if team_ids and frappe.db.has_column("Saudi Annual Leave", "workflow_state") else 0,
 		"sick_leave": _count("Saudi Sick Leave", {"employee": ["in", team_ids], "docstatus": 0}) if team_ids else 0,
 		"overtime": _count("Overtime Request", {"employee": ["in", team_ids], "approval_status": "Pending / معلق"}) if team_ids else 0,
 	}
@@ -890,7 +899,8 @@ def get_self_service_portal():
 	recent_requests = []
 	for row in leaves:
 		st = row.workflow_state or ( "معتمد" if row.docstatus == 1 else "قيد المراجعة" )
-		st_code = "approved" if row.docstatus == 1 or st in ("Approved", "معتمد") else ("rejected" if st in ("Rejected", "مرفوض") else "pending")
+		st_bucket = state_bucket(st)
+		st_code = "approved" if row.docstatus == 1 or st_bucket == "approved" else ("rejected" if st_bucket == "rejected" else "pending")
 		recent_requests.append({
 			"id": row.name,
 			"title": "إجازة سنوية",
@@ -952,7 +962,8 @@ def get_self_service_portal():
 		order_by="creation desc",
 		limit=5,
 	) if _doctype_exists("HR Service Request") else []:
-		st_code = "approved" if row.workflow_state == "Approved" else ("rejected" if row.workflow_state == "Rejected" else "pending")
+		st_bucket = state_bucket(row.workflow_state)
+		st_code = "approved" if st_bucket == "approved" else ("rejected" if st_bucket == "rejected" else "pending")
 		recent_requests.append({
 			"id": row.name,
 			"title": HR_SERVICE_REQUEST_LABELS.get(getattr(row, "request_type", ""), "طلب خدمة"),
@@ -960,6 +971,26 @@ def get_self_service_portal():
 			"status": "معتمد" if st_code == "approved" else ("مرفوض" if st_code == "rejected" else "قيد المراجعة"),
 			"status_code": st_code,
 			"icon": "📄",
+			"route": "#requests",
+			"created_at": cstr(row.creation),
+		})
+
+	for row in frappe.get_all(
+		"Saudi Punch Correction",
+		filters={"employee": emp},
+		fields=["name", "attendance_date", "correction_reason", "workflow_state", "docstatus", "creation"],
+		order_by="creation desc",
+		limit=5,
+	) if _doctype_exists("Saudi Punch Correction") else []:
+		st_bucket = state_bucket(row.workflow_state)
+		st_code = "approved" if st_bucket == "approved" else ("rejected" if st_bucket == "rejected" else "pending")
+		recent_requests.append({
+			"id": row.name,
+			"title": "تصحيح بصمة",
+			"dates": cstr(row.attendance_date or ""),
+			"status": "معتمد" if st_code == "approved" else ("مرفوض" if st_code == "rejected" else "قيد المراجعة"),
+			"status_code": st_code,
+			"icon": "🕐",
 			"route": "#requests",
 			"created_at": cstr(row.creation),
 		})

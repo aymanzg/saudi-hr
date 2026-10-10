@@ -5,6 +5,7 @@ offers is proven to survive the trip to the database, and to be refused for the
 same reason the server would refuse it.
 """
 
+import datetime
 from unittest.mock import patch
 
 import frappe
@@ -132,16 +133,45 @@ class TestMobileLeaveRequests(FrappeTestCase):
 
 		self.assertIn("time", str(error.exception).lower())
 
-	def test_a_punch_correction_carries_the_corrected_time(self):
+	def test_a_punch_correction_carries_the_corrected_times(self):
 		doc = self._punch_correction(
 			start_date=self.punched_day,
 			corrected_time="08:05",
+			corrected_out_time="17:45",
 			reason="the gate was slow",
 		)
 
 		self.assertEqual(doc.doctype, "Saudi Punch Correction")
 		self.assertEqual(doc.get("corrected_in_time"), "08:05")
+		self.assertEqual(doc.get("corrected_out_time"), "17:45")
 		self.assertEqual(doc.correction_reason, "the gate was slow")
+
+	def test_a_check_out_only_correction_is_allowed(self):
+		"""Correcting just the check-out is enough; the check-in can stay as is."""
+		doc = self._punch_correction(
+			start_date=self.punched_day,
+			corrected_out_time="18:10",
+			reason="forgot to punch out",
+		)
+
+		self.assertEqual(doc.doctype, "Saudi Punch Correction")
+		self.assertFalse(doc.get("corrected_in_time"))
+		self.assertEqual(doc.get("corrected_out_time"), "18:10")
+
+	def test_a_check_out_only_correction_survives_the_endpoint(self):
+		"""The phone only ever sends the punched correction, so the whitelisted
+		endpoint has to accept the check-out time too and store it."""
+		doc = self._submit(
+			"punch_correction",
+			start_date=self.punched_day,
+			corrected_out_time="18:10",
+			reason="forgot to punch out",
+		)
+
+		self.assertEqual(doc["doctype"], "Saudi Punch Correction")
+		stored = frappe.get_doc("Saudi Punch Correction", doc["name"])
+		self.assertFalse(stored.get("corrected_in_time"))
+		self.assertEqual(stored.get("corrected_out_time"), datetime.timedelta(hours=18, minutes=10))
 
 	def test_a_punch_correction_reaches_the_employee_queue(self):
 		"""A submitted correction has to show up where the employee looks for it."""
