@@ -449,3 +449,80 @@ def send_training_disclosure_due_alerts():
 		closed_statuses=["Accepted / مقبول", "Closed / مغلق"],
 		days_ahead=30,
 	)
+
+
+def sync_missing_daily_attendance(from_date=None, to_date=None, employee=None):
+	"""Repair Saudi Daily Attendance rows that employee punches never produced.
+
+	Mirrors the mobile check-out aggregation over historical punches: a day with both
+	an IN and an OUT gets a single submitted 'Present' row, and any day that already
+	has a submitted row only gets its orphaned check-ins linked. Days with only an IN
+	or only an OUT are left untouched (they cannot form a valid attendance row).
+	"""
+	from frappe.utils import get_datetime
+
+	from saudi_hr.saudi_hr.api import _build_daily_attendance, _get_location_for_branch
+	from saudi_hr.saudi_hr.attendance_policy import calculate_attendance_variance, resolve_mobile_attendance_policy
+
+	filters = {"attendance": ["is", "not set"]}
+	if employee:
+		filters["employee"] = employee
+	if from_date and to_date:
+		filters["time"] = ["between", [f"{getdate(from_date)} 00:00:00", f"{getdate(to_date)} 23:59:59"]]
+	elif from_date:
+		filters["time"] = [">=", f"{getdate(from_date)} 00:00:00"]
+	elif to_date:
+		filters["time"] = ["<=", f"{getdate(to_date)} 23:59:59"]
+
+	orphans = frappe.get_all(
+		"Saudi Employee Checkin",
+		filters=filters,
+		fields=["name", "employee", "log_type", "time"],
+		order_by="employee asc, time asc",
+	)
+
+	groups = {}
+	for row in orphans:
+		groups.setdefault((row["employee"], getdate(row["time"])), []).append(row)
+
+	created = 0
+	linked = 0
+	skipped = 0
+	for (emp, day), rows in groups.items():
+		checkin_names = [row["name"] for row in rows]
+		existing = frappe.db.get_value(
+			"Saudi Daily Attendance",
+			{"employee": emp, "attendance_date": day, "docstatus": 1},
+			"name",
+		)
+		if existing:
+			for name in checkin_names:
+				frappe.db.set_value("Saudi Employee Checkin", name, "attendance", existing)
+			linked += len(checkin_names)
+			continue
+
+		in_time = min((get_datetime(row["time"]) for row in rows if row["log_type"] == "IN"), default=None)
+		out_time = max((get_datetime(row["time"]) for row in rows if row["log_type"] == "OUT"), default=None)
+		if not in_time or not out_time or out_time <= in_time:
+			skipped += 1
+			continue
+
+		branch = frappe.db.get_value("Employee", emp, "branch")
+		location = _get_location_for_branch(branch)
+		policy = resolve_mobile_attendance_policy(emp, day, location)
+		attendance = _build_daily_attendance(
+			emp,
+			day,
+			in_time,
+			out_time,
+			location,
+			policy,
+			calculate_attendance_variance("IN", in_time, policy),
+			calculate_attendance_variance("OUT", out_time, policy),
+		)
+		for name in checkin_names:
+			frappe.db.set_value("Saudi Employee Checkin", name, "attendance", attendance.name)
+		created += 1
+
+	frappe.db.commit()
+	return {"created": created, "linked": linked, "skipped": skipped}

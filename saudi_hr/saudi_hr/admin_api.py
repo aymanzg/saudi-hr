@@ -71,9 +71,11 @@ from saudi_hr.saudi_hr.workflow_catalogue import role_label, state_bucket
 POST_ONLY_METHODS = frozenset(
 	{
 		"create_employee",
+		"update_employee",
 		"apply_leave_action",
 		"submit_leave_request",
 		"correct_attendance_day",
+		"remove_attendance_day",
 		"create_eosb_settlement",
 		"issue_hr_document",
 		"create_termination_notice",
@@ -98,8 +100,32 @@ ADMIN_PORTAL_ROLES = frozenset(
 		"Accounts Manager",
 		"Supervisor",
 		"General Manager",
+		"Attendance Officer",
 	}
 )
+
+# The panels the admin shell can show, in rail order.  A restricted role opens
+# only the subset it is granted; the first one it may see is its landing panel.
+PORTAL_PANELS = (
+	"dashboard",
+	"approvals",
+	"employees",
+	"attendance",
+	"report",
+	"clearance",
+	"documents",
+)
+
+ATTENDANCE_OFFICER_ROLE = "Attendance Officer"
+SUPERVISOR_ROLE = "Supervisor"
+
+# The panels each restricted role may open.  A role missing from this map is
+# unrestricted and opens every panel, so an approver role can never be locked
+# out by omission.  A user holding several restricted roles gets their union.
+PANEL_ACCESS = {
+	ATTENDANCE_OFFICER_ROLE: frozenset({"attendance", "employees"}),
+	SUPERVISOR_ROLE: frozenset({"approvals"}),
+}
 
 # Leave doctypes the admin inbox covers, in display order.  The five tuples are
 # (doctype, label, start field, end field, days field, kind field, status field).
@@ -187,6 +213,11 @@ LEAVE_REGISTRY = (
 	),
 )
 
+# Two entries in the registry are not leave: a visa/service request and a punch
+# correction share the row shape (a per-employee request with a workflow) but
+# carry no leave days, so the day-by-day leave map skips them by name.
+NON_LEAVE_DOCTYPES = ("HR Service Request", "Saudi Punch Correction")
+
 # Employee fields the admin form may write.  Anything not listed is dropped
 # even if the client sends it, so the form cannot reach the salary, bank or
 # review fields that Desk manages.
@@ -242,6 +273,10 @@ MAX_ATTENDANCE_DAYS = 180
 # One row per day in the report table. A month cannot exceed 31, so this only
 # bites on a date range, where it is what keeps the table readable.
 REPORT_DAY_ROWS = 62
+# Today's punches in the report. Capping this by time drops whoever punched
+# earliest, so the cap is high enough to name the whole day for a normal
+# headcount rather than a dozen of the most recent taps.
+TODAY_PUNCH_ROWS = 100
 
 # The status column is a bilingual Select, so the value carries both languages.
 # Keying on the English prefix keeps the counters stable when the label text
@@ -266,6 +301,12 @@ ATTENDANCE_COUNT_KEYS = (
 	"late_minutes",
 	"hours",
 )
+
+# The week's rest days when an employee has no Holiday List to say otherwise.
+# Friday and Saturday are the Saudi weekend, and the same pair the self-service
+# portal (api.get_monthly_attendance) and Monthly Attendance Record already
+# fall back to, so a site that never assigned a Holiday List still reads right.
+DEFAULT_WEEKLY_OFF_DAYS = (4, 5)
 
 
 def _attendance_status_key(value):
@@ -464,6 +505,43 @@ def assert_portal_access():
 		)
 
 
+def visible_panels(user=None):
+	"""The admin panels the user may open, in rail order.
+
+	An unrestricted role opens everything; a restricted role opens only its
+	grant.  Holding an unrestricted role alongside a restricted one restores
+	the full admin, so an HR manager is never narrowed by a supervisor grant.
+	"""
+	user = user or frappe.session.user
+	if user == "Administrator":
+		return list(PORTAL_PANELS)
+
+	portal_roles = set(frappe.get_roles(user)).intersection(ADMIN_PORTAL_ROLES)
+	if not portal_roles:
+		return []
+	if any(role not in PANEL_ACCESS for role in portal_roles):
+		return list(PORTAL_PANELS)
+
+	allowed = set()
+	for role in portal_roles:
+		allowed |= PANEL_ACCESS[role]
+	return [panel for panel in PORTAL_PANELS if panel in allowed]
+
+
+def assert_panel_access(*panels):
+	"""Refuse a caller who may not open any of the named panels.
+
+	The page hides the rail items a role cannot use, but that is presentation:
+	this is the boundary that a hand-crafted request cannot walk around.
+	"""
+	assert_portal_access()
+	if not set(panels).intersection(visible_panels()):
+		frappe.throw(
+			_("You do not have access to this section."),
+			frappe.PermissionError,
+		)
+
+
 # Frappe's implicit fields are stored on every document but are not listed in
 # meta.fields, so they have to bypass the meta check below.
 STANDARD_FIELDS = frozenset(
@@ -523,9 +601,12 @@ def _doctype_entry(entry):
 def get_admin_config():
 	"""Everything the shell needs before the first panel renders."""
 	assert_portal_access()
+	panels = visible_panels()
 	return {
 		"user": frappe.session.user,
 		"roles": sorted(frappe.get_roles()),
+		"panels": panels,
+		"default_panel": panels[0] if panels else "",
 		"can_manage_employees": _can_manage_employees(),
 		"leave_types": [_doctype_entry(entry) for entry in LEAVE_REGISTRY],
 		"lang": frappe.db.get_value("User", frappe.session.user, "language") or "en",
@@ -539,6 +620,7 @@ def _can_manage_employees():
 @frappe.whitelist(methods=["GET"])
 def get_admin_dashboard():
 	assert_portal_access()
+	assert_panel_access("dashboard", "report")
 
 	leave = {}
 	actionable_total = 0
@@ -772,6 +854,7 @@ def _count_actionable(doctype, entry):
 @frappe.whitelist(methods=["GET"])
 def list_employees(search=None, company=None, department=None, status=None, limit=None):
 	assert_portal_access()
+	assert_panel_access("employees", "attendance", "clearance")
 	limit = _clean_limit(limit)
 
 	# An approver role reaches the portal to clear leave, not to browse the
@@ -881,6 +964,7 @@ def get_employee_detail(name):
 	is refused rather than handed an empty profile.
 	"""
 	assert_portal_access()
+	assert_panel_access("employees")
 	employee = cstr(name or "").strip()
 	if not employee:
 		frappe.throw(_("Employee is required."), frappe.ValidationError)
@@ -983,6 +1067,7 @@ def get_employee_detail(name):
 @frappe.whitelist(methods=["GET"])
 def get_employee_form_options():
 	assert_portal_access()
+	assert_panel_access("employees")
 	assert_doctype_permissions("Employee", "create")
 
 	meta = frappe.get_meta("Employee")
@@ -1037,6 +1122,7 @@ def create_employee(payload_json):
 	on, which keeps a newly created employee consistent with the renamed ones.
 	"""
 	assert_portal_access()
+	assert_panel_access("employees")
 
 	try:
 		payload = json.loads(cstr(payload_json or "{}"))
@@ -1077,6 +1163,48 @@ def create_employee(payload_json):
 	# which would put rename chatter in the web request log.
 
 	return {"name": employee_number, "created": True, "desk_url": desk_route("Employee", employee_number)}
+
+
+@frappe.whitelist(methods=["POST"])
+def update_employee(payload_json):
+	"""Edit an existing employee from the admin form.
+
+	Only ``EMPLOYEE_WRITABLE_FIELDS`` are read back, so a crafted payload
+	cannot reach the salary, bank or review fields Desk owns.  The employee
+	number is left alone: it is also the document name, and renaming a live
+	document would repoint every link to it, so the number is fixed once at
+	creation.
+	"""
+	assert_portal_access()
+	assert_panel_access("employees")
+
+	try:
+		payload = json.loads(cstr(payload_json or "{}"))
+	except (TypeError, ValueError):
+		frappe.throw(_("Invalid employee data."), frappe.ValidationError)
+	if not isinstance(payload, dict):
+		frappe.throw(_("Invalid employee data."), frappe.ValidationError)
+
+	name = cstr(payload.get("name") or "").strip()
+	if not name or not frappe.db.exists("Employee", name):
+		frappe.throw(_("Employee not found.<br>الموظف غير موجود."), title=_("Not Found"))
+
+	doc = frappe.get_doc("Employee", name)
+	# read back only the allowed fields, skipping the document name and the
+	# number that mirrors it so an edit can never orphan existing links
+	for key, value in payload.items():
+		if key in ("name", "employee_number"):
+			continue
+		if key in EMPLOYEE_WRITABLE_FIELDS and value is not None:
+			doc.set(key, value)
+
+	_validate_employee_fields(doc)
+	_validate_id_number(doc)
+
+	assert_doctype_permissions("Employee", "write", doc=doc)
+	doc.save()
+
+	return {"name": name, "updated": True, "desk_url": desk_route("Employee", name)}
 
 
 def _validate_employee_number(employee_number):
@@ -1169,6 +1297,7 @@ def list_leave_requests(state=None, doctype=None, limit=None):
 	one table instead of five.
 	"""
 	assert_portal_access()
+	assert_panel_access("approvals")
 	limit = _clean_limit(limit)
 	wanted_state = cstr(state or "").strip().lower()
 
@@ -1302,6 +1431,7 @@ def get_leave_request(doctype, name):
 	framework, so the UI never offers a button the API would refuse.
 	"""
 	assert_portal_access()
+	assert_panel_access("approvals")
 	leave_doctype = cstr(doctype or "").strip()
 	entry = next((item for item in LEAVE_REGISTRY if item[0] == leave_doctype), None)
 	if not entry:
@@ -1376,6 +1506,7 @@ def apply_leave_action(doctype, name, action):
 	workflow_state.
 	"""
 	assert_portal_access()
+	assert_panel_access("approvals")
 	leave_doctype = cstr(doctype or "").strip()
 	if not any(entry[0] == leave_doctype for entry in LEAVE_REGISTRY):
 		frappe.throw(_("Unsupported leave document type."), frappe.ValidationError)
@@ -1423,6 +1554,7 @@ def submit_leave_request(doctype, name):
 	a Maternity request with no medical certificate.
 	"""
 	assert_portal_access()
+	assert_panel_access("approvals")
 	leave_doctype = cstr(doctype or "").strip()
 	if not any(entry[0] == leave_doctype for entry in LEAVE_REGISTRY):
 		frappe.throw(_("Unsupported leave document type."), frappe.ValidationError)
@@ -1460,6 +1592,7 @@ def get_attendance_report(employee=None, month=None, from_date=None, to_date=Non
 	walk or come back silently empty.
 	"""
 	assert_portal_access()
+	assert_panel_access("attendance")
 
 	window = _attendance_window(from_date, to_date, month)
 	readable = frappe.has_permission(ATTENDANCE_DOCTYPE, "read", throw=False)
@@ -1500,7 +1633,7 @@ def get_attendance_report(employee=None, month=None, from_date=None, to_date=Non
 	else:
 		payload["departments"], payload["department_count"] = _attendance_departments(window, limit)
 		payload["truncated"] = len(payload["departments"]) < payload["department_count"]
-	payload["today"] = _attendance_today_rows()
+	payload["today"] = _attendance_today_rows(employee)
 	return payload
 
 
@@ -1580,25 +1713,30 @@ def _attendance_corrections(employee, from_date, to_date):
 
 
 def _attendance_days(window, employee):
-	"""One row per calendar day in the window, newest first and capped.
+	"""One row per calendar day in the window, oldest first and capped.
 
 	A month is a calendar, not a ledger: every day is listed, and a day with no
 	attendance row yet comes back marked ``missing`` (and ``future`` when it is
 	still ahead of today), so the panel can offer to register it instead of
 	pretending the date does not exist.
+
+	A day with no row is not always a gap to fill.  It may be leave the employee
+	is on, a holiday, or the weekend; those days are described from the records
+	that already exist rather than left to read as a missing record.
 	"""
 	rows = _attendance_window_rows(window, [employee])
 	by_date = {str(row.get("attendance_date")): row for row in rows}
 	corrections = _attendance_corrections(employee, window["from_date"], window["to_date"])
+	holidays = _holiday_dates(employee, window["from_date"], window["to_date"])
+	leaves = _leave_dates(employee, window["from_date"], window["to_date"])
 	days = [
 		_attendance_view(by_date[key], corrections)
 		if key in by_date
-		else _missing_attendance_view(key, employee)
+		else _off_attendance_view(key, employee, holidays.get(key), leaves.get(key))
 		for key in _each_date(window["from_date"], window["to_date"])
 	]
-	# newest-first, like the ledger rows they replace, and capped like before
-	days.reverse()
-	return days[:REPORT_DAY_ROWS]
+	# a month reads top-down from day 1; keep the most recent window when capped
+	return days[-REPORT_DAY_ROWS:]
 
 
 def _each_date(from_date, to_date):
@@ -1608,6 +1746,135 @@ def _each_date(from_date, to_date):
 	while day <= end:
 		yield str(day)
 		day = add_days(day, 1)
+
+
+def _holiday_list_for(employee):
+	"""The Holiday List that applies to this employee: their own, else the company's.
+
+	Both fields are optional in ERPNext, and a site that set neither still has
+	to read right, so a miss falls through to the built-in weekend.
+	"""
+	if not employee:
+		return None
+	fields = _existing_fields("Employee", ["holiday_list", "company"])
+	row = frappe.db.get_value("Employee", employee, fields, as_dict=True) if fields else None
+	if not row:
+		return None
+	if row.get("holiday_list"):
+		return row["holiday_list"]
+	if row.get("company") and _existing_fields("Company", ["default_holiday_list"]):
+		return frappe.db.get_value("Company", row["company"], "default_holiday_list")
+	return None
+
+
+def _holiday_dates(employee, from_date, to_date):
+	"""Holiday and weekly-off days in the window, by date.
+
+	The employee's Holiday List is the source, so two people can rest on
+	different days (Friday and Saturday for one, Saturday only for another).
+	A day can carry both a named holiday and a weekly off, and the name is what
+	a person reads, so a named holiday wins.  No list at all falls back to the
+	built-in Friday/Saturday weekend.
+	"""
+	from_date, to_date = str(from_date), str(to_date)
+	holiday_list = _holiday_list_for(employee)
+	if not holiday_list:
+		return {
+			day: {"weekly_off": True, "description": None}
+			for day in _each_date(from_date, to_date)
+			if getdate(day).weekday() in DEFAULT_WEEKLY_OFF_DAYS
+		}
+	if not frappe.db.table_exists("Holiday"):
+		return {}
+	rows = frappe.get_all(
+		"Holiday",
+		filters=[
+			["parent", "=", holiday_list],
+			["holiday_date", ">=", from_date],
+			["holiday_date", "<=", to_date],
+		],
+		fields=["holiday_date", "weekly_off", "description"],
+	)
+	days = {}
+	for row in rows:
+		day = str(row.get("holiday_date"))
+		weekly_off = bool(cint(row.get("weekly_off")))
+		# keep a named holiday over a weekly off, and the first of either
+		if day in days and (not days[day]["weekly_off"] or weekly_off):
+			continue
+		days[day] = {
+			"weekly_off": weekly_off,
+			"description": cstr(row.get("description") or "").strip() or None,
+		}
+	return days
+
+
+def _leave_dates(employee, from_date, to_date):
+	"""Approved leave days in the window, by date, from the inbox's own doctypes.
+
+	Only approved records count: a rejected or still-pending request is not
+	leave the employee is on.  When two overlap, the first doctype in
+	LEAVE_REGISTRY wins, which is the order the inbox lists them in.
+	"""
+	if not employee:
+		return {}
+	from_date, to_date = str(from_date), str(to_date)
+	days = {}
+	for entry in LEAVE_REGISTRY:
+		doctype, label, start_field, end_field, _days_field, _kind_field, _state_field = entry
+		if doctype in NON_LEAVE_DOCTYPES:
+			continue
+		if not frappe.has_permission(doctype, "read", throw=False):
+			continue
+		fields = _existing_fields(
+			doctype, ["name", start_field, end_field, "workflow_state", "status", "docstatus"]
+		)
+		if start_field not in fields or end_field not in fields:
+			continue
+		rows = frappe.get_list(
+			doctype,
+			filters=[
+				["employee", "=", employee],
+				[start_field, "<=", to_date],
+				[end_field, ">=", from_date],
+			],
+			fields=fields,
+			limit_page_length=0,
+		)
+		for row in rows:
+			if _row_state(row) != "approved":
+				continue
+			start = max(getdate(row.get(start_field)), getdate(from_date))
+			end = min(getdate(row.get(end_field)), getdate(to_date))
+			for day in _each_date(str(start), str(end)):
+				days.setdefault(day, label)
+	return days
+
+
+def _off_attendance_view(day, employee, holiday, leave):
+	"""A day with no attendance row, described as leave, a holiday or a rest day.
+
+	Leave wins over a holiday.  The rest of the record still comes from
+	_missing_attendance_view, so the dialog treats it exactly like any other day
+	with no row: only the status the table shows changes.
+	"""
+	view = _missing_attendance_view(day, employee)
+	if leave:
+		view.update({"status_key": "on_leave", "status": leave, "reason": leave})
+	elif holiday:
+		if holiday["weekly_off"]:
+			# a weekly off is the label on its own; its Holiday row carries only
+			# the weekday name, which the label already says
+			view["status_key"] = "weekly_off"
+		else:
+			view.update(
+				{
+					"status_key": "holiday",
+					"status": holiday["description"],
+					"reason": holiday["description"],
+				}
+			)
+	return view
 
 
 def _missing_attendance_view(day, employee):
@@ -1623,6 +1890,7 @@ def _missing_attendance_view(day, employee):
 		"date": day,
 		"status": None,
 		"status_key": "missing",
+		"reason": None,
 		"in_time": None,
 		"out_time": None,
 		"hours": None,
@@ -1735,18 +2003,25 @@ def _attendance_month(month):
 	return date(year, mon, 1), date(year, mon, last)
 
 
-def _attendance_today_rows(limit=12):
-	"""Today's punches, so the report answers "who is in?" without a filter."""
+def _attendance_today_rows(employee=None, limit=TODAY_PUNCH_ROWS):
+	"""Today's punches, so the report answers "who is in?" without a filter.
+
+	Scoped to `employee` when the report is, so an employee's own card shows
+	their own punches instead of the rest of the company's.  The window ends
+	at tomorrow, not at now(): a punch logged a minute ahead by a device with
+	a fast clock is still today's punch.
+	"""
 	if not frappe.has_permission(CHECKIN_DOCTYPE, "read", throw=False):
 		return []
 	fields = _existing_fields(CHECKIN_DOCTYPE, ["name", "employee", "log_type", "time", "late_minutes"])
 	# two conditions, not ["between", ...]: between matches nothing on this field
 	# here, which would leave the table permanently empty rather than wrong.
-	# The window ends at tomorrow, not at now(): a punch logged a minute ahead
-	# by a device with a fast clock is still today's punch.
+	filters = [["time", ">=", nowdate()], ["time", "<", add_days(nowdate(), 1)]]
+	if employee:
+		filters.append(["employee", "=", employee])
 	rows = frappe.get_list(
 		CHECKIN_DOCTYPE,
-		filters=[["time", ">=", nowdate()], ["time", "<", add_days(nowdate(), 1)]],
+		filters=filters,
 		fields=fields,
 		order_by="time desc",
 		limit_page_length=limit,
@@ -1791,6 +2066,7 @@ def correct_attendance_day(attendance=None, employee=None, date=None, time=None,
 	swap it into the table in place of the stale one.
 	"""
 	assert_portal_access()
+	assert_panel_access("attendance")
 	attendance = cstr(attendance or "").strip()
 	date_value = cstr(date or "").strip()
 
@@ -1872,33 +2148,63 @@ def correct_attendance_day(attendance=None, employee=None, date=None, time=None,
 		# re-derives the punches and enforces the once-per-day guard, then
 		# on_submit() applies the correction (creating the punch when the date
 		# has none).
-		correction_fields = {
-			"doctype": PUNCH_CORRECTION_DOCTYPE,
-			"employee": employee,
-			"attendance_date": date_value,
-			"correction_reason": note
-			or _("Corrected from the admin attendance panel / تصحيح من لوحة الحضور الإدارية"),
-		}
-		if time:
-			correction_fields["corrected_in_time"] = time
-		if out_time:
-			correction_fields["corrected_out_time"] = out_time
-		correction = frappe.get_doc(correction_fields)
-		correction.flags.ignore_permissions = True
-		correction.insert()
-		correction.docstatus = 1
-		correction.workflow_state = "Completed"
-		try:
-			correction.validate()
-			correction.on_submit()
-		except Exception:
-			frappe.delete_doc(
-				PUNCH_CORRECTION_DOCTYPE, correction.name, force=True, ignore_permissions=True
-			)
-			raise
-		frappe.db.set_value(
-			PUNCH_CORRECTION_DOCTYPE, correction.name, {"workflow_state": "Completed", "docstatus": 1}
+		#
+		# A day that was already corrected is corrected again by updating the
+		# same request, not by refusing: the once-per-day guard only blocks a
+		# *second* request, and the original times this one captured stay the
+		# audit trail. Re-applying it moves the punches to the new times.
+		existing = frappe.db.get_value(
+			PUNCH_CORRECTION_DOCTYPE,
+			{"employee": employee, "attendance_date": date_value, "applied": 1, "docstatus": 1},
+			"name",
 		)
+		if existing:
+			correction = frappe.get_doc(PUNCH_CORRECTION_DOCTYPE, existing)
+			if time:
+				correction.corrected_in_time = time
+			if out_time:
+				correction.corrected_out_time = out_time
+			if note:
+				correction.correction_reason = note
+			# un-apply so validate() runs the update path again; the originals
+			# are already on the request and are left untouched
+			correction.applied = 0
+			correction.flags.ignore_permissions = True
+			correction.flags.ignore_validate_update_after_submit = True
+			correction.validate()
+			frappe.db.set_value(
+				PUNCH_CORRECTION_DOCTYPE,
+				correction.name,
+				{"workflow_state": "Completed", "docstatus": 1},
+			)
+		else:
+			correction_fields = {
+				"doctype": PUNCH_CORRECTION_DOCTYPE,
+				"employee": employee,
+				"attendance_date": date_value,
+				"correction_reason": note
+				or _("Corrected from the admin attendance panel / تصحيح من لوحة الحضور الإدارية"),
+			}
+			if time:
+				correction_fields["corrected_in_time"] = time
+			if out_time:
+				correction_fields["corrected_out_time"] = out_time
+			correction = frappe.get_doc(correction_fields)
+			correction.flags.ignore_permissions = True
+			correction.insert()
+			correction.docstatus = 1
+			correction.workflow_state = "Completed"
+			try:
+				correction.validate()
+				correction.on_submit()
+			except Exception:
+				frappe.delete_doc(
+					PUNCH_CORRECTION_DOCTYPE, correction.name, force=True, ignore_permissions=True
+				)
+				raise
+			frappe.db.set_value(
+				PUNCH_CORRECTION_DOCTYPE, correction.name, {"workflow_state": "Completed", "docstatus": 1}
+			)
 
 	if note:
 		target = _attendance_doc_for("", employee, date_value)
@@ -1910,6 +2216,91 @@ def correct_attendance_day(attendance=None, employee=None, date=None, time=None,
 	if time or out_time:
 		corrections[date_value] = correction.correction_reason or None
 	return _attendance_view(updated, corrections)
+
+
+@frappe.whitelist(methods=["POST"])
+def remove_attendance_day(attendance=None, employee=None, date=None):
+	"""Remove a day's attendance entirely: its punches, any punch correction
+	that produced them, and the daily attendance row itself, so the day reads
+	as missing again.
+
+	The punches go with the row, rather than being left for the next
+	consolidation to rebuild the day from, because "remove" must mean the day
+	is gone. A day addressed by ``employee`` and ``date`` works whether or not
+	a row exists yet, so the same control serves both.
+	"""
+	assert_portal_access()
+	assert_panel_access("attendance")
+	attendance = cstr(attendance or "").strip()
+	date_value = cstr(date or "").strip()
+
+	doc = _attendance_doc_for(attendance, employee, date_value)
+	if doc:
+		if not frappe.has_permission(ATTENDANCE_DOCTYPE, "write", doc=doc):
+			frappe.throw(
+				_("You do not have permission to remove this attendance record.<br>"
+				  "ليس لديك صلاحية لحذف سجل الحضور."),
+				frappe.PermissionError,
+			)
+		employee = doc.employee
+		date_value = str(doc.attendance_date)
+	else:
+		employee = cstr(employee or "").strip()
+		if not employee or not date_value:
+			frappe.throw(
+				_("Attendance record is required.<br>سجل الحضور مطلوب."),
+				title=_("Attendance Required / سجل الحضور مطلوب"),
+			)
+		if not frappe.has_permission(ATTENDANCE_DOCTYPE, "write", throw=False):
+			frappe.throw(
+				_("You do not have permission to remove this attendance record.<br>"
+				  "ليس لديك صلاحية لحذف سجل الحضور."),
+				frappe.PermissionError,
+			)
+		try:
+			date_value = str(getdate(date_value))
+		except ValueError:
+			frappe.throw(
+				_("Date must be written as YYYY-MM-DD.<br>التاريخ يجب أن يكون بالصيغة YYYY-MM-DD."),
+				frappe.ValidationError,
+			)
+
+	# corrections first: cancel so the punches they moved go back, then drop the
+	# request so nothing still points at the day that is about to disappear
+	for name in frappe.get_all(
+		PUNCH_CORRECTION_DOCTYPE,
+		filters={"employee": employee, "attendance_date": date_value},
+		pluck="name",
+	):
+		correction = frappe.get_doc(PUNCH_CORRECTION_DOCTYPE, name)
+		correction.flags.ignore_permissions = True
+		try:
+			if correction.docstatus == 1:
+				correction.cancel()
+		except Exception:
+			pass
+		frappe.delete_doc(PUNCH_CORRECTION_DOCTYPE, name, force=True, ignore_permissions=True)
+
+	# the punches themselves, so a later consolidation cannot rebuild the day
+	for name in frappe.get_all(
+		CHECKIN_DOCTYPE,
+		filters={
+			"employee": employee,
+			"time": ["between", [f"{date_value} 00:00:00", f"{date_value} 23:59:59"]],
+		},
+		pluck="name",
+	):
+		frappe.delete_doc(CHECKIN_DOCTYPE, name, force=True, ignore_permissions=True)
+
+	# the daily attendance row, cancelled first because it is submitted
+	target = _attendance_doc_for("", employee, date_value)
+	if target:
+		target.flags.ignore_permissions = True
+		if target.docstatus == 1:
+			target.cancel()
+		frappe.delete_doc(ATTENDANCE_DOCTYPE, target.name, force=True, ignore_permissions=True)
+
+	return {"employee": employee, "date": date_value, "removed": True}
 
 
 def _attendance_doc_for(attendance, employee, date_value):
@@ -1937,6 +2328,7 @@ def _attendance_doc_for(attendance, employee, date_value):
 def get_eosb_settlement(employee=None, termination_reason=None, termination_date=None, eosb_deductions=0):
 	"""Calculate financial clearance / end of service settlement details for admin UI."""
 	assert_portal_access()
+	assert_panel_access("clearance")
 	return _eosb_settlement_preview(employee, termination_reason, termination_date, eosb_deductions)
 
 
@@ -2041,6 +2433,7 @@ def _eosb_settlement_preview(employee=None, termination_reason=None, termination
 def create_eosb_settlement(employee, termination_date, termination_reason, last_basic_salary, eosb_deductions=0, notes=None):
 	"""Create or submit End of Service Benefit record."""
 	assert_portal_access()
+	assert_panel_access("clearance")
 	if not frappe.db.table_exists("End of Service Benefit"):
 		frappe.throw(_("End of Service Benefit doctype does not exist."), frappe.ValidationError)
 	assert_doctype_permissions("End of Service Benefit", "create")
@@ -2076,6 +2469,7 @@ def create_eosb_settlement(employee, termination_date, termination_reason, last_
 def get_documents_and_letters(employee=None, document_type=None, status=None, limit=50):
 	"""Fetch documents & letters dashboard metrics and request history."""
 	assert_portal_access()
+	assert_panel_access("documents")
 	limit = _clean_limit(limit)
 
 	filters = {}
@@ -2122,6 +2516,7 @@ def get_documents_and_letters(employee=None, document_type=None, status=None, li
 def issue_hr_document(employee, document_type, addressed_to=None, notes=None):
 	"""Issue or request a new HR document/letter."""
 	assert_portal_access()
+	assert_panel_access("documents")
 	if not frappe.db.table_exists("HR Service Request"):
 		frappe.throw(_("HR Service Request doctype is missing."), frappe.ValidationError)
 	assert_doctype_permissions("HR Service Request", "create")
@@ -2277,6 +2672,7 @@ def _update_clearance_checklist(clearance_name, values):
 def get_offboarding_form_options():
 	"""Select options for the offboarding start form, read live from meta."""
 	assert_portal_access()
+	assert_panel_access("clearance")
 
 	def _options(doctype, fieldname):
 		meta = frappe.get_meta(doctype)
@@ -2294,6 +2690,7 @@ def get_offboarding_form_options():
 def list_exit_clearances(employee=None, status=None, limit=50):
 	"""Exit clearance cases the caller may read, newest first."""
 	assert_portal_access()
+	assert_panel_access("clearance")
 	if not frappe.db.table_exists("Exit Clearance"):
 		return {"rows": [], "statuses": list(EXIT_CLEARANCE_STATUSES)}
 	if not frappe.has_permission("Exit Clearance", "read", throw=False):
@@ -2397,6 +2794,7 @@ def _final_settlement_summary(termination_notice, exit_clearance):
 def get_offboarding_case(name):
 	"""Full picture of one exit case: notice, SLA, settlement, checks, interviews."""
 	assert_portal_access()
+	assert_panel_access("clearance")
 	clearance_name = cstr(name or "").strip()
 	if not clearance_name or not frappe.db.exists("Exit Clearance", clearance_name):
 		frappe.throw(_("Exit clearance not found."), frappe.DoesNotExistError)
@@ -2470,6 +2868,7 @@ def create_termination_notice(
 ):
 	"""Start an exit: HR records the termination notice for the employee."""
 	assert_portal_access()
+	assert_panel_access("clearance")
 	if not frappe.db.table_exists("Termination Notice"):
 		frappe.throw(_("Termination Notice doctype does not exist."), frappe.ValidationError)
 	assert_doctype_permissions("Termination Notice", "create")
@@ -2505,6 +2904,7 @@ def create_termination_notice(
 def create_exit_clearance(employee, termination_notice=None, last_working_day=None):
 	"""Create (or return) the exit clearance for an employee and wire up links."""
 	assert_portal_access()
+	assert_panel_access("clearance")
 	if not frappe.db.table_exists("Exit Clearance"):
 		frappe.throw(_("Exit Clearance doctype does not exist."), frappe.ValidationError)
 	assert_doctype_permissions("Exit Clearance", "create")
@@ -2552,6 +2952,7 @@ def create_exit_clearance(employee, termination_notice=None, last_working_day=No
 def apply_offboarding_action(doctype, name, action):
 	"""Advance a Termination Notice workflow transition on HR's behalf."""
 	assert_portal_access()
+	assert_panel_access("clearance")
 	off_doctype = cstr(doctype or "").strip()
 	if off_doctype not in OFFBOARDING_ACTION_DOCTYPES:
 		frappe.throw(_("Unsupported offboarding document type."), frappe.ValidationError)
@@ -2592,6 +2993,7 @@ def apply_offboarding_action(doctype, name, action):
 def save_exit_clearance(name, checklist=None, notes=None):
 	"""Save the clearance checklist; the controller recomputes percent and status."""
 	assert_portal_access()
+	assert_panel_access("clearance")
 	clearance_name = cstr(name or "").strip()
 	if not clearance_name or not frappe.db.exists("Exit Clearance", clearance_name):
 		frappe.throw(_("Exit clearance not found."), frappe.DoesNotExistError)
@@ -2621,6 +3023,7 @@ def save_exit_clearance(name, checklist=None, notes=None):
 def create_eosb_from_case(exit_clearance, last_basic_salary=None, eosb_deductions=0):
 	"""Create the end of service settlement for a case and link it both ways."""
 	assert_portal_access()
+	assert_panel_access("clearance")
 	if not frappe.db.table_exists("End of Service Benefit"):
 		frappe.throw(_("End of Service Benefit doctype does not exist."), frappe.ValidationError)
 	clearance_name = cstr(exit_clearance or "").strip()
@@ -2678,6 +3081,7 @@ def create_eosb_from_case(exit_clearance, last_basic_salary=None, eosb_deduction
 def submit_eosb(name):
 	"""Submit the settlement and tick the linked clearance's EOSB box."""
 	assert_portal_access()
+	assert_panel_access("clearance")
 	eosb_name = cstr(name or "").strip()
 	if not eosb_name or not frappe.db.exists("End of Service Benefit", eosb_name):
 		frappe.throw(_("End of Service Benefit not found."), frappe.DoesNotExistError)
@@ -2704,6 +3108,7 @@ def submit_eosb(name):
 def create_exit_interview(exit_clearance, interview_date=None, interviewer=None, interview_mode=None):
 	"""Schedule the exit interview for a case and link it back."""
 	assert_portal_access()
+	assert_panel_access("clearance")
 	clearance_name = cstr(exit_clearance or "").strip()
 	if not frappe.db.exists("Exit Clearance", clearance_name):
 		frappe.throw(_("Exit clearance not found."), frappe.DoesNotExistError)
@@ -2752,6 +3157,7 @@ def create_leave_disbursement(
 ):
 	"""Create the annual leave disbursement for a case and link it back."""
 	assert_portal_access()
+	assert_panel_access("clearance")
 	if not frappe.db.table_exists("Annual Leave Disbursement"):
 		frappe.throw(_("Annual Leave Disbursement doctype does not exist."), frappe.ValidationError)
 	clearance_name = cstr(exit_clearance or "").strip()
@@ -2797,6 +3203,7 @@ def create_leave_disbursement(
 def settle_final_settlement(name=None, exit_clearance=None):
 	"""Close out the final settlement SLA for a case."""
 	assert_portal_access()
+	assert_panel_access("clearance")
 	sla_name = cstr(name or "").strip()
 	if not sla_name and exit_clearance:
 		sla_name = (

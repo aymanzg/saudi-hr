@@ -19,6 +19,7 @@ def get_context(context):
 		ADMIN_PORTAL_ROLES,
 		assert_portal_access,
 		get_admin_dashboard,
+		visible_panels,
 	)
 
 	if frappe.session.user == "Guest":
@@ -51,10 +52,15 @@ def get_context(context):
 
 	context.can_manage_employees = bool(frappe.has_permission("Employee", "create", throw=False))
 	context.admin_roles = sorted(ADMIN_PORTAL_ROLES.intersection(frappe.get_roles()))
+	# a restricted role opens a subset of the shell; the template renders only
+	# those rail items and panels, and the API refuses the rest independently
+	context.admin_panels = visible_panels()
+	context.default_panel = context.admin_panels[0] if context.admin_panels else "dashboard"
 
 	# First paint carries real numbers, so the dashboard is never a blank grid.
 	# A failure here must not blank the page, since the JS retries on load.
+	# A role without the dashboard panel pays nothing for a grid it cannot see.
 	try:
-		context.dashboard = get_admin_dashboard()
+		context.dashboard = get_admin_dashboard() if "dashboard" in context.admin_panels else {}
 	except Exception:
 		context.dashboard = {}

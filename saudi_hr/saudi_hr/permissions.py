@@ -3,6 +3,12 @@ import frappe
 
 ELEVATED_ROLES = {"HR Manager", "HR User", "System Manager", "Leave Approver"}
 DEPARTMENT_APPROVER_ROLE = "Department Approver"
+SUPERVISOR_ROLE = "Supervisor"
+# A user with one of these roles sees, in addition to their own records, the
+# people who report to them.  Department Approver is the original line-manager
+# role; Supervisor is the portal-facing name for the same relationship, so both
+# resolve through Employee.reports_to.
+MANAGER_SCOPE_ROLES = {DEPARTMENT_APPROVER_ROLE, SUPERVISOR_ROLE}
 DIRECT_MANAGER_FIELDS = ("leave_approver", "expense_approver")
 ANNUAL_LEAVE_FINANCE_ROLE = "Accounts Manager"
 ANNUAL_LEAVE_FINANCE_VISIBLE_STATES = {"GM Approved", "Completed"}
@@ -25,6 +31,12 @@ def _get_employee_for_user(user=None):
 def _has_department_approver_role(user=None):
 	user = user or frappe.session.user
 	return DEPARTMENT_APPROVER_ROLE in frappe.get_roles(user)
+
+
+def _has_manager_scope(user=None):
+	"""True when the user may see their direct reports, not just themselves."""
+	user = user or frappe.session.user
+	return bool(MANAGER_SCOPE_ROLES.intersection(set(frappe.get_roles(user))))
 
 
 def _get_branch_for_user(user=None):
@@ -78,7 +90,7 @@ def _employee_or_approver_query(doctype, approver_fields=None, user=None):
 
 	approver_fields = _get_existing_employee_fields(approver_fields or ())
 	manager_employee = _get_employee_for_user(user)
-	if _has_department_approver_role(user) and (approver_fields or manager_employee):
+	if _has_manager_scope(user) and (approver_fields or manager_employee):
 		approver_checks = [
 			f"`tabEmployee`.`{fieldname}` = {frappe.db.escape(user)}" for fieldname in approver_fields
 		]
@@ -104,7 +116,7 @@ def _employee_or_approver_permission(doc, approver_fields=None, user=None):
 		return True
 
 	approver_fields = _get_existing_employee_fields(approver_fields or ())
-	if not _has_department_approver_role(user):
+	if not _has_manager_scope(user):
 		return False
 
 	approver_values = frappe.db.get_value("Employee", getattr(doc, "employee", None), list(approver_fields), as_dict=True) or {}

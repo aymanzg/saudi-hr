@@ -54,6 +54,7 @@ scheduler_events = {
 		"saudi_hr.saudi_hr.tasks.send_work_regulation_review_alerts",
 		"saudi_hr.saudi_hr.tasks.send_expat_authorization_due_alerts",
 		"saudi_hr.saudi_hr.tasks.send_training_disclosure_due_alerts",
+		"saudi_hr.saudi_hr.tasks.sync_missing_daily_attendance",
 	],
 	"monthly": [
 		"saudi_hr.saudi_hr.tasks.send_gosi_due_alerts",

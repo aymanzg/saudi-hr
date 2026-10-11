@@ -14,16 +14,21 @@ from unittest.mock import patch
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import add_days, getdate, now_datetime, nowdate
+from frappe.utils import add_days, get_time, getdate, now_datetime, nowdate
 
 from saudi_hr.saudi_hr import admin_api
 from saudi_hr.saudi_hr.admin_api import (
+	ATTENDANCE_OFFICER_ROLE,
 	ATTENDANCE_STATUS_KEYS,
 	LEAVE_REGISTRY,
+	PANEL_ACCESS,
+	PORTAL_PANELS,
 	STANDARD_FIELDS,
+	SUPERVISOR_ROLE,
 	_dedupe_actions,
 	_existing_fields,
 	_row_state,
+	assert_panel_access,
 	assert_portal_access,
 	apply_leave_action,
 	apply_offboarding_action,
@@ -49,10 +54,13 @@ from saudi_hr.saudi_hr.admin_api import (
 	list_employees,
 	list_exit_clearances,
 	list_leave_requests,
+	remove_attendance_day,
 	save_exit_clearance,
 	settle_final_settlement,
 	submit_eosb,
 	submit_leave_request,
+	update_employee,
+	visible_panels,
 )
 from saudi_hr.saudi_hr.test_support import get_or_create_department, make_qa_employee
 
@@ -77,6 +85,11 @@ class _ApiTestBase(FrappeTestCase):
 	def setUp(self):
 		super().setUp()
 		frappe.set_user("Administrator")
+		# the attendance role is made by install/migrate, which a test database
+		# need not have run; make it here so role-linked users always resolve
+		from saudi_hr.install import ensure_attendance_officer_role
+
+		ensure_attendance_officer_role()
 		self.company = frappe.get_all("Company", pluck="name", limit_page_length=1)[0]
 		# this suite's own employee, so its leave requests are never measured
 		# against somebody's real balance that another test happened to spend
@@ -780,7 +793,11 @@ class TestAdminApiEmployees(_ApiTestBase):
 		options = get_employee_form_options()["options"]
 		self.assertIn("gender", options)
 		self.assertNotEqual(options["gender"], ["Gender"])
-		self.assertTrue(set(options["gender"]).issubset({"Male", "Female"}))
+		# read against the site's own Gender records: a site may hold more than
+		# the two seeded ones, so hardcoding Male/Female fails on real data
+		genders = set(frappe.get_all("Gender", pluck="name"))
+		self.assertTrue(options["gender"])
+		self.assertTrue(set(options["gender"]).issubset(genders))
 		self.assertIn("company", options)
 		self.assertIn(self.company, options["company"])
 
@@ -1203,12 +1220,104 @@ class TestAdminApiAttendanceCorrection(_AttendanceTestBase):
 			"the request is the audit trail that created this registered punch",
 		)
 
-	def test_a_day_is_corrected_only_once(self):
-		_, att = self._closed_day()
-		correct_attendance_day(attendance=att, time="07:00:00")
-		self.assertRaises(
-			frappe.ValidationError, correct_attendance_day, attendance=att, time="08:00:00"
+	def test_a_day_can_be_corrected_again(self):
+		"""A second correction updates the same request rather than being
+		refused, so the day still has exactly one applied request and the
+		punches follow the newest times."""
+		checkin, att = self._closed_day()
+		first = correct_attendance_day(attendance=att, time="07:00:00")
+		second = correct_attendance_day(attendance=att, time="08:00:00")
+
+		self.assertTrue(first["corrected"])
+		self.assertTrue(second["corrected"])
+		self.assertEqual(second["in_time"], "08:00")
+		self.assertEqual(
+			frappe.db.count(
+				"Saudi Punch Correction",
+				{"employee": self.employee, "attendance_date": self.today},
+			),
+			1,
+			"the day is still covered by a single request",
 		)
+		self.assertTrue(
+			frappe.db.get_value(
+				"Saudi Punch Correction",
+				{"employee": self.employee, "attendance_date": self.today},
+				"applied",
+			)
+		)
+		self.assertIn("08:00:00", str(frappe.db.get_value("Saudi Employee Checkin", checkin, "time")))
+		self.assertIn("08:00:00", str(frappe.db.get_value("Saudi Daily Attendance", att, "in_time")))
+
+	def test_re_correcting_keeps_the_original_as_the_audit_trail(self):
+		"""The request's captured original must survive the second correction,
+		because it is the record of what the punch used to say."""
+		_, att = self._closed_day(in_time="09:15:00")
+		correct_attendance_day(attendance=att, time="07:00:00")
+		correct_attendance_day(attendance=att, time="08:00:00")
+
+		correction = frappe.get_doc(
+			"Saudi Punch Correction",
+			{"employee": self.employee, "attendance_date": self.today},
+		)
+		self.assertEqual(str(get_time(correction.original_in_time)), "09:15:00")
+
+	def test_removing_a_day_deletes_its_record_and_punches(self):
+		checkin, att = self._closed_day()
+		result = remove_attendance_day(attendance=att)
+
+		self.assertTrue(result["removed"])
+		self.assertFalse(frappe.db.exists("Saudi Daily Attendance", att))
+		self.assertFalse(frappe.db.exists("Saudi Employee Checkin", checkin))
+		self.assertIsNone(
+			frappe.db.get_value(
+				"Saudi Daily Attendance",
+				{"employee": self.employee, "attendance_date": self.today},
+				"name",
+			)
+		)
+
+	def test_removing_a_corrected_day_takes_the_correction_with_it(self):
+		"""A correction and the punches it moved must not outlive the day, or
+		the next consolidation would quietly rebuild it."""
+		_, att = self._closed_day(in_time="09:15:00")
+		correct_attendance_day(attendance=att, time="07:00:00")
+
+		remove_attendance_day(attendance=att)
+
+		self.assertFalse(frappe.db.exists("Saudi Daily Attendance", att))
+		self.assertEqual(
+			frappe.db.count(
+				"Saudi Punch Correction",
+				{"employee": self.employee, "attendance_date": self.today},
+			),
+			0,
+		)
+		self.assertEqual(
+			frappe.db.count(
+				"Saudi Employee Checkin",
+				{"employee": self.employee, "time": ["like", f"{self.today}%"]},
+			),
+			0,
+		)
+
+	def test_removing_a_missing_day_needs_an_employee_and_a_date(self):
+		self.assertRaises(frappe.ValidationError, remove_attendance_day, employee=self.employee)
+
+	def test_removal_requires_the_admin_portal(self):
+		_, att = self._closed_day()
+		email = self._make_user(["Employee"])
+		frappe.set_user(email)
+		self.assertRaises(frappe.PermissionError, remove_attendance_day, attendance=att)
+
+	def test_removal_requires_write_permission_on_the_day(self):
+		_, att = self._closed_day()
+		with patch.object(
+			admin_api.frappe, "has_permission", self._deny(admin_api.ATTENDANCE_DOCTYPE)
+		):
+			self.assertRaises(
+				frappe.PermissionError, remove_attendance_day, attendance=att
+			)
 
 	def test_an_empty_correction_is_refused(self):
 		_, att = self._closed_day()
@@ -1292,11 +1401,12 @@ class TestAdminApiAttendanceCorrection(_AttendanceTestBase):
 		self.assertFalse(registered["missing"])
 		self.assertTrue(registered["corrected"])
 		self.assertEqual(registered["status_key"], "present")
-		# the days with no record still read as missing, waiting to be registered
-		self.assertCountEqual(
-			[row["status_key"] for row in report["days"]],
-			["missing", "missing", "present"],
-		)
+		# the days with no record still read as unfilled — missing, or the
+		# weekend/a holiday when the calendar says so — waiting to be registered
+		for row in report["days"]:
+			if row["date"] == day:
+				continue
+			self.assertIn(row["status_key"], ("missing", "weekly_off", "holiday"))
 
 	def test_a_missing_day_without_a_time_is_refused(self):
 		self.assertRaises(
@@ -1414,16 +1524,18 @@ class TestAdminApiAttendanceOverview(_AttendanceTestBase):
 		empty day for an employee who is standing in the office.
 		"""
 		ahead = (now_datetime() + timedelta(minutes=10)).strftime("%H:%M:%S")
-		if ahead[:5] == now_datetime().strftime("%H:%M:%S"):
-			self.skipTest("the clock cannot be beaten from here")
+		# a punch ten minutes ahead crosses midnight near the end of the day,
+		# which the window ends at tomorrow, so this cannot be judged then
+		if (now_datetime() + timedelta(minutes=10)).date() != now_datetime().date():
+			self.skipTest("the clock cannot be beaten across midnight from here")
 		name = self._make_checkin(0, at=ahead, log_type="IN")
-		self.assertIn(name, [row["name"] for row in get_attendance_report()["today"]])
+		self.assertIn(name, [row["name"] for row in get_attendance_report(employee=self.employee)["today"]])
 		detail = get_employee_detail(self.employee)["attendance"]
 		self.assertEqual(detail["checkin"]["time"], ahead[:5])
 
 	def test_a_punch_from_another_day_is_not_listed_under_today(self):
 		self._make_checkin(-2)
-		self.assertEqual(get_attendance_report()["today"], [])
+		self.assertEqual(get_attendance_report(employee=self.employee)["today"], [])
 
 	def test_no_attendance_permission_reads_as_restricted(self):
 		self._make_attendance(0)
@@ -1488,10 +1600,10 @@ class TestAdminApiAttendancePeriods(_AttendanceTestBase):
 		self.assertNotIn(theirs, [row["name"] for row in days if row["name"]])
 		for row in days:
 			if row["missing"]:
-				# a day with no record carries no name and no times, so the row
-				# is addressed by its date when the panel registers it
+				# a day with no record carries no name and no times; it may still
+				# read as the weekend or a holiday, and is addressed by its date
 				self.assertIsNone(row["name"])
-				self.assertEqual(row["status_key"], "missing")
+				self.assertIn(row["status_key"], ("missing", "weekly_off", "holiday", "on_leave"))
 				self.assertIsNone(row["in_time"])
 			else:
 				self.assertIn(row["name"], {first, second})
@@ -1528,6 +1640,102 @@ class TestAdminApiAttendancePeriods(_AttendanceTestBase):
 	def test_an_unreadable_employee_is_refused(self):
 		frappe.set_user(self._make_user(["Department Approver"]))
 		self.assertRaises(frappe.PermissionError, get_attendance_report, self.employee)
+
+
+class TestAdminApiAttendanceOffDays(_AttendanceTestBase):
+	"""Blank days that are leave, a holiday or the weekend, not gaps to fill."""
+
+	def _holiday_list(self, rows):
+		"""A Holiday List covering 2026 with the given (date, description, weekly_off)."""
+		doc = frappe.get_doc(
+			{
+				"doctype": "Holiday List",
+				"holiday_list_name": f"QA Holidays {frappe.generate_hash(length=8)}",
+				"from_date": "2026-01-01",
+				"to_date": "2026-12-31",
+				"holidays": [
+					{"holiday_date": day, "description": desc, "weekly_off": off}
+					for day, desc, off in rows
+				],
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.set_value("Employee", self.employee, "holiday_list", doc.name)
+		return doc.name
+
+	def _approved_leave(self, start, end):
+		"""An annual leave marked approved, which is what the day map reads."""
+		doc = frappe.get_doc(
+			{
+				"doctype": "Saudi Annual Leave",
+				"employee": self.employee,
+				"company": self.company,
+				"leave_start_date": start,
+				"leave_end_date": end,
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.set_value("Saudi Annual Leave", doc.name, "workflow_state", "Approved")
+		return doc.name
+
+	def _day_row(self, day):
+		report = get_attendance_report(employee=self.employee, from_date=day, to_date=day)
+		return report["days"][0]
+
+	def test_a_named_holiday_reads_as_a_holiday_not_a_missing_day(self):
+		self._holiday_list([("2026-03-03", "Founding Day / يوم التأسيس", 0)])
+		row = self._day_row("2026-03-03")
+		self.assertTrue(row["missing"])
+		self.assertEqual(row["status_key"], "holiday")
+		self.assertEqual(row["reason"], "Founding Day / يوم التأسيس")
+
+	def test_a_weekly_off_in_the_list_reads_as_a_rest_day(self):
+		# a Wednesday, so the answer can only come from the list and not the
+		# built-in Friday/Saturday weekend
+		self._holiday_list([("2026-03-04", "Wednesday", 1)])
+		row = self._day_row("2026-03-04")
+		self.assertTrue(row["missing"])
+		self.assertEqual(row["status_key"], "weekly_off")
+		# the row's own weekday name is not shown; the label already says it
+		self.assertIsNone(row["reason"])
+
+	def test_an_approved_leave_day_reads_as_leave(self):
+		self._approved_leave("2026-03-03", "2026-03-03")
+		row = self._day_row("2026-03-03")
+		self.assertTrue(row["missing"])
+		self.assertEqual(row["status_key"], "on_leave")
+		self.assertEqual(row["reason"], "Annual Leave / إجازة سنوية")
+
+	def test_leave_beats_a_holiday_on_the_same_day(self):
+		self._holiday_list([("2026-03-03", "Founding Day / يوم التأسيس", 0)])
+		self._approved_leave("2026-03-03", "2026-03-03")
+		row = self._day_row("2026-03-03")
+		self.assertEqual(row["status_key"], "on_leave")
+		self.assertEqual(row["reason"], "Annual Leave / إجازة سنوية")
+
+	def test_a_working_day_with_no_list_is_still_missing(self):
+		frappe.db.set_value("Company", self.company, "default_holiday_list", None)
+		frappe.db.set_value("Employee", self.employee, "holiday_list", None)
+		row = self._day_row("2026-03-03")  # a Tuesday
+		self.assertTrue(row["missing"])
+		self.assertEqual(row["status_key"], "missing")
+		self.assertIsNone(row["reason"])
+
+	def test_without_a_list_the_weekend_still_rests(self):
+		frappe.db.set_value("Company", self.company, "default_holiday_list", None)
+		frappe.db.set_value("Employee", self.employee, "holiday_list", None)
+		for day in ("2026-03-06", "2026-03-07"):  # Friday and Saturday
+			self.assertEqual(self._day_row(day)["status_key"], "weekly_off")
+
+	def test_an_off_day_is_still_registerable(self):
+		self._holiday_list([("2026-03-04", "Wednesday", 1)])
+		self.assertEqual(self._day_row("2026-03-04")["status_key"], "weekly_off")
+		# the panel keeps the offer to register the day, so a rest day someone
+		# did work is not locked out
+		correct_attendance_day(
+			employee=self.employee, date="2026-03-04", time="08:00:00", out_time="17:00:00"
+		)
+		after = self._day_row("2026-03-04")
+		self.assertFalse(after["missing"])
+		self.assertEqual(after["status_key"], "present")
 
 
 class TestAdminApiDashboard(_ApiTestBase):
@@ -2042,3 +2250,142 @@ class TestAdminApiOffboarding(_ApiTestBase):
 		frappe.set_user(self._make_user(["Employee"]))
 		self.assertRaises(frappe.PermissionError, get_offboarding_form_options)
 		self.assertRaises(frappe.PermissionError, list_exit_clearances)
+
+
+class TestAdminApiPanelAccess(_ApiTestBase):
+	"""A restricted portal role opens a subset of the shell.
+
+	The rail hides what a role cannot use, but that is presentation; these
+	tests pin the API boundary a hand-crafted request hits.
+	"""
+
+	def test_an_unrestricted_role_opens_every_panel(self):
+		frappe.set_user(self._make_user(["HR User"]))
+		self.assertEqual(visible_panels(), list(PORTAL_PANELS))
+
+	def test_the_attendance_officer_opens_attendance_and_employees_only(self):
+		frappe.set_user(self._make_user([ATTENDANCE_OFFICER_ROLE]))
+		# rail order decides the order, first panel is the landing panel
+		self.assertEqual(visible_panels(), ["employees", "attendance"])
+
+	def test_a_supervisor_opens_approvals_only(self):
+		frappe.set_user(self._make_user([SUPERVISOR_ROLE]))
+		self.assertEqual(visible_panels(), ["approvals"])
+
+	def test_an_unrestricted_role_beside_a_restricted_one_opens_everything(self):
+		frappe.set_user(self._make_user([SUPERVISOR_ROLE, "HR User"]))
+		self.assertEqual(visible_panels(), list(PORTAL_PANELS))
+
+	def test_assert_panel_access_accepts_a_granted_panel(self):
+		frappe.set_user(self._make_user([SUPERVISOR_ROLE]))
+		assert_panel_access("approvals")
+		self.assertRaises(frappe.PermissionError, assert_panel_access, "employees")
+
+	def test_the_api_refuses_a_supervisor_the_employee_list(self):
+		frappe.set_user(self._make_user([SUPERVISOR_ROLE]))
+		self.assertRaises(frappe.PermissionError, list_employees)
+
+	def test_the_api_refuses_an_attendance_officer_the_leave_inbox(self):
+		frappe.set_user(self._make_user([ATTENDANCE_OFFICER_ROLE]))
+		self.assertRaises(frappe.PermissionError, list_leave_requests)
+
+	def test_admin_config_carries_the_panel_set(self):
+		frappe.set_user(self._make_user([SUPERVISOR_ROLE]))
+		config = get_admin_config()
+		self.assertEqual(config["panels"], ["approvals"])
+		self.assertEqual(config["default_panel"], "approvals")
+
+	def test_the_attendance_officer_can_manage_employees(self):
+		"""The role exists to add and edit employees, so its install grant must
+		make the employee list and the add/edit form reachable."""
+		frappe.set_user(self._make_user([ATTENDANCE_OFFICER_ROLE]))
+		self.assertTrue(get_admin_config()["can_manage_employees"])
+		self.assertFalse(list_employees()["restricted"])
+
+	def test_the_attendance_officer_role_is_a_registered_portal_role(self):
+		self.assertIn(ATTENDANCE_OFFICER_ROLE, PANEL_ACCESS)
+		self.assertIn(SUPERVISOR_ROLE, PANEL_ACCESS)
+
+
+class TestAdminApiEmployeeEdit(_ApiTestBase):
+	"""Editing an existing employee through the admin form."""
+
+	def _current(self, fieldname):
+		return frappe.db.get_value("Employee", self.employee, fieldname)
+
+	def test_editing_an_employee_writes_the_named_field(self):
+		update_employee(json.dumps({"name": self.employee, "first_name": "Renamed"}))
+		self.assertEqual(self._current("first_name"), "Renamed")
+
+	def test_an_edit_never_renames_the_employee(self):
+		number = self._current("employee_number")
+		update_employee(
+			json.dumps({"name": self.employee, "employee_number": "HACK-1", "first_name": "Edited"})
+		)
+		self.assertTrue(frappe.db.exists("Employee", self.employee))
+		self.assertEqual(self._current("employee_number"), number)
+		self.assertEqual(self._current("first_name"), "Edited")
+
+	def test_a_field_outside_the_writable_set_is_ignored(self):
+		before = self._current("bank_ac_no")
+		update_employee(json.dumps({"name": self.employee, "bank_ac_no": "HACK"}))
+		self.assertEqual(self._current("bank_ac_no"), before)
+
+	def test_a_missing_employee_is_refused(self):
+		self.assertRaises(frappe.ValidationError, update_employee, json.dumps({"name": "DOES-NOT-EXIST"}))
+
+	def test_an_edit_needs_the_employee_panel(self):
+		frappe.set_user(self._make_user([SUPERVISOR_ROLE]))
+		self.assertRaises(
+			frappe.PermissionError,
+			update_employee,
+			json.dumps({"name": self.employee, "mobile_no": "0500000001"}),
+		)
+
+
+class TestPermissionsSupervisorScope(_ApiTestBase):
+	"""The Supervisor role sees the people who report to them, like the
+	Department Approver does."""
+
+	def _supervisor_with_report(self):
+		from saudi_hr.saudi_hr import permissions
+
+		user = self._make_user([SUPERVISOR_ROLE])
+		manager = make_qa_employee(self.company, f"sup-{frappe.generate_hash(length=6)}")
+		frappe.db.set_value("Employee", manager, "user_id", user)
+		report = make_qa_employee(self.company, f"rep-{frappe.generate_hash(length=6)}")
+		frappe.db.set_value("Employee", report, "reports_to", manager)
+		return permissions, user, manager, report
+
+	def test_a_supervisor_has_manager_scope(self):
+		from saudi_hr.saudi_hr import permissions
+
+		self.assertTrue(permissions._has_manager_scope(self._make_user([SUPERVISOR_ROLE])))
+
+	def test_a_plain_employee_has_no_manager_scope(self):
+		from saudi_hr.saudi_hr import permissions
+
+		self.assertFalse(permissions._has_manager_scope(self._make_user(["Employee"])))
+
+	def test_a_supervisor_can_read_a_direct_reports_request(self):
+		permissions, user, _manager, report = self._supervisor_with_report()
+		doc = frappe.get_doc(
+			{
+				"doctype": "Saudi Sick Leave",
+				"employee": report,
+				"company": self.company,
+				"from_date": "2026-11-01",
+				"to_date": "2026-11-02",
+				"reason": "supervisor scope test",
+			}
+		).insert(ignore_permissions=True)
+		self.assertTrue(permissions.has_saudi_sick_leave_permission(doc, user))
+
+	def test_a_supervisor_query_scopes_to_their_reports(self):
+		permissions, user, manager, _report = self._supervisor_with_report()
+		query = permissions._employee_or_approver_query(
+			"Saudi Annual Leave", permissions.DIRECT_MANAGER_FIELDS, user
+		)
+		self.assertIn("reports_to", query)
+		self.assertIn(frappe.db.escape(manager), query)
+

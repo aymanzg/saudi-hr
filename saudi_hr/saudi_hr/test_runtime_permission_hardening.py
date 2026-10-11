@@ -21,6 +21,7 @@ class _InsertableDoc:
 		self.name = name or f"{self.doctype}-0001"
 		self.inserted = False
 		self.submitted = False
+		self.flags = SimpleNamespace(ignore_permissions=False)
 
 	def update(self, payload):
 		for key, value in payload.items():
@@ -127,9 +128,9 @@ class TestRuntimePermissionHardening(FrappeTestCase):
 		), patch.object(api_module, "assert_doctype_permissions") as assert_permissions:
 			result = api_module.do_mobile_checkin(latitude="24.7", longitude="46.6")
 
-		self.assertEqual(assert_permissions.call_args_list[0].args[:2], ("Saudi Employee Checkin", "create"))
-		self.assertEqual(assert_permissions.call_args_list[1].args[:2], ("Saudi Daily Attendance", ("create", "submit")))
+		assert_permissions.assert_called_once_with("Saudi Employee Checkin", "create", doc=checkin_doc)
 		self.assertTrue(checkin_doc.inserted)
+		self.assertTrue(attendance_doc.flags.ignore_permissions)
 		self.assertTrue(attendance_doc.inserted)
 		self.assertTrue(attendance_doc.submitted)
 		self.assertEqual(result["attendance_name"], "ATT-0001")

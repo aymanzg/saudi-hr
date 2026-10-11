@@ -22,6 +22,8 @@ def after_install():
 	sync_legal_rule_catalog()
 	sync_enterprise_defaults()
 	ensure_department_approver_role()
+	ensure_attendance_officer_role()
+	sync_attendance_officer_permissions()
 	sync_department_approver_role_assignments()
 	sync_department_approver_company_permissions()
 	sync_dashboard_chart_configs()
@@ -41,6 +43,8 @@ def after_migrate():
 	sync_legal_rule_catalog()
 	sync_enterprise_defaults()
 	ensure_department_approver_role()
+	ensure_attendance_officer_role()
+	sync_attendance_officer_permissions()
 	sync_department_approver_role_assignments()
 	sync_department_approver_company_permissions()
 	sync_dashboard_chart_configs()
@@ -123,6 +127,82 @@ def ensure_department_approver_role():
 			"doctype": "Role",
 			"role_name": "Department Approver",
 			"desk_access": 1,
+		}
+	).insert(ignore_permissions=True)
+
+
+def ensure_attendance_officer_role():
+	"""Ensure the attendance-only admin role exists, with its Arabic label.
+
+	The role opens the admin portal on the attendance and employee panels
+	only; the panel gate lives in ``admin_api``.  Creating it here keeps a
+	fresh site and a migrated site identical.
+	"""
+	role_name = "Attendance Officer"
+	if not frappe.db.exists("Role", role_name):
+		frappe.get_doc(
+			{
+				"doctype": "Role",
+				"role_name": role_name,
+				"desk_access": 1,
+			}
+		).insert(ignore_permissions=True)
+
+	if not frappe.db.exists("Translation", {"source_text": role_name, "language": "ar"}):
+		frappe.get_doc(
+			{
+				"doctype": "Translation",
+				"source_text": role_name,
+				"translated_text": "مسؤول الحضور",
+				"language": "ar",
+			}
+		).insert(ignore_permissions=True)
+
+
+def sync_attendance_officer_permissions():
+	"""Give the attendance role the Employee rights its panel promises.
+
+	A brand-new role starts with no permissions, so without this the employee
+	list and the add/edit form it exists for would render empty.  The grant is
+	read/create/write on Employee only; salary, bank and review data stay with
+	whoever already owns them.
+	"""
+	if not frappe.db.exists("Role", "Attendance Officer"):
+		return
+
+	from frappe.permissions import setup_custom_perms
+
+	# standard perms become Custom DocPerm rows so a single role's grant can be
+	# layered on top without disturbing the roles ERPNext ships with
+	setup_custom_perms("Employee")
+
+	name = frappe.db.get_value(
+		"Custom DocPerm",
+		{"parent": "Employee", "role": "Attendance Officer", "permlevel": 0, "if_owner": 0},
+		"name",
+	)
+	if name:
+		doc = frappe.get_doc("Custom DocPerm", name)
+		changed = False
+		for ptype in ("read", "create", "write"):
+			if not doc.get(ptype):
+				doc.set(ptype, 1)
+				changed = True
+		if changed:
+			doc.save(ignore_permissions=True)
+		return
+
+	frappe.get_doc(
+		{
+			"doctype": "Custom DocPerm",
+			"parent": "Employee",
+			"parenttype": "DocType",
+			"parentfield": "permissions",
+			"role": "Attendance Officer",
+			"permlevel": 0,
+			"read": 1,
+			"create": 1,
+			"write": 1,
 		}
 	).insert(ignore_permissions=True)
 

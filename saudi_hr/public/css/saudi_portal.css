@@ -669,6 +669,35 @@
 #attendance-form select,
 #attendance-form input { height: 44px; }
 
+/* Searchable employee picker: the box takes the typing and the list below it
+   is clicked, so a directory of any size is one match away instead of a long
+   native menu. The list is absolutely placed so it overlaps the report rather
+   than pushing the controls down as it opens. */
+#attendance-form .saudi-picker-field { grid-column: 1 / -1; }
+.saudi-picker { position: relative; }
+.saudi-picker > .saudi-input { width: 100%; }
+.saudi-picker__list {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: calc(100% + 4px);
+	z-index: 30;
+	list-style: none;
+	margin: 0;
+	padding: 4px;
+	max-height: 260px;
+	overflow-y: auto;
+	background: var(--card-bg);
+	border: 1px solid var(--border-color);
+	border-radius: 12px;
+	box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+}
+.saudi-picker__list[hidden] { display: none; }
+.saudi-picker__item { padding: 9px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.saudi-picker__item:hover, .saudi-picker__item--active { background: var(--app-primary-light); }
+.saudi-picker__item--active { font-weight: 700; }
+.saudi-picker__empty { padding: 9px 10px; color: var(--text-muted); font-size: 13px; }
+
 /* Two-column form layout on desktop */
 .saudi-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
 .saudi-form-grid .saudi-field--wide { grid-column: 1 / -1; }

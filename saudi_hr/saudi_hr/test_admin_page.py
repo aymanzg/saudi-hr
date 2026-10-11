@@ -479,7 +479,7 @@ var document = {
 	body: { classList: { add: function(){}, remove: function(){} } }
 };
 var frappe = { call: function(){ return Promise.resolve({ message: {} }); }, ready: function(){} };
-var window = { frappe: frappe };
+var window = { frappe: frappe, confirm: function(){ return true; } };
 var confirm = function(){ return true; };
 function check(name, fn) {
 	try {
@@ -581,6 +581,45 @@ class TestAdminPageBehaviour(FrappeTestCase):
 			[],
 		)
 
+	def test_workflow_action_labels_are_translated(self):
+		"""Workflow actions carry a role prefix and must still reach a label."""
+		self.assertEqual(
+			self._run(
+				"check('supervisor approve', () => actionLabel('Supervisor Approve') === t('admin_action_supervisor_approve'));"
+				"check('hr manager reject', () => actionLabel('HR Manager Reject') === t('admin_action_hr_manager_reject'));"
+				"check('gm approve', () => actionLabel('GM Approve') === t('admin_action_gm_approve'));"
+				"check('submit request', () => actionLabel('Submit Request') === t('admin_action_submit_request'));"
+				"check('raw fallback', () => actionLabel('Pending HR Review') === 'Pending HR Review');"
+			),
+			[],
+		)
+
+	def test_bilingual_registry_labels_render_in_the_active_language(self):
+		"""The registry hands over 'English / العربية'; the page shows one."""
+		self.assertEqual(
+			self._run(
+				"check('active part', () => localizeLabel('Annual Leave / إجازة سنوية') === 'إجازة سنوية');"
+				"check('no separator', () => localizeLabel('Single Label') === 'Single Label');"
+				"check('null safe', () => localizeLabel(null) === '' && localizeLabel(undefined) === '');"
+			),
+			[],
+		)
+
+	def test_workflow_state_chips_are_translated(self):
+		"""A raw workflow state reaches a label, with the normalised state as backup."""
+		self.assertEqual(
+			self._run(
+				"check('pending hr manager', () => stateLabel('Pending HR Manager Review')"
+				" === t('admin_wstate_pending_hr_manager_review'));"
+				"check('gm approved', () => stateLabel('GM Approved') === t('admin_wstate_gm_approved'));"
+				"check('cancelled', () => stateLabel('Cancelled') === t('admin_wstate_cancelled'));"
+				"check('normalised fallback', () => stateLabel('Some New State', 'pending')"
+				" === t('admin_state_pending'));"
+				"check('raw fallback', () => stateLabel('Unknown Thing') === 'Unknown Thing');"
+			),
+			[],
+		)
+
 	def test_the_corrected_day_row_is_tagged_and_its_date_escaped(self):
 		"""The row tells the reader the day was corrected, and a hostile value
 		never reaches the DOM raw. The row is addressed by its date, because the
@@ -595,7 +634,9 @@ class TestAdminPageBehaviour(FrappeTestCase):
 				"check('escaped date', function() {"
 				" return html.includes(\"data-date='ATD-&lt;img&gt;'\"); });"
 				"check('no raw tag', function() { return !html.includes('<img'); });"
-				"check('no record name', function() { return !html.includes('data-name'); });"
+				"check('escaped name', function() { return html.includes(\"data-name='ATD-&lt;img&gt;'\"); });"
+				"check('remove button', function() {"
+				" return html.includes(\"data-action='remove-attendance-day'\"); });"
 				"check('corrected chip', function() {"
 				" return html.includes('saudi-chip--muted'); });"
 				"check('time trimmed', function() { return toTimeValue('07:00:00') === '07:00'; });"
@@ -603,23 +644,40 @@ class TestAdminPageBehaviour(FrappeTestCase):
 			[],
 		)
 
-	def test_the_correction_modal_offers_a_time_only_when_it_is_still_editable(self):
-		"""A corrected day keeps its time; the manager can only write a note."""
+	def test_the_correction_modal_keeps_the_time_editable_on_a_corrected_day(self):
+		"""A day can be corrected again, so its time stays editable and the
+		modal explains that saving updates the existing request."""
 		self.assertEqual(
 			self._run(
 				"ADMIN_STATE.attendance = { days: [{ name: 'ATD-1', date: '2026-10-07',"
 				" status: 'present', in_time: '07:00:00', out_time: '15:00:00',"
-				" hours: 8, late_minutes: 0, corrected: false }],"
+				" hours: 8, late_minutes: 0, corrected: true }],"
 				" employee: { employee_name: 'Amina' } };"
 				"var time = document.getElementById('attendance-correct-time');"
 				"time.value = '';"
 				"openAttendanceDayCorrection('2026-10-07');"
 				"check('time editable', function() { return time.disabled === false; });"
 				"check('time seeded', function() { return time.value === '07:00'; });"
-				"closeAttendanceDayCorrection();"
-				"ADMIN_STATE.attendance.days[0].corrected = true;"
-				"openAttendanceDayCorrection('2026-10-07');"
-				"check('time locked', function() { return time.disabled === true; });"
+				"check('hint shown', function() {"
+				" return document.getElementById('attendance-correction-already').hidden === false; });"
+			),
+			[],
+		)
+
+	def test_removing_a_day_calls_the_remove_endpoint_with_the_day(self):
+		"""The remove control must reach the endpoint that owns the deletion,
+		with the day and the employee the report is currently showing."""
+		self.assertEqual(
+			self._run(
+				"var seen = null; frappe.call = function(o) { seen = o; };"
+				"ADMIN_STATE.attendance = { employee: { name: 'EMP-1' } };"
+				"removeAttendanceDay('2026-10-07', 'ATD-1');"
+				"check('endpoint', function() { return seen.url ==="
+				" '/api/method/saudi_hr.saudi_hr.admin_api.remove_attendance_day'; });"
+				"check('method', function() { return seen.type === 'POST'; });"
+				"check('record', function() { return seen.args.attendance === 'ATD-1'; });"
+				"check('employee', function() { return seen.args.employee === 'EMP-1'; });"
+				"check('date', function() { return seen.args.date === '2026-10-07'; });"
 			),
 			[],
 		)
@@ -1192,6 +1250,79 @@ class TestAdminPageBehaviour(FrappeTestCase):
 		).read()
 		self.assertIn("data-i18n-placeholder", shared)
 
+	def test_the_attendance_picker_lists_and_narrows_the_employees(self):
+		"""The search box drives a visible list, not the hidden select a native
+		dropdown would show.  The list is built from that select, so it must
+		narrow to the typed term and say so when nothing matches.
+		"""
+		self.assertEqual(
+			self._run(
+				"ADMIN_STATE.attendance_employees = ["
+				" { name: '855', employee_number: '855', full_name: 'Jane Doe' },"
+				" { name: '174', employee_number: '174', full_name: 'Hamdan' } ];"
+				"renderAttendanceEmployeeOptions();"
+				"var select = document.getElementById('attendance-employee');"
+				"select.options = ["
+				" { value: '', text: t('admin_attendance_all_employees') },"
+				" { value: '855', text: '855 — Jane Doe' },"
+				" { value: '174', text: '174 — Hamdan' } ];"
+				"ADMIN_STATE.attendance_open = true;"
+				"var input = document.getElementById('attendance-employee-search');"
+				"var list = document.getElementById('attendance-employee-results');"
+				"attendanceRenderResults();"
+				"check('the whole list is offered', function() { return"
+				" list.innerHTML.includes('Jane Doe') && list.innerHTML.includes('Hamdan')"
+				" && list.innerHTML.includes(t('admin_attendance_all_employees')); });"
+				"input.value = 'jane';"
+				"attendanceRenderResults();"
+				"check('typing narrows the list', function() { return"
+				" list.innerHTML.includes('Jane Doe') && !list.innerHTML.includes('Hamdan'); });"
+				"input.value = 'nobody';"
+				"attendanceRenderResults();"
+				"check('no match is said out loud', function() { return"
+				" list.innerHTML.includes(t('admin_attendance_no_records')); });"
+			),
+			[],
+		)
+
+	def test_choosing_from_the_attendance_picker_sets_the_employee_and_reloads(self):
+		"""Picking a row is the one way the report's subject changes, so the
+		select, the box that shows the choice and the report must move together.
+		"""
+		self.assertEqual(
+			self._run(
+				"var loaded = 0; loadAttendance = function() { loaded++; };"
+				"var input = document.getElementById('attendance-employee-search');"
+				"ADMIN_STATE.attendance_open = true;"
+				"chooseAttendanceEmployee('174', '174 — Hamdan');"
+				"check('the select holds the value', function() { return"
+				" document.getElementById('attendance-employee').value === '174'; });"
+				"check('the box shows the wording', function() { return"
+				" input.value === '174 — Hamdan'; });"
+				"check('the list is closed', function() { return"
+				" ADMIN_STATE.attendance_open === false; });"
+				"check('the report is reloaded once', function() { return loaded === 1; });"
+				"chooseAttendanceEmployee('', '');"
+				"check('choosing everyone clears the box', function() { return input.value === ''; });"
+			),
+			[],
+		)
+
+	def test_escape_closes_the_attendance_picker(self):
+		self.assertEqual(
+			self._run(
+				"var select = document.getElementById('attendance-employee');"
+				"select.options = [ { value: '', text: t('admin_attendance_all_employees') } ];"
+				"ADMIN_STATE.attendance_open = true;"
+				"attendanceRenderResults();"
+				"attendanceSearchKeydown({ key: 'Escape', preventDefault: function() {} });"
+				"check('the list is hidden', function() { return"
+				" document.getElementById('attendance-employee-results').hidden === true"
+				" && ADMIN_STATE.attendance_open === false; });"
+			),
+			[],
+		)
+
 	def test_switching_language_rebuilds_the_attendance_tables(self):
 		"""They are built from the last response, not from markup, so a switch
 		that left them alone would keep them in the previous language."""
@@ -1365,3 +1496,73 @@ class TestAdminPageRoute(FrappeTestCase):
 		module = importlib.import_module("saudi_hr.www.saudi_admin")
 		self.assertEqual(getattr(module, "no_cache", 0), 1)
 		self.assertEqual(getattr(module, "login_required", 0), 1)
+
+
+class TestAdminPagePanelAccess(FrappeTestCase):
+	"""A restricted portal role gets a shell with only its own rail and panels."""
+
+	def setUp(self):
+		super().setUp()
+		frappe.set_user("Administrator")
+		# the role is made by install/migrate, which a test database need not
+		# have run; create it the same way so this never depends on site state
+		from saudi_hr.install import ensure_attendance_officer_role
+
+		ensure_attendance_officer_role()
+
+	def _user_with(self, role):
+		suffix = frappe.generate_hash(length=8).lower()
+		email = f"saudi.panel.{suffix}@example.com"
+		frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": email,
+				"first_name": f"panel{suffix}",
+				"new_password": "N7!xP4@qR9#vT2$k",
+				"send_welcome_email": 0,
+				"roles": [{"role": role}],
+			}
+		).insert(ignore_permissions=True)
+		return email
+
+	def test_a_supervisor_gets_only_the_approvals_rail(self):
+		frappe.set_user(self._user_with("Supervisor"))
+		html, _ctx = render_page()
+		self.assertIn('data-panel="approvals"', html)
+		self.assertIn('id="panel-approvals"', html)
+		for panel in ("dashboard", "employees", "attendance", "report"):
+			self.assertNotIn(f'data-panel="{panel}"', html)
+			self.assertNotIn(f'id="panel-{panel}"', html)
+
+	def test_the_attendance_officer_gets_attendance_and_employees(self):
+		frappe.set_user(self._user_with("Attendance Officer"))
+		html, _ctx = render_page()
+		self.assertIn('data-panel="attendance"', html)
+		self.assertIn('id="panel-attendance"', html)
+		self.assertIn('data-panel="employees"', html)
+		self.assertIn('id="panel-employees"', html)
+		for panel in ("dashboard", "approvals", "report", "clearance", "documents"):
+			self.assertNotIn(f'data-panel="{panel}"', html)
+			self.assertNotIn(f'id="panel-{panel}"', html)
+
+	def test_the_admin_config_carries_the_panel_set(self):
+		frappe.set_user(self._user_with("Supervisor"))
+		html, _ctx = render_page()
+		match = re.search(r"panels: (\[[^\]]*\])", html)
+		self.assertIsNotNone(match, "ADMIN_CFG.panels is missing")
+		self.assertEqual(json.loads(match.group(1)), ["approvals"])
+
+	def test_the_landing_panel_is_the_first_one_a_role_may_open(self):
+		frappe.set_user(self._user_with("Attendance Officer"))
+		html, _ctx = render_page()
+		match = re.search(r"default_panel: (\"[^\"]*\")", html)
+		self.assertIsNotNone(match, "ADMIN_CFG.default_panel is missing")
+		self.assertEqual(json.loads(match.group(1)), "employees")
+
+	def test_the_page_can_post_an_employee_edit(self):
+		frappe.set_user("Administrator")
+		js = page_js(render_page()[0])
+		self.assertIn("update_employee: 1", js)
+		self.assertIn('"update_employee"', js)
+		self.assertIn('"edit-employee"', js)
+

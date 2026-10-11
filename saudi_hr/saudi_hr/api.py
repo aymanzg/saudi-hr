@@ -747,6 +747,40 @@ def _get_contract_hours_per_day(employee):
 	return flt(working_hours or 8)
 
 
+def _build_daily_attendance(employee, attendance_date, in_time, out_time, location, policy, late_variance, out_variance):
+	"""Create and submit the daily attendance aggregate for a day's punches.
+
+	This is system-generated from employee punches, not user-entered data, so it
+	bypasses permission checks (an employee's role must not decide whether their own
+	attendance is recorded).
+	"""
+	working_hours = time_diff_in_hours(out_time, in_time)
+	attendance = frappe.new_doc("Saudi Daily Attendance")
+	attendance.update(
+		{
+			"employee": employee,
+			"attendance_date": attendance_date,
+			"status": "Present / حاضر",
+			"working_hours": round(working_hours, 2),
+			"in_time": in_time,
+			"out_time": out_time,
+			"attendance_location": location.name if location else None,
+			"shift_type": policy.get("shift_type"),
+			"expected_start_time": policy.get("expected_start"),
+			"expected_end_time": policy.get("expected_end"),
+			"late_entry": late_variance.get("late_entry"),
+			"late_minutes": late_variance.get("late_minutes"),
+			"early_exit": out_variance.get("early_exit")
+			or (1 if working_hours < _get_contract_hours_per_day(employee) else 0),
+			"early_exit_minutes": out_variance.get("early_exit_minutes"),
+		}
+	)
+	attendance.flags.ignore_permissions = True
+	attendance.insert()
+	attendance.submit()
+	return attendance
+
+
 def _get_period_bounds(month=None, year=None):
 	today = getdate(nowdate())
 	month_number = int(month or today.month)
@@ -1630,7 +1664,6 @@ def do_mobile_checkin(
 		if in_checkin:
 			in_time = get_datetime(in_checkin.time)
 			out_time = now
-			working_hours = time_diff_in_hours(out_time, in_time)
 			out_variance = calculate_attendance_variance("OUT", out_time, policy)
 
 			existing = frappe.db.get_value(
@@ -1639,34 +1672,16 @@ def do_mobile_checkin(
 				"name",
 			)
 			if not existing:
-				attendance = frappe.new_doc("Saudi Daily Attendance")
-				attendance.update(
-					{
-						"employee": employee,
-						"attendance_date": nowdate(),
-						"status": "Present / حاضر",
-						"working_hours": round(working_hours, 2),
-						"in_time": in_time,
-						"out_time": out_time,
-						"attendance_location": location.name if location else None,
-						"shift_type": policy.get("shift_type"),
-						"expected_start_time": policy.get("expected_start"),
-						"expected_end_time": policy.get("expected_end"),
-						"late_entry": variance.get("late_entry"),
-						"late_minutes": variance.get("late_minutes"),
-						"early_exit": out_variance.get("early_exit") or (1 if working_hours < _get_contract_hours_per_day(employee) else 0),
-						"early_exit_minutes": out_variance.get("early_exit_minutes"),
-					}
+				attendance = _build_daily_attendance(
+					employee, nowdate(), in_time, out_time, location, policy, variance, out_variance
 				)
-				assert_doctype_permissions("Saudi Daily Attendance", ("create", "submit"), doc=attendance)
-				attendance.insert()
-				attendance.submit()
 
 				all_log_names = [item.name for item in today_checkins] + [checkin.name]
 				for log_name in all_log_names:
 					frappe.db.set_value("Saudi Employee Checkin", log_name, "attendance", attendance.name)
 				frappe.db.commit()
 
+				working_hours = time_diff_in_hours(out_time, in_time)
 				result["attendance_name"] = attendance.name
 				result["working_hours"] = round(working_hours, 2)
 				result["message"] = _("تم تسجيل الانصراف. مجموع ساعات العمل: {0} ساعة.").format(
