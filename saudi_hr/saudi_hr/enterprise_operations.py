@@ -997,14 +997,6 @@ def get_self_service_portal():
 
 	recent_requests.sort(key=lambda item: item.get("created_at") or "", reverse=True)
 
-	if not recent_requests:
-		recent_requests = [
-			{"id": "REQ-001", "title": "إجازة سنوية", "dates": "2026/09/20 - 2026/09/24", "status": "معتمد", "status_code": "approved", "icon": "palm", "route": "#requests"},
-			{"id": "REQ-002", "title": "إذن دوام", "dates": "2026/09/18", "status": "قيد المراجعة", "status_code": "pending", "icon": "clock", "route": "#requests"},
-			{"id": "REQ-003", "title": "طلب سلفة", "dates": "2026/09/15", "status": "مرفوض", "status_code": "rejected", "icon": "wallet", "route": "#requests"},
-			{"id": "REQ-004", "title": "تعريف بالراتب", "dates": "2026/09/10", "status": "معتمد", "status_code": "approved", "icon": "file", "route": "#requests"},
-		]
-
 	return {
 		"mode": mode,
 		"branding": _branding(),
