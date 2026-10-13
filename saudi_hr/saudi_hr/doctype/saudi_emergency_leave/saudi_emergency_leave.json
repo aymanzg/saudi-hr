@@ -32,6 +32,7 @@
    "fieldname": "naming_series",
    "fieldtype": "Select",
    "label": "Series",
+   "default": "SAU-EMG-.YYYY.-",
    "options": "SAU-EMG-.YYYY.-",
    "reqd": 1,
    "hidden": 1

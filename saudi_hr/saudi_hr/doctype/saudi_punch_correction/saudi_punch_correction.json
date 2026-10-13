@@ -33,6 +33,7 @@
    "fieldname": "naming_series",
    "fieldtype": "Select",
    "label": "Series",
+   "default": "SAU-PCR-.YYYY.-",
    "options": "SAU-PCR-.YYYY.-",
    "reqd": 1,
    "hidden": 1
