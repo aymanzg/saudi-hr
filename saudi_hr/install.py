@@ -380,6 +380,7 @@ def sync_workflow_configs():
 	what the catalogue says.  Legacy per-doctype JSON fixtures no longer apply.
 	"""
 	from saudi_hr.saudi_hr.workflow_catalogue import (
+		complete_gm_approved_documents,
 		ensure_workflow_actions,
 		ensure_workflow_roles,
 		ensure_workflow_states,
@@ -391,6 +392,9 @@ def sync_workflow_configs():
 	ensure_workflow_roles()
 	ensure_workflow_states()
 	ensure_workflow_actions()
+	# Before the catalogue drops the "GM Approved" holding state, finish any
+	# document still parked there so its approval effect is applied.
+	complete_gm_approved_documents()
 	reconcile_workflows()
 
 

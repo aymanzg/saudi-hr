@@ -106,13 +106,14 @@ class TestMobileLeaveRequests(FrappeTestCase):
 		result = self._submit("emergency_leave")
 
 		self.assertEqual(result["doctype"], "Saudi Emergency Leave")
+		self.assertEqual(result["workflow_state"], "Pending Supervisor Review")
 		stored = frappe.db.get_value(
 			"Saudi Emergency Leave",
 			result["name"],
 			["workflow_state", "total_days"],
 			as_dict=True,
 		)
-		self.assertEqual(stored.workflow_state, "Draft")
+		self.assertEqual(stored.workflow_state, "Pending Supervisor Review")
 		self.assertEqual(stored.total_days, 1)
 
 	def test_a_punch_correction_needs_the_corrected_time(self):
@@ -192,3 +193,35 @@ class TestMobileLeaveRequests(FrappeTestCase):
 		self.assertEqual(len(corrections), 1, requests)
 		self.assertEqual(corrections[0]["from_date"], self.punched_day)
 		self.assertEqual(corrections[0]["status_code"], "pending")
+
+	def test_a_submitted_punch_correction_is_pending_without_a_second_tap(self):
+		"""The phone sends the request straight to the review queue on save."""
+		self._punch_in(self.punched_day)
+
+		result = self._submit(
+			"punch_correction",
+			start_date=self.punched_day,
+			corrected_time="08:05",
+			reason="the gate was slow",
+		)
+
+		self.assertEqual(result["workflow_state"], "Pending Supervisor Review")
+		self.assertEqual(
+			frappe.db.get_value("Saudi Punch Correction", result["name"], "workflow_state"),
+			"Pending Supervisor Review",
+		)
+
+	def test_a_hr_service_request_is_pending_on_save(self):
+		"""Service requests from the phone also land in review on save."""
+		frappe.set_user(self.employee_email)
+		try:
+			with patch.object(api_module.frappe.db, "commit"):
+				result = api_module.submit_hr_service_request("salary_certificate", description="please issue")
+		finally:
+			frappe.set_user("Administrator")
+
+		self.assertEqual(result["workflow_state"], "Pending Supervisor Review")
+		self.assertEqual(
+			frappe.db.get_value("HR Service Request", result["name"], "workflow_state"),
+			"Pending Supervisor Review",
+		)

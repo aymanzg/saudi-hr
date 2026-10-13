@@ -1734,12 +1734,14 @@ def submit_mobile_leave_request(
 
 	assert_doctype_permissions(doc.doctype, "create", doc=doc)
 	doc.insert()
+	_auto_send_for_approval(doc)
 	attached_files = _attach_files(doc, attachments)
 	frappe.db.commit()
 
 	return {
 		"doctype": doc.doctype,
 		"name": doc.name,
+		"workflow_state": doc.get("workflow_state"),
 		"attached_files": attached_files,
 		"message": _("تم حفظ طلب الإجازة بنجاح وهو الآن بانتظار المراجعة."),
 	}
@@ -1807,12 +1809,14 @@ def submit_hr_service_request(
 	)
 	assert_doctype_permissions(doc.doctype, "create", doc=doc)
 	doc.insert()
+	_auto_send_for_approval(doc)
 	attached_files = _attach_files(doc, attachments)
 	frappe.db.commit()
 
 	return {
 		"doctype": doc.doctype,
 		"name": doc.name,
+		"workflow_state": doc.get("workflow_state"),
 		"attached_files": attached_files,
 		"message": _("تم حفظ طلب الخدمة بنجاح وهو الآن بانتظار المراجعة."),
 	}
@@ -1882,6 +1886,30 @@ def _can_submit_draft(doctype, workflow_state):
 	if not workflow_state or workflow_state != "Draft":
 		return False
 	return bool(get_workflow_name(doctype))
+
+
+def _auto_send_for_approval(doc):
+	"""Send a freshly saved employee request straight into the pending queue.
+
+	The phone forms no longer ask for a second "Send Request" tap: a saved
+	request is sent for approval immediately and lands on the first review
+	state. ``Submit Request`` remains available for resubmitting a rejected
+	request (handled by ``apply_my_workflow_action``).
+
+	A fresh copy is read back for the transition because inserting the request
+	renders it through ``printview`` for the workflow alert, which leaves
+	``flags.in_print`` set on that object; a later ``save()`` on it would be a
+	silent no-op.
+	"""
+	if not get_workflow_name(doc.doctype):
+		return doc
+
+	request = frappe.get_doc(doc.doctype, doc.name)
+	transitions = get_transitions(request, raise_exception=False)
+	if any(t.get("action") == "Submit Request" for t in transitions):
+		apply_workflow(request, "Submit Request")
+		doc.reload()
+	return doc
 
 
 @frappe.whitelist()

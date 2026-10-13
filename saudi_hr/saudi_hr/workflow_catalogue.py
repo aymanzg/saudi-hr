@@ -13,6 +13,11 @@ chain is:
                           -> GM Approved        (Mark Completed)
                                -> Completed
 
+Doctypes in ``AUTO_COMPLETE_ON_GM_APPROVAL`` (currently the punch correction)
+short-circuit the last hop: GM approval goes straight to ``Completed`` and the
+document is applied there, so there is no ``GM Approved`` state and no
+``Mark Completed`` step for them.
+
 Each approval level has its own ``Rejected by <level>`` state; the applicant
 resubmits from that state back into the same level.  ``Completed`` is the only
 state that can carry a submitted ``doc_status``; whether it does depends on the
@@ -67,6 +72,11 @@ SUBMIT_ROLE_OVERRIDES = {
 # Doctypes that HR drives end to end: there is no employee submitter and no
 # supervisor leg, so the chain runs HR -> HR Manager -> General Manager.
 HR_INITIATED_CHAIN = ("Termination Notice",)
+
+# Doctypes where GM approval is the terminal action: the document is applied
+# the moment the GM approves, so the chain ends on Completed. There is no
+# intermediate "GM Approved" holding state and no "Mark Completed" step.
+AUTO_COMPLETE_ON_GM_APPROVAL = ("Saudi Punch Correction",)
 
 # The one workflow vocabulary the rest of the app speaks.  Arabic on the desk
 # comes from the label layer, never from these names.
@@ -176,6 +186,9 @@ def _state_specs(is_submittable: bool, doctype: str):
 			row for row in specs if row[0] not in ("Pending Supervisor Review", "Rejected by Supervisor")
 		)
 		specs = ((FIRST_STATE, HR_ROLE, "0", "Warning"),) + specs[1:]
+	if doctype in AUTO_COMPLETE_ON_GM_APPROVAL:
+		# GM approval is the last step, so there is no holding state after it.
+		specs = tuple(row for row in specs if row[0] != "GM Approved")
 	return specs
 
 
@@ -211,9 +224,11 @@ def _hr_initiated_transition_specs(doctype: str):
 	_add("HR Reject", "Pending HR Review", "Rejected by HR", (HR_ROLE,), 0)
 	_add("HR Manager Approve", "Pending HR Manager Review", "Pending GM Review", (HR_MANAGER_ROLE,), 0)
 	_add("HR Manager Reject", "Pending HR Manager Review", "Rejected by HR Manager", (HR_MANAGER_ROLE,), 0)
-	_add("GM Approve", "Pending GM Review", "GM Approved", (GM_ROLE,), 0)
+	_gm_target = TERMINAL_STATE if doctype in AUTO_COMPLETE_ON_GM_APPROVAL else "GM Approved"
+	_add("GM Approve", "Pending GM Review", _gm_target, (GM_ROLE,), 0)
 	_add("GM Reject", "Pending GM Review", "Rejected by GM", (GM_ROLE,), 0)
-	_add("Mark Completed", "GM Approved", TERMINAL_STATE, EXECUTOR_ROLES, 0)
+	if doctype not in AUTO_COMPLETE_ON_GM_APPROVAL:
+		_add("Mark Completed", "GM Approved", TERMINAL_STATE, EXECUTOR_ROLES, 0)
 	return specs
 
 
@@ -241,9 +256,11 @@ def _transition_specs(doctype: str | None = None):
 	_add("HR Reject", "Pending HR Review", "Rejected by HR", (HR_ROLE,), 0)
 	_add("HR Manager Approve", "Pending HR Manager Review", "Pending GM Review", (HR_MANAGER_ROLE,), 0)
 	_add("HR Manager Reject", "Pending HR Manager Review", "Rejected by HR Manager", (HR_MANAGER_ROLE,), 0)
-	_add("GM Approve", "Pending GM Review", "GM Approved", (GM_ROLE,), 0)
+	_gm_target = TERMINAL_STATE if doctype in AUTO_COMPLETE_ON_GM_APPROVAL else "GM Approved"
+	_add("GM Approve", "Pending GM Review", _gm_target, (GM_ROLE,), 0)
 	_add("GM Reject", "Pending GM Review", "Rejected by GM", (GM_ROLE,), 0)
-	_add("Mark Completed", "GM Approved", TERMINAL_STATE, EXECUTOR_ROLES, 0)
+	if doctype not in AUTO_COMPLETE_ON_GM_APPROVAL:
+		_add("Mark Completed", "GM Approved", TERMINAL_STATE, EXECUTOR_ROLES, 0)
 	return specs
 
 
@@ -465,6 +482,42 @@ def reconcile_workflows():
 			workflow.save(ignore_permissions=True)
 		else:
 			frappe.get_doc(payload).insert(ignore_permissions=True)
+
+
+def complete_gm_approved_documents():
+	"""Finish documents whose GM approval used to need a separate completed step.
+
+	A doctype in ``AUTO_COMPLETE_ON_GM_APPROVAL`` that is sitting at
+	``GM Approved`` was already approved but never followed by the (now gone)
+	``Mark Completed`` action, so its effect was never applied. Submitting it
+	here runs the same ``on_submit`` a fresh GM approval runs now, and the
+	workflow moves it to ``Completed``. Must run before ``reconcile_workflows``
+	removes the ``GM Approved`` state, otherwise the state is no longer valid.
+	"""
+	completed = 0
+	for doctype in AUTO_COMPLETE_ON_GM_APPROVAL:
+		if not frappe.db.exists("DocType", doctype) or not frappe.db.table_exists(doctype):
+			continue
+		meta = frappe.get_meta(doctype)
+		if not meta.has_field("workflow_state"):
+			continue
+		for name in frappe.get_all(doctype, filters={"workflow_state": "GM Approved"}, pluck="name"):
+			try:
+				doc = frappe.get_doc(doctype, name)
+				doc.flags.ignore_permissions = True
+				doc.submit()
+				completed += 1
+			except Exception:
+				frappe.log_error(
+					frappe.get_traceback(),
+					f"Saudi HR workflow: could not complete {doctype} {name}",
+				)
+	if completed:
+		frappe.log_error(
+			f"Completed {completed} document(s) left awaiting the old GM completed step",
+			"Saudi HR Workflow GM Completion",
+		)
+	return completed
 
 
 # ─── Backfill ────────────────────────────────────────────────────────────────

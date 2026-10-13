@@ -27,18 +27,58 @@ class TestWorkflowCatalogue(FrappeTestCase):
 		for doctype, workflow in workflows.items():
 			self.assertEqual(workflow["document_type"], doctype)
 			self.assertEqual(workflow["is_active"], 1)
+			states = {row["state"] for row in workflow["states"]}
 			if doctype == "Termination Notice":
 				# HR-driven: no employee submitter, no supervisor leg.
 				self.assertEqual(
-					{row["state"] for row in workflow["states"]},
+					states,
 					set(wf.ALL_STATES) - {"Pending Supervisor Review", "Rejected by Supervisor"},
 				)
 				self.assertEqual(len(workflow["states"]), 10)
 				self.assertEqual(len(workflow["transitions"]), 16)
 				continue
-			self.assertEqual({row["state"] for row in workflow["states"]}, set(wf.ALL_STATES))
+			if doctype in wf.AUTO_COMPLETE_ON_GM_APPROVAL:
+				# GM approval is terminal: no "GM Approved" holding state and no
+				# "Mark Completed" follow-up transition.
+				self.assertEqual(states, set(wf.ALL_STATES) - {"GM Approved"})
+				self.assertEqual(len(workflow["states"]), 11)
+				self.assertEqual(len(workflow["transitions"]), 18)
+				continue
+			self.assertEqual(states, set(wf.ALL_STATES))
 			self.assertEqual(len(workflow["states"]), 12)
 			self.assertEqual(len(workflow["transitions"]), 20)
+
+	def test_gm_approval_completes_the_punch_correction(self):
+		workflow = wf.build_workflow("Saudi Punch Correction", is_submittable=True)
+		states = [row["state"] for row in workflow["states"]]
+		actions = [t["action"] for t in workflow["transitions"]]
+
+		self.assertNotIn("GM Approved", states)
+		self.assertNotIn("Mark Completed", actions)
+
+		gm_approvals = [t for t in workflow["transitions"] if t["action"] == "GM Approve"]
+		self.assertTrue(gm_approvals)
+		for transition in gm_approvals:
+			self.assertEqual(transition["state"], "Pending GM Review")
+			self.assertEqual(transition["next_state"], wf.TERMINAL_STATE)
+			self.assertEqual(transition["allowed"], wf.GM_ROLE)
+
+		terminal = next(row for row in workflow["states"] if row["state"] == wf.TERMINAL_STATE)
+		self.assertEqual(terminal["doc_status"], "1")
+
+	def test_other_doctypes_keep_the_gm_approved_handoff(self):
+		workflow = wf.build_workflow("Saudi Annual Leave", is_submittable=True)
+		states = [row["state"] for row in workflow["states"]]
+		actions = [t["action"] for t in workflow["transitions"]]
+
+		self.assertIn("GM Approved", states)
+		self.assertIn("Mark Completed", actions)
+		gm_approve = next(t for t in workflow["transitions"] if t["action"] == "GM Approve")
+		self.assertEqual(gm_approve["next_state"], "GM Approved")
+		mark_completed = next(t for t in workflow["transitions"] if t["action"] == "Mark Completed")
+		self.assertEqual(mark_completed["state"], "GM Approved")
+		self.assertEqual(mark_completed["next_state"], wf.TERMINAL_STATE)
+
 
 	def test_terminal_doc_status_tracks_submittability(self):
 		for doctype in ALL_DOCTYPES:

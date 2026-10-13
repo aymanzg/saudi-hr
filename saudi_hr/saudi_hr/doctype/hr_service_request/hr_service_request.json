@@ -143,9 +143,9 @@
   },
   {
    "fieldname": "workflow_state",
-   "fieldtype": "Select",
+   "fieldtype": "Link",
    "label": "Status",
-   "options": "Draft\nPending Manager Approval\nPending HR Approval\nApproved\nRejected",
+   "options": "Workflow State",
    "read_only": 1
   },
   {
