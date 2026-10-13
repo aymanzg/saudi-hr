@@ -1623,3 +1623,170 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 		self.assertEqual(created, ["EMP-2960"])
 		self.assertEqual(len(inserted), 1)
 		self.assertEqual(len(skipped), 1)
+
+	# ─── Attendance → payroll deductions ────────────────────────────────────
+
+	def test_parse_penalty_to_days_maps_catalog_text(self):
+		from saudi_hr.saudi_hr.utils import parse_penalty_to_days
+
+		self.assertEqual(parse_penalty_to_days("Written warning / إنذار كتابي"), 0.0)
+		self.assertEqual(parse_penalty_to_days("Termination for Cause / فصل تأديبي"), 0.0)
+		self.assertEqual(parse_penalty_to_days(None), 0.0)
+		self.assertEqual(parse_penalty_to_days("50% daily wage"), 0.5)
+		self.assertEqual(parse_penalty_to_days("One day / يوم"), 1.0)
+		self.assertEqual(parse_penalty_to_days("Two days"), 2.0)
+		self.assertEqual(parse_penalty_to_days("نصف يوم"), 0.5)
+
+	def test_resolve_attendance_period_uses_explicit_window(self):
+		doc = SimpleNamespace(period_from="2026-10-01", period_to="2026-10-25")
+		period = payroll_module._resolve_attendance_period(doc)
+		self.assertEqual(period["from"], getdate("2026-10-01"))
+		self.assertEqual(period["to"], getdate("2026-10-25"))
+
+	def test_resolve_attendance_period_rolls_from_previous_payroll(self):
+		doc = SimpleNamespace(
+			period_from=None,
+			period_to=None,
+			period_cutoff_day=25,
+			month="November / نوفمبر",
+			year=2026,
+			company="amd",
+			name="SAU-PAY-2026-0011",
+		)
+		with patch.object(payroll_module.frappe.db, "get_value", return_value="2026-10-25"):
+			period = payroll_module._resolve_attendance_period(doc)
+
+		self.assertEqual(period["from"], getdate("2026-10-26"))
+		self.assertEqual(period["to"], getdate("2026-11-25"))
+		self.assertEqual(doc.period_from, getdate("2026-10-26"))
+		self.assertEqual(doc.period_to, getdate("2026-11-25"))
+
+	def test_resolve_attendance_period_without_previous_starts_at_month_start(self):
+		doc = SimpleNamespace(
+			period_from=None,
+			period_to=None,
+			period_cutoff_day=None,
+			month="November / نوفمبر",
+			year=2026,
+			company="amd",
+			name="SAU-PAY-2026-0011",
+		)
+		with patch.object(payroll_module.frappe.db, "get_value", return_value=None):
+			period = payroll_module._resolve_attendance_period(doc)
+
+		self.assertEqual(period["from"], getdate("2026-11-01"))
+		self.assertEqual(period["to"], getdate("2026-11-25"))
+
+	def _build_attendance_doc(self, basic=3000):
+		row = SimpleNamespace(
+			employee="EMP-1",
+			employee_name="Demo Employee",
+			basic_salary=basic,
+			working_days=0.0,
+			absence_days=0.0,
+			late_hours=0.0,
+			absence_deduction=0.0,
+			late_deduction=0.0,
+			penalty_deduction=0.0,
+			attendance_flags="",
+		)
+		return SimpleNamespace(employees=[row], period_from="2026-10-01", period_to="2026-10-25")
+
+	def test_build_attendance_deductions_only_pays_closed_absence(self):
+		doc = self._build_attendance_doc(basic=3000)
+		counts = {"present": 18, "absent": 3, "late_days": 1, "late_minutes": 30, "late_hours": 0.5}
+		with patch.object(payroll_module.frappe, "has_permission", return_value=True), patch.object(
+			payroll_module, "_attendance_window_counts", return_value=counts
+		), patch.object(payroll_module, "_approved_absence_days", return_value=1), patch.object(
+			payroll_module, "_approved_penalty_days", return_value=0.0
+		):
+			rows = payroll_module._build_attendance_deductions(doc, {"from": getdate("2026-10-01"), "to": getdate("2026-10-25")})
+
+		row = rows[0]
+		self.assertEqual(row["working_days"], 18)
+		self.assertEqual(row["absence_days"], 3)
+		self.assertEqual(row["approved_absence_days"], 1)
+		self.assertEqual(row["absence_deduction"], 100.0)
+		self.assertEqual(row["penalty_deduction"], 0.0)
+		self.assertIn("2 absent day(s)", row["flags"])
+		self.assertIn("1 late day(s)", row["flags"])
+
+	def test_build_attendance_deductions_caps_penalty_at_five_days(self):
+		doc = self._build_attendance_doc(basic=3000)
+		counts = {"present": 20, "absent": 0, "late_days": 0, "late_minutes": 0, "late_hours": 0.0}
+		with patch.object(payroll_module.frappe, "has_permission", return_value=True), patch.object(
+			payroll_module, "_attendance_window_counts", return_value=counts
+		), patch.object(payroll_module, "_approved_absence_days", return_value=0), patch.object(
+			payroll_module, "_approved_penalty_days", return_value=8.0
+		):
+			rows = payroll_module._build_attendance_deductions(doc, {"from": getdate("2026-10-01"), "to": getdate("2026-10-25")})
+
+		row = rows[0]
+		self.assertEqual(row["penalty_days"], 8.0)
+		self.assertEqual(row["penalty_deduction"], 500.0)
+		self.assertIn("capped", row["flags"])
+
+	def test_apply_attendance_deductions_writes_scoped_fields(self):
+		doc = self._build_attendance_doc(basic=3000)
+		doc.docstatus = 0
+		doc.name = "SAU-PAY-2026-0011"
+		doc.comments = []
+		doc.recalculated = False
+
+		def _recalc_rows():
+			doc.recalculated = True
+
+		doc._recalculate_employee_rows = _recalc_rows
+		doc._recalculate_totals = lambda: None
+		doc.save = lambda: None
+		doc.add_comment = lambda comment_type, text: doc.comments.append(text)
+
+		result_row = {
+			"employee": "EMP-1",
+			"employee_name": "Demo Employee",
+			"working_days": 18,
+			"absence_days": 3,
+			"late_hours": 0.5,
+			"absence_deduction": 100.0,
+			"late_deduction": 0.0,
+			"penalty_deduction": 50.0,
+			"flags": "flag text",
+		}
+		with patch.object(payroll_module.frappe, "get_doc", return_value=doc), patch.object(
+			payroll_module.frappe, "has_permission"
+		), patch.object(payroll_module, "_build_attendance_deductions", return_value=[result_row]):
+			result = payroll_module.apply_attendance_deductions("SAU-PAY-2026-0011")
+
+		row = doc.employees[0]
+		self.assertEqual(result["count"], 1)
+		self.assertTrue(doc.recalculated)
+		self.assertEqual(row.working_days, 18)
+		self.assertEqual(row.absence_days, 3)
+		self.assertEqual(row.absence_deduction, 100.0)
+		self.assertEqual(row.penalty_deduction, 50.0)
+		self.assertEqual(row.attendance_flags, "flag text")
+		self.assertTrue(doc.comments)
+
+	def test_apply_attendance_deductions_rejects_submitted_payroll(self):
+		doc = self._build_attendance_doc()
+		doc.docstatus = 1
+		doc.name = "SAU-PAY-2026-0011"
+		with patch.object(payroll_module.frappe, "get_doc", return_value=doc), patch.object(
+			payroll_module.frappe, "has_permission"
+		):
+			with self.assertRaises(frappe.ValidationError):
+				payroll_module.apply_attendance_deductions("SAU-PAY-2026-0011")
+
+	def test_attendance_reset_warning_names_affected_employees(self):
+		doc = SimpleNamespace(
+			employees=[
+				SimpleNamespace(employee="EMP-1", employee_name="A", attendance_flags="x"),
+				SimpleNamespace(employee="EMP-2", employee_name="B", attendance_flags=""),
+			]
+		)
+		labels = payroll_module._attendance_generated_employee_labels(doc)
+		self.assertEqual(labels, ["A"])
+		warning = payroll_module._get_attendance_reset_warning(labels)
+		self.assertIn("A", warning)
+		self.assertIn("Generate Attendance", warning)
+

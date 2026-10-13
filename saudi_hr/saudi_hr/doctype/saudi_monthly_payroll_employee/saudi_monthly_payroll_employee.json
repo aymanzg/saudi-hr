@@ -16,10 +16,11 @@
   "department",
   "cost_center",
   "nationality",
-  "working_days",
-  "absence_days",
-  "late_hours",
-  "salary_section",
+   "working_days",
+   "absence_days",
+   "late_hours",
+   "attendance_flags",
+   "salary_section",
   "basic_salary",
   "housing_allowance",
   "transport_allowance",
@@ -134,6 +135,12 @@
    "fieldname": "late_hours",
    "fieldtype": "Float",
    "label": "Late Hours / ساعات التأخير",
+   "read_only": 1
+  },
+  {
+   "fieldname": "attendance_flags",
+   "fieldtype": "Small Text",
+   "label": "Attendance Flags / ملاحظات الحضور",
    "read_only": 1
   },
   {

@@ -87,6 +87,11 @@ function _add_buttons(frm) {
             _recalculate_all(frm);
         }, __('Actions / إجراءات'));
 
+        // زر احتساب الحضور والخصومات
+        frm.add_custom_button(__('Generate Attendance & Deductions / احتساب الحضور والخصومات'), function() {
+            _generate_attendance_deductions(frm);
+        }, __('Actions / إجراءات'));
+
         if (frm.doc.source_workbook) {
             frm.add_custom_button(__('Import Attached Workbook / استيراد الملف المرفق'), function() {
                 _import_workbook(frm);
@@ -546,6 +551,96 @@ function _recalculate_all(frm) {
                     }, 4);
                     _show_payroll_warning_list(__('Recalculation Warnings / ملاحظات إعادة الحساب'), r.message.warnings || []);
                 }
+            }
+        });
+    });
+}
+
+
+function _generate_attendance_deductions(frm) {
+    if (!frm.doc.employees || frm.doc.employees.length === 0) {
+        frappe.msgprint(__('No employees. Please fetch employees first.<br>لا يوجد موظفون. جلب الموظفين أولاً.'));
+        return;
+    }
+
+    const run_preview = function() {
+        frappe.call({
+            method: 'saudi_hr.saudi_hr.doctype.saudi_monthly_payroll.saudi_monthly_payroll.preview_attendance_deductions',
+            args: { doc_name: frm.doc.name },
+            freeze: true,
+            freeze_message: __('Reading attendance for the period...<br>جارٍ قراءة الحضور للفترة...'),
+            callback(r) {
+                if (!r.message) {
+                    return;
+                }
+                _confirm_attendance_deductions(frm, r.message);
+            }
+        });
+    };
+
+    if (frm.is_new()) {
+        frm.save().then(run_preview);
+    } else {
+        run_preview();
+    }
+}
+
+
+function _confirm_attendance_deductions(frm, preview) {
+    const rows = (preview.rows || []).filter(function(row) {
+        return row.absence_deduction || row.penalty_deduction || row.flags;
+    });
+
+    if (!rows.length) {
+        frappe.msgprint({
+            title: __('Nothing to Deduct / لا يوجد ما يُخصم'),
+            message: __('No absence or fine falls inside {0} to {1}.<br>لا يوجد غياب أو جزاء داخل الفترة {0} إلى {1}.', [preview.period_from, preview.period_to]),
+            indicator: 'green'
+        });
+        return;
+    }
+
+    const body = rows.map(function(row) {
+        const flags = (row.flags || '').split('\n').filter(Boolean)
+            .map(function(text) { return frappe.utils.escape_html(text); }).join('<br>');
+        return `<tr>
+            <td>${frappe.utils.escape_html(row.employee_name)}</td>
+            <td class="text-center">${row.absence_days}</td>
+            <td class="text-right">${format_currency(row.absence_deduction)}</td>
+            <td class="text-right">${format_currency(row.penalty_deduction)}</td>
+            <td>${flags}</td>
+        </tr>`;
+    }).join('');
+
+    const message = `
+        <p>${__('Period / الفترة')}: <b>${preview.period_from} → ${preview.period_to}</b></p>
+        <table class="table table-bordered" style="font-size:12px">
+            <thead><tr>
+                <th>${__('Employee / الموظف')}</th>
+                <th>${__('Absent / غياب')}</th>
+                <th>${__('Absence / خصم الغياب')}</th>
+                <th>${__('Penalty / الجزاء')}</th>
+                <th>${__('Flags / ملاحظات')}</th>
+            </tr></thead>
+            <tbody>${body}</tbody>
+        </table>
+        <p>${__('Only absence covered by a closed Absence Case and fines on an approved Disciplinary Procedure are deducted; everything else is only flagged.<br>يُخصم فقط الغياب المغطى بحالة غياب مغلقة والجزاءات الصادرة بإجراء تأديبي معتمد، وما عدا ذلك يُسجَّل كملاحظة فقط.')}</p>`;
+
+    frappe.confirm(message, function() {
+        frappe.call({
+            method: 'saudi_hr.saudi_hr.doctype.saudi_monthly_payroll.saudi_monthly_payroll.apply_attendance_deductions',
+            args: { doc_name: frm.doc.name },
+            freeze: true,
+            freeze_message: __('Applying attendance deductions...<br>جارٍ تطبيق خصومات الحضور...'),
+            callback(r) {
+                if (!r.message) {
+                    return;
+                }
+                frm.reload_doc();
+                frappe.show_alert({
+                    message: __('Deductions applied to {0} employees.<br>تم تطبيق الخصومات على {0} موظف.', [r.message.count]),
+                    indicator: 'green'
+                }, 5);
             }
         });
     });

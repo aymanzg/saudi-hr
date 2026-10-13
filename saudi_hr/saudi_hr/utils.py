@@ -1,6 +1,8 @@
 """
 utils.py — Helper functions for Saudi HR calculations.
 """
+import re
+
 import frappe
 from frappe import _
 from frappe.utils import add_years, cint, cstr, date_diff, flt, getdate, today
@@ -68,6 +70,59 @@ def calculate_prorated_sick_leave_deduction(leave_rows: list, month_start, month
 			deduction += round(full_pay - actual_pay, 2)
 
 	return round(deduction, 2)
+
+
+# The disciplinary catalogue stores penalties as free text ("Written warning",
+# "50% daily wage", "One day / يوم"), not as a number.  Payroll needs a number
+# of days' wage to multiply by the daily wage, so these phrases are mapped here
+# against the same catalogue the Disciplinary Procedure reads from.
+PENALTY_DAY_PHRASES = (
+	("half", 0.5),
+	("one", 1.0),
+	("two", 2.0),
+	("three", 3.0),
+	("four", 4.0),
+	("five", 5.0),
+	("six", 6.0),
+	("seven", 7.0),
+	("eight", 8.0),
+	("nine", 9.0),
+	("ten", 10.0),
+)
+
+
+def parse_penalty_to_days(penalty_text) -> float:
+	"""Number of days' wage a catalogue penalty text stands for.
+
+	Warnings and non-fine outcomes (termination, promotion delay) cost nothing,
+	so they return ``0.0``.  Percentages ("50% daily wage") are returned as a
+	fraction of a day (``0.5``); explicit day counts ("One day", "Two days",
+	"يوم") are returned as whole days.  The caller clamps the monthly total to
+	the five-days'-wage ceiling the labour law sets for fines.
+	"""
+	text = cstr(penalty_text or "").strip().lower()
+	if not text:
+		return 0.0
+
+	percent_match = re.search(r"(\d+(?:\.\d+)?)\s*%", text)
+	if percent_match:
+		return round(flt(percent_match.group(1)) / 100.0, 4)
+
+	digit_match = re.search(r"(\d+(?:\.\d+)?)\s*days?", text)
+	if digit_match:
+		return flt(digit_match.group(1))
+
+	for phrase, days in PENALTY_DAY_PHRASES:
+		if re.search(r"\b" + re.escape(phrase) + r"\b", text):
+			return days
+
+	if "نصف" in text:
+		return 0.5
+	if "يوم" in text:
+		return 1.0
+
+	return 0.0
+
 
 
 def get_active_contract(employee: str, fields=None, as_dict=True, reference_date=None):

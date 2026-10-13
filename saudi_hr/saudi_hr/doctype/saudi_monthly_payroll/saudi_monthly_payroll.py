@@ -5,7 +5,7 @@ from pathlib import Path
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import cint, cstr, flt, getdate, today
+from frappe.utils import add_days, cint, cstr, flt, getdate, today
 from frappe.utils.file_manager import save_file
 from frappe.utils.xlsxutils import make_xlsx
 from openpyxl import Workbook, load_workbook
@@ -13,7 +13,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from saudi_hr.saudi_hr.doctype.employee_loan.employee_loan import apply_payroll_loan_deductions, get_due_loan_deduction, revert_payroll_loan_deductions
-from saudi_hr.saudi_hr.utils import assert_doctype_permissions, assert_positive_basic_salary, calculate_prorated_sick_leave_deduction, get_contract_nationality_lookup, get_employee_nationality, get_employee_salary_components, get_gosi_rates, text_matches_tokens
+from saudi_hr.saudi_hr.utils import assert_doctype_permissions, assert_positive_basic_salary, calculate_prorated_sick_leave_deduction, get_contract_nationality_lookup, get_employee_nationality, get_employee_salary_components, get_gosi_rates, get_overlap_days, parse_penalty_to_days, text_matches_tokens
 
 GOSI_MAX_BASE = 45000.0
 PREFERRED_SOURCE_WORKBOOK_SHEETS = ("مسير الرواتب", "كشف الرواتب طباعة", "كشف الرواتب", "كشف المصدر")
@@ -306,8 +306,12 @@ def fetch_employees(doc_name: str):
 	nationality_map = get_contract_nationality_lookup(emp_names)
 
 	# مسح الجدول الحالي
-	doc.set("employees", [])
 	warnings = []
+	attendance_reset_names = _attendance_generated_employee_labels(doc)
+	if attendance_reset_names:
+		warnings.append(_get_attendance_reset_warning(attendance_reset_names))
+
+	doc.set("employees", [])
 	skipped_employees = []
 
 	for emp in employees:
@@ -376,7 +380,7 @@ def fetch_employees(doc_name: str):
 
 	doc._recalculate_totals()
 	doc.save()
-	if warnings:
+	if skipped_employees:
 		sample_names = ", ".join(skipped_employees[:5])
 		extra_count = max(len(skipped_employees) - 5, 0)
 		extra_text = _(" (+{0} more)").format(extra_count) if extra_count else ""
@@ -393,6 +397,297 @@ def fetch_employees(doc_name: str):
 		"warnings": warnings,
 		"total_net": doc.total_net_payable,
 	}
+
+
+# ─── Attendance → Payroll Deductions ────────────────────────────────────────────
+
+APPROVED_ABSENCE_CASE_STATUS = "Closed / مغلق"
+DISCIPLINARY_APPROVED_STATUSES = ("Decision Issued / صدر القرار", "Closed / مغلقة")
+PENALTY_MONTHLY_CAP_DAYS = 5.0
+DEFAULT_PERIOD_CUTOFF_DAY = 25
+
+
+@frappe.whitelist(methods=["POST"])
+def preview_attendance_deductions(doc_name: str):
+	"""Read-only preview of what Generate Attendance & Deductions would write."""
+	doc = frappe.get_doc("Saudi Monthly Payroll", doc_name)
+	frappe.has_permission("Saudi Monthly Payroll", "write", doc=doc, throw=True)
+	period = _resolve_attendance_period(doc)
+	rows = _build_attendance_deductions(doc, period)
+	return {
+		"period_from": str(period["from"]),
+		"period_to": str(period["to"]),
+		"rows": rows,
+	}
+
+
+@frappe.whitelist(methods=["POST"])
+def apply_attendance_deductions(doc_name: str):
+	"""Write attendance-derived deductions onto the payroll rows.
+
+	Only absence covered by a closed Absence Case, and fines on an approved
+	Disciplinary Procedure, become money.  Everything else is recorded as a
+	flag so a human decides.  The document is saved (never submitted), so loans,
+	WPS and the posting date keep behaving exactly as before.
+	"""
+	doc = frappe.get_doc("Saudi Monthly Payroll", doc_name)
+	frappe.has_permission("Saudi Monthly Payroll", "write", doc=doc, throw=True)
+	if doc.docstatus != 0:
+		frappe.throw(
+			_("Attendance deductions can only be generated on a draft payroll.<br>يمكن احتساب خصومات الحضور على مسودة مسير الرواتب فقط.")
+		)
+
+	period = _resolve_attendance_period(doc)
+	rows = _build_attendance_deductions(doc, period)
+	by_employee = {row["employee"]: row for row in rows}
+	changed = 0
+	for row in doc.employees:
+		result = by_employee.get(row.employee)
+		if not result:
+			continue
+		row.working_days = result["working_days"]
+		row.absence_days = result["absence_days"]
+		row.late_hours = result["late_hours"]
+		row.absence_deduction = result["absence_deduction"]
+		row.late_deduction = result["late_deduction"]
+		row.penalty_deduction = result["penalty_deduction"]
+		row.attendance_flags = result["flags"]
+		changed += 1
+
+	doc.period_from = period["from"]
+	doc.period_to = period["to"]
+	doc._recalculate_employee_rows()
+	doc._recalculate_totals()
+	doc.save()
+	_add_payroll_audit_comment(
+		doc,
+		_("Generated attendance deductions for {0} employees for the period {1} to {2}.").format(
+			changed, period["from"], period["to"]
+		),
+	)
+	return {
+		"count": changed,
+		"period_from": str(period["from"]),
+		"period_to": str(period["to"]),
+		"rows": rows,
+	}
+
+
+def _resolve_attendance_period(doc):
+	"""The window to read attendance from, rolling on the cut-off day.
+
+	The cycle runs from the day after the previous payroll's cut-off through
+	this payroll's cut-off (e.g. 26 Oct - 25 Nov).  An explicit period on the
+	document wins; otherwise it is derived from the month, the cut-off day and
+	the previous payroll for the same company.
+	"""
+	if doc.period_from and doc.period_to:
+		return {"from": getdate(doc.period_from), "to": getdate(doc.period_to)}
+
+	import calendar as _cal
+
+	month_num = _month_name_to_num(doc.month)
+	year = int(doc.year or today()[:4])
+	last_day = _cal.monthrange(year, month_num)[1]
+	cutoff = max(1, min(cint(doc.period_cutoff_day) or DEFAULT_PERIOD_CUTOFF_DAY, last_day))
+	period_to = getdate(f"{year}-{month_num:02d}-{cutoff:02d}")
+
+	previous_to = frappe.db.get_value(
+		"Saudi Monthly Payroll",
+		{
+			"company": doc.company,
+			"period_to": ["<", period_to],
+			"docstatus": ["<", 2],
+			"name": ["!=", doc.name or ""],
+		},
+		"period_to",
+		order_by="period_to desc",
+	)
+	period_from = add_days(getdate(previous_to), 1) if previous_to else getdate(f"{year}-{month_num:02d}-01")
+	if getdate(period_from) > period_to:
+		period_from = getdate(f"{year}-{month_num:02d}-01")
+
+	if not doc.period_from:
+		doc.period_from = period_from
+	if not doc.period_to:
+		doc.period_to = period_to
+	return {"from": getdate(period_from), "to": period_to}
+
+
+def _build_attendance_deductions(doc, period):
+	"""One result row per payroll employee: counts, deductions and flags."""
+	if doc.employees and not frappe.has_permission("Saudi Daily Attendance", "read", throw=False):
+		frappe.throw(
+			_(
+				"Reading attendance is required to generate its deductions. Ask for the Attendance role.<br>"
+				"قراءة الحضور مطلوبة لاحتساب خصوماته. اطلب صلاحية الحضور."
+			),
+			title=_("Missing Attendance Permission / لا توجد صلاحية حضور"),
+		)
+
+	results = []
+	for row in doc.employees:
+		if not row.employee:
+			continue
+		counts = _attendance_window_counts(row.employee, period["from"], period["to"])
+		daily_wage = round(flt(row.basic_salary) / 30, 2) if flt(row.basic_salary) else 0.0
+
+		approved_absence = _approved_absence_days(row.employee, period["from"], period["to"])
+		payable_absence = min(flt(counts["absent"]), flt(approved_absence))
+		absence_deduction = round(payable_absence * daily_wage, 2)
+
+		penalty_days = _approved_penalty_days(row.employee, period["from"], period["to"])
+		penalty_raw = round(penalty_days * daily_wage, 2)
+		penalty_cap = round(PENALTY_MONTHLY_CAP_DAYS * daily_wage, 2)
+		penalty_deduction = round(min(penalty_raw, penalty_cap), 2) if daily_wage else 0.0
+
+		results.append(
+			{
+				"employee": row.employee,
+				"employee_name": row.employee_name or row.employee,
+				"daily_wage": daily_wage,
+				"working_days": counts["present"],
+				"absence_days": counts["absent"],
+				"late_hours": counts["late_hours"],
+				"approved_absence_days": round(flt(approved_absence), 2),
+				"absence_deduction": absence_deduction,
+				"late_deduction": 0.0,
+				"penalty_days": round(penalty_days, 2),
+				"penalty_deduction": penalty_deduction,
+				"flags": "\n".join(
+					_attendance_flags(counts, payable_absence, penalty_days, penalty_raw, penalty_cap, daily_wage)
+				),
+			}
+		)
+	return results
+
+
+def _attendance_window_counts(employee, period_from, period_to):
+	"""Present/absent/late tallies for one employee inside the window."""
+	from saudi_hr.saudi_hr.admin_api import _attendance_days
+
+	days = _attendance_days({"from_date": period_from, "to_date": period_to}, employee)
+	present = absent = late_days = 0
+	late_minutes = 0.0
+	for day in days:
+		if day.get("future"):
+			continue
+		status_key = day.get("status_key")
+		if status_key in ("absent", "missing"):
+			absent += 1
+		elif status_key in ("present", "in_progress", "half_day", "other"):
+			present += 1
+		minutes = flt(day.get("late_minutes"))
+		if minutes > 0:
+			late_days += 1
+			late_minutes += minutes
+	return {
+		"present": present,
+		"absent": absent,
+		"late_days": late_days,
+		"late_minutes": round(late_minutes, 1),
+		"late_hours": round(late_minutes / 60.0, 2),
+	}
+
+
+def _approved_absence_days(employee, period_from, period_to):
+	"""Absence days covered by a closed Absence Case and inside the window."""
+	if not frappe.db.exists("DocType", "Absence Case"):
+		return 0.0
+	cases = frappe.get_all(
+		"Absence Case",
+		filters={"employee": employee, "status": APPROVED_ABSENCE_CASE_STATUS},
+		fields=["absence_start_date", "absence_end_date"],
+	)
+	total = 0
+	for case in cases:
+		total += get_overlap_days(case.absence_start_date, case.absence_end_date, period_from, period_to)
+	return total
+
+
+def _approved_penalty_days(employee, period_from, period_to):
+	"""Days' wage owed on approved Disciplinary Procedures inside the window."""
+	if not frappe.db.exists("DocType", "Disciplinary Procedure"):
+		return 0.0
+	meta = frappe.get_meta("Disciplinary Procedure")
+	fields = ["penalty_type", "penalty_days", "incident_date"]
+	if meta.has_field("recommended_penalty"):
+		fields.append("recommended_penalty")
+
+	filters = [
+		["employee", "=", employee],
+		["status", "in", list(DISCIPLINARY_APPROVED_STATUSES)],
+		["incident_date", ">=", period_from],
+		["incident_date", "<=", period_to],
+	]
+	if meta.has_field("hr_manager_approval"):
+		filters.append(["hr_manager_approval", "=", 1])
+
+	total = 0.0
+	for procedure in frappe.get_all("Disciplinary Procedure", filters=filters, fields=fields):
+		total += _procedure_penalty_days(procedure)
+	return total
+
+
+def _procedure_penalty_days(procedure):
+	"""One procedure's fine in days' wage; warnings and terminations cost nothing."""
+	penalty_type = cstr(procedure.get("penalty_type") or "")
+	if "Suspension" in penalty_type or "إيقاف" in penalty_type:
+		return flt(procedure.get("penalty_days"))
+	recommended = cstr(procedure.get("recommended_penalty") or "").strip()
+	if recommended:
+		return parse_penalty_to_days(recommended)
+	return parse_penalty_to_days(penalty_type)
+
+
+def _attendance_flags(counts, payable_absence, penalty_days, penalty_raw, penalty_cap, daily_wage):
+	flags = []
+	uncovered = flt(counts["absent"]) - flt(payable_absence)
+	if uncovered > 0:
+		flags.append(
+			_(
+				"{0} absent day(s) with no closed Absence Case; not deducted. / "
+				"{0} يوم غياب بدون حالة غياب مغلقة؛ لم يُخصم."
+			).format(_fmt_days(uncovered))
+		)
+	if counts["late_days"]:
+		flags.append(
+			_(
+				"{0} late day(s), {1} hour(s). Deducted only through an approved Disciplinary Procedure. / "
+				"{0} يوم تأخير، {1} ساعة. لا يُخصم إلا بإجراء تأديبي معتمد."
+			).format(counts["late_days"], counts["late_hours"])
+		)
+	if penalty_days and daily_wage and flt(penalty_raw) > flt(penalty_cap):
+		flags.append(
+			_(
+				"Disciplinary fine capped at five days' wage. / تم تحديد الجزاء التأديبي بحد أقصى خمسة أيام أجر."
+			)
+		)
+	return flags
+
+
+def _fmt_days(value):
+	return f"{flt(value):g}"
+
+
+def _attendance_generated_employee_labels(doc):
+	"""Employees whose rows carry an attendance flag already."""
+	labels = []
+	for row in doc.employees or []:
+		if cstr(getattr(row, "attendance_flags", "")).strip():
+			labels.append(row.employee_name or row.employee)
+	return labels
+
+
+def _get_attendance_reset_warning(names):
+	sample = ", ".join(names[:5])
+	extra = _(" (+{0} more)").format(len(names) - 5) if len(names) > 5 else ""
+	return _(
+		"Fetch Employees rebuilds the rows and clears the attendance deductions generated earlier for {0}{1}. "
+		"Press Generate Attendance & Deductions again afterwards. / "
+		"جلب الموظفين يعيد بناء الصفوف ويمسح خصومات الحضور المحتسبة سابقاً لـ {0}{1}. "
+		"اضغط احتساب الحضور والخصومات مرة أخرى بعد ذلك."
+	).format(sample, extra)
 
 
 @frappe.whitelist()
