@@ -193,6 +193,13 @@ class SaudiPunchCorrection(Document):
 		if not (self.employee and self.attendance_date and self.name):
 			return
 
+		# A request already in the chain is allowed to reach approval: at that
+		# point it supersedes the older correction instead of being refused (see
+		# _cancel_prior_corrections). The once-per-day guard only stops a *new*
+		# request from being filed while one is already in force.
+		if not self.is_new():
+			return
+
 		existing = frappe.db.exists(
 			"Saudi Punch Correction",
 			{
@@ -212,10 +219,70 @@ class SaudiPunchCorrection(Document):
 				title=_("Already Corrected / تم التصحيح مسبقاً"),
 			)
 
+	def _cancel_prior_corrections(self):
+		"""Cancel any other applied correction for the day: the newest one wins.
+
+		Approving a correction for a day that is already corrected used to be
+		refused outright, which left a request filed before the first one took
+		effect stuck forever. Instead the older request is cancelled here — which
+		puts its punches and the day back the way it found them — and the current
+		request is then applied on top, so the day ends with a single correction
+		in force and both requests remain as the audit trail.
+		"""
+		if not (self.employee and self.attendance_date):
+			return False
+
+		priors = frappe.get_all(
+			"Saudi Punch Correction",
+			filters={
+				"employee": self.employee,
+				"attendance_date": self.attendance_date,
+				"applied": 1,
+				"docstatus": 1,
+				"name": ["!=", self.name],
+			},
+			pluck="name",
+		)
+		if not priors:
+			return False
+
+		# The current request may already point at the day row an older
+		# correction created. Detach from it so that correction can cancel and
+		# delete the row while reverting; the row is re-resolved afterwards.
+		if self.daily_attendance:
+			frappe.db.set_value("Saudi Punch Correction", self.name, "daily_attendance", None)
+			self.daily_attendance = None
+
+		for name in priors:
+			prior = frappe.get_doc("Saudi Punch Correction", name)
+			prior.flags.ignore_permissions = True
+			prior.cancel()
+		return True
+
 	def _apply_correction_if_approved(self):
 		"""Idempotent: the ``applied`` flag means this runs exactly once."""
 		if self.applied or self.workflow_state != APPROVED_STATE or self.docstatus != 1:
 			return
+
+		# A correction approved after an older one already took effect supersedes
+		# it. Cancelling the older request moves its punches back, so the punches
+		# and their originals are re-read here: the times this request records as
+		# "before" must be the ones actually in force now, not what the superseded
+		# request had left behind.
+		if self._cancel_prior_corrections():
+			self.original_in_time = None
+			self.original_out_time = None
+			self._resolve_punches()
+			self._resolve_daily_attendance()
+			self.db_set(
+				{
+					"punch": self.punch,
+					"punch_out": self.punch_out,
+					"original_in_time": self.original_in_time,
+					"original_out_time": self.original_out_time,
+					"daily_attendance": self.daily_attendance,
+				}
+			)
 
 		in_time = self._corrected_datetime("corrected_in_time")
 		out_time = self._corrected_datetime("corrected_out_time")

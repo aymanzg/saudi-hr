@@ -330,6 +330,44 @@ class TestSaudiPunchCorrection(FrappeTestCase):
 		self.assertIn("already corrected", str(error.exception))
 		self.assertEqual(self._punch_time(), "08:05:00")
 
+	def test_a_later_approval_supersedes_an_applied_correction(self):
+		"""A request filed before an older one took effect must still be
+		approvable: approving it cancels the older correction and takes over, so
+		the day ends with exactly one correction in force."""
+		first = self._insert(corrected_in_time="08:05:00")
+		second = self._insert(corrected_in_time="08:30:00")
+		self.assertEqual(first.applied, 0)
+		self.assertEqual(second.applied, 0)
+
+		self._approve(first)
+		self.assertEqual(self._punch_time(), "08:05:00")
+
+		# approving the second is no longer refused, and it wins
+		self._approve(second)
+		self.assertEqual(self._punch_time(), "08:30:00")
+		self.assertEqual(
+			frappe.db.get_value("Saudi Punch Correction", first.name, "docstatus"),
+			2,
+			"the superseded correction is cancelled",
+		)
+		in_force = frappe.get_all(
+			"Saudi Punch Correction",
+			filters={
+				"employee": self.employee,
+				"attendance_date": self.day,
+				"applied": 1,
+				"docstatus": 1,
+			},
+			pluck="name",
+		)
+		self.assertEqual(in_force, [second.name], "only one correction is in force")
+		# the original on the winning request is the true one, read after the
+		# superseded correction put its punch back
+		self.assertEqual(
+			_hhmm(frappe.db.get_value("Saudi Punch Correction", second.name, "original_in_time")),
+			"09:40:00",
+		)
+
 	def test_a_future_day_cannot_be_corrected(self):
 		with self.assertRaises(frappe.exceptions.ValidationError):
 			self._insert(attendance_date=add_days(nowdate(), 2))
