@@ -277,6 +277,9 @@ REPORT_DAY_ROWS = 62
 # earliest, so the cap is high enough to name the whole day for a normal
 # headcount rather than a dozen of the most recent taps.
 TODAY_PUNCH_ROWS = 100
+# The daily board lists every expected employee, so its cap only has to stop a
+# runaway headcount from being serialised whole; it is far above a normal firm.
+TODAY_ROSTER_ROWS = 1000
 
 # The status column is a bilingual Select, so the value carries both languages.
 # Keying on the English prefix keeps the counters stable when the label text
@@ -1582,20 +1585,24 @@ def submit_leave_request(doctype, name):
 
 
 @frappe.whitelist(methods=["GET"])
-def get_attendance_report(employee=None, month=None, from_date=None, to_date=None, limit=25):
+def get_attendance_report(
+	employee=None, month=None, from_date=None, to_date=None, day=None, company=None, limit=25
+):
 	"""The attendance panel: one window, counted for one employee or by department.
 
-	`month` ("YYYY-MM") and an explicit `from_date`/`to_date` pair are two ways
-	to ask for the same thing, so a caller picks whichever it has; a month
-	wins, because it is the more specific of the two.  The window is capped and
-	a reversed pair is swapped, so a mistyped range cannot ask for an unbounded
-	walk or come back silently empty.
+	`month` ("YYYY-MM"), a single `day`, and an explicit `from_date`/`to_date`
+	pair are ways to ask for the same window, so a caller picks whichever it
+	has; the single day is the most specific, then a month, and the window is
+	capped and a reversed pair is swapped, so a mistyped range cannot ask for an
+	unbounded walk or come back silently empty.  `company` narrows the whole
+	report to one company without changing its shape.
 	"""
 	assert_portal_access()
 	assert_panel_access("attendance")
 
-	window = _attendance_window(from_date, to_date, month)
+	window = _attendance_window(from_date, to_date, month, day)
 	readable = frappe.has_permission(ATTENDANCE_DOCTYPE, "read", throw=False)
+	employees = _attendance_company_employees(company)
 
 	if employee:
 		# the same document-level check the employee dialog makes: a User
@@ -1610,8 +1617,10 @@ def get_attendance_report(employee=None, month=None, from_date=None, to_date=Non
 		"span_days": window["days"],
 		"scope": "employee" if employee else "departments",
 		"employee": _attendance_employee(employee) if employee else None,
+		"company": company or None,
 		"scoped": bool(get_user_permissions(frappe.session.user).get("Employee")),
 		"month": window.get("month"),
+		"day": window.get("day"),
 		# both shapes are always present so the client can read `scope` instead
 		# of probing for keys; only the one in scope carries rows
 		"days": [],
@@ -1623,17 +1632,25 @@ def get_attendance_report(employee=None, month=None, from_date=None, to_date=Non
 		return payload
 
 	# the totals follow the scope: a report about one employee must not carry
-	# the whole company's days in its own tiles
+	# the whole company's days in its own tiles.  A company filter narrows the
+	# department scope only, because an explicitly chosen employee already
+	# names the one person the tiles are about.
+	if employee:
+		scoped_employees = [employee]
+	else:
+		scoped_employees = employees
 	payload["totals"] = _attendance_period_counts(
-		_attendance_window_rows(window, [employee] if employee else None)
+		_attendance_window_rows(window, scoped_employees)
 	)
 	if employee:
 		payload["days"] = _attendance_days(window, employee)
 		payload["truncated"] = len(payload["days"]) >= REPORT_DAY_ROWS
 	else:
-		payload["departments"], payload["department_count"] = _attendance_departments(window, limit)
+		payload["departments"], payload["department_count"] = _attendance_departments(
+			window, limit, employees
+		)
 		payload["truncated"] = len(payload["departments"]) < payload["department_count"]
-	payload["today"] = _attendance_today_rows(employee)
+	payload["today"] = _attendance_today_rows(employee, company=company)
 	return payload
 
 
@@ -1650,20 +1667,67 @@ def _attendance_employee(employee):
 	}
 
 
+def _attendance_company_employees(company):
+	"""The employees of one company this caller can read, or None without a filter.
+
+	Tri-state on purpose: ``None`` keeps a report company-wide, a list narrows
+	it, and an empty list says the company has nobody to show.  ``get_list``
+	applies the caller's permissions, so a pinned user only ever narrows to
+	their own slice rather than every employee in the company.
+	"""
+	company = cstr(company or "").strip()
+	if not company:
+		return None
+	return (
+		frappe.get_list(
+			"Employee",
+			filters={"company": company},
+			pluck="name",
+			limit_page_length=0,
+		)
+		or []
+	)
+
+
+@frappe.whitelist(methods=["GET"])
+def get_attendance_filter_options():
+	"""Companies to filter the attendance panel by.
+
+	Only companies that actually hold an employee this caller can see are
+	listed, so picking one never lands on an empty report, and a Department
+	Approver pinned by a User Permission only sees their own.
+	"""
+	assert_portal_access()
+	assert_panel_access("attendance")
+	if not frappe.has_permission("Employee", "read", throw=False):
+		return {"companies": []}
+	companies = {
+		cstr(row.get("company") or "").strip()
+		for row in frappe.get_list("Employee", fields=["company"], limit_page_length=0)
+	}
+	companies.discard("")
+	return {"companies": sorted(companies)}
+
+
 def _attendance_window_rows(window, employees):
 	"""Attendance days inside the window, for `employees` or for everyone.
 
 	The window caps the walk; the department scope is bounded by that alone,
 	which is why the row count is reported back with the result rather than
 	left to look exact.
+
+	`employees` is tri-state: ``None`` means everyone, a list means just those
+	people, and an empty list means nobody.  The last one matters for a company
+	filter that matches no visible employee, which must read as empty rather
+	than quietly fall back to the whole firm.
 	"""
 	filters = [
 		# see _attendance_rows: "between" matches nothing on this field
 		["attendance_date", ">=", window["from_date"]],
 		["attendance_date", "<=", window["to_date"]],
 	]
-	if employees:
-		filters.insert(0, ["employee", "in", list(employees)])
+	if employees is not None:
+		filters.insert(0, ["employee", "in", list(employees) or ["__no_employee__"]])
 	return frappe.get_list(
 		ATTENDANCE_DOCTYPE,
 		filters=filters,
@@ -1712,6 +1776,48 @@ def _attendance_corrections(employee, from_date, to_date):
 	return {str(row.get("attendance_date")): row.get("correction_reason") for row in rows}
 
 
+def _attendance_window_punches(employee, from_date, to_date):
+	"""The employee's own punches in the window, grouped by day, oldest first.
+
+	The day grid is built from Saudi Daily Attendance, so a day whose punches
+	were never consolidated - today while the employee is still on shift, or a
+	past day the sync job has not reached - has no row at all and would read as
+	a blank.  Reading the punches back lets that day show its real times instead
+	of pretending nothing happened.
+
+	The window ends at the day after ``to_date`` rather than using ``between``
+	on the time field, which matches nothing here and would leave every day
+	looking unpunched.
+	"""
+	if not employee or not frappe.has_permission(CHECKIN_DOCTYPE, "read", throw=False):
+		return {}
+	fields = _existing_fields(CHECKIN_DOCTYPE, ["log_type", "time", "late_minutes"])
+	rows = frappe.get_list(
+		CHECKIN_DOCTYPE,
+		filters=[
+			["employee", "=", employee],
+			["time", ">=", f"{from_date} 00:00:00"],
+			["time", "<", f"{add_days(to_date, 1)} 00:00:00"],
+		],
+		fields=fields,
+		order_by="time asc",
+		limit_page_length=0,
+	)
+	days = {}
+	for row in rows:
+		day = str(getdate(row.get("time")))
+		bucket = days.setdefault(day, {"in_time": None, "out_time": None, "late_minutes": None})
+		if row.get("log_type") == "IN":
+			# the first check-in is the day's check-in; its penalty comes with it
+			if bucket["in_time"] is None:
+				bucket["in_time"] = _time_only(row.get("time"))
+				bucket["late_minutes"] = flt(row.get("late_minutes")) or None
+		else:
+			# rows are time asc, so the last OUT written is the day's check-out
+			bucket["out_time"] = _time_only(row.get("time"))
+	return days
+
+
 def _attendance_days(window, employee):
 	"""One row per calendar day in the window, oldest first and capped.
 
@@ -1722,19 +1828,36 @@ def _attendance_days(window, employee):
 
 	A day with no row is not always a gap to fill.  It may be leave the employee
 	is on, a holiday, or the weekend; those days are described from the records
-	that already exist rather than left to read as a missing record.
+	that already exist rather than left to read as a missing record.  A working
+	day with punches but no row yet - the day is not finished - instead shows
+	the real punch times and reads as ``in_progress``.
 	"""
 	rows = _attendance_window_rows(window, [employee])
 	by_date = {str(row.get("attendance_date")): row for row in rows}
 	corrections = _attendance_corrections(employee, window["from_date"], window["to_date"])
 	holidays = _holiday_dates(employee, window["from_date"], window["to_date"])
 	leaves = _leave_dates(employee, window["from_date"], window["to_date"])
-	days = [
-		_attendance_view(by_date[key], corrections)
-		if key in by_date
-		else _off_attendance_view(key, employee, holidays.get(key), leaves.get(key))
-		for key in _each_date(window["from_date"], window["to_date"])
-	]
+	punches = _attendance_window_punches(employee, window["from_date"], window["to_date"])
+	days = []
+	for key in _each_date(window["from_date"], window["to_date"]):
+		if key in by_date:
+			days.append(_attendance_view(by_date[key], corrections))
+			continue
+		view = _off_attendance_view(key, employee, holidays.get(key), leaves.get(key))
+		punch = punches.get(key)
+		# only a plain working day is enriched: a rest day or an approved leave
+		# keeps its own label, because that is what the day was
+		if punch and view["status_key"] == "missing":
+			view.update(
+				{
+					"in_time": punch["in_time"],
+					"out_time": punch["out_time"],
+					"late_minutes": punch["late_minutes"],
+					"status_key": "in_progress",
+					"punched": True,
+				}
+			)
+		days.append(view)
 	# a month reads top-down from day 1; keep the most recent window when capped
 	return days[-REPORT_DAY_ROWS:]
 
@@ -1905,16 +2028,17 @@ def _missing_attendance_view(day, employee):
 	}
 
 
-def _attendance_departments(window, limit):
+def _attendance_departments(window, limit, employees=None):
 	"""Per department totals, biggest first, plus how many there were.
 
 	Grouped on the department rather than on the employee, so one person's
 	three days land in one row instead of three rows of one day each, and the
 	employee count in that row is the number of distinct people behind it.
+	`employees` narrows the walk to a company's people, or to nobody.
 	"""
 	departments = {}
 	employees_of = {}
-	for row in _attendance_window_rows(window, None):
+	for row in _attendance_window_rows(window, employees):
 		key = row.get("employee")
 		if key not in employees_of:
 			employees_of[key] = frappe.db.get_value("Employee", key, "department") or ""
@@ -1956,15 +2080,21 @@ def _attendance_departments(window, limit):
 	return capped, len(summary)
 
 
-def _attendance_window(from_date=None, to_date=None, month=None):
+def _attendance_window(from_date=None, to_date=None, month=None, day=None):
 	"""Normalise the requested window.
 
-	Defaults to the last 30 days, reads "YYYY-MM" as that whole month, swaps a
-	reversed pair rather than returning nothing for it, and caps the span so
-	one request cannot walk an unbounded amount of history.
+	Defaults to the last 30 days; a single ``day`` reads as that one date, a
+	"YYYY-MM" reads as that whole month, and an explicit pair is honoured as
+	given.  A reversed pair is swapped rather than returning nothing for it, and
+	the span is capped so one request cannot walk an unbounded amount of
+	history.  The UI sends exactly one selector, but when several arrive the
+	most specific wins: day, then month, then the range.
 	"""
+	day = cstr(day or "").strip()
 	month = cstr(month or "").strip()
-	if month:
+	if day:
+		start = end = _attendance_day(day)
+	elif month:
 		start, end = _attendance_month(month)
 	elif from_date or to_date:
 		start = getdate(from_date) if from_date else None
@@ -1983,7 +2113,8 @@ def _attendance_window(from_date=None, to_date=None, month=None):
 		"from_date": str(start),
 		"to_date": str(end),
 		"days": (end - start).days + 1,
-		"month": month or None,
+		"month": (month if month and not day else None),
+		"day": (str(start) if day else None),
 	}
 
 
@@ -2003,13 +2134,29 @@ def _attendance_month(month):
 	return date(year, mon, 1), date(year, mon, last)
 
 
-def _attendance_today_rows(employee=None, limit=TODAY_PUNCH_ROWS):
+def _attendance_day(day):
+	"""'2026-10-12' -> that date.
+
+	Refused rather than ignored when malformed, for the same reason as the
+	month: falling back to the default window would answer a different question
+	than the one asked.
+	"""
+	match = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", day)
+	if not match:
+		frappe.throw(_("Date must be written as YYYY-MM-DD."), frappe.ValidationError)
+	try:
+		return date(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+	except ValueError:
+		frappe.throw(_("Date must be written as YYYY-MM-DD."), frappe.ValidationError)
+
+
+def _attendance_today_rows(employee=None, limit=TODAY_PUNCH_ROWS, company=None):
 	"""Today's punches, so the report answers "who is in?" without a filter.
 
-	Scoped to `employee` when the report is, so an employee's own card shows
-	their own punches instead of the rest of the company's.  The window ends
-	at tomorrow, not at now(): a punch logged a minute ahead by a device with
-	a fast clock is still today's punch.
+	Scoped to `employee` when the report is, and to `company` when the report
+	is, so an employee's own card shows their own punches instead of the rest of
+	the company's.  The window ends at tomorrow, not at now(): a punch logged a
+	minute ahead by a device with a fast clock is still today's punch.
 	"""
 	if not frappe.has_permission(CHECKIN_DOCTYPE, "read", throw=False):
 		return []
@@ -2019,6 +2166,9 @@ def _attendance_today_rows(employee=None, limit=TODAY_PUNCH_ROWS):
 	filters = [["time", ">=", nowdate()], ["time", "<", add_days(nowdate(), 1)]]
 	if employee:
 		filters.append(["employee", "=", employee])
+	elif company:
+		employees = _attendance_company_employees(company)
+		filters.append(["employee", "in", list(employees) or ["__no_employee__"]])
 	rows = frappe.get_list(
 		CHECKIN_DOCTYPE,
 		filters=filters,
@@ -2043,6 +2193,238 @@ def _attendance_today_rows(employee=None, limit=TODAY_PUNCH_ROWS):
 		}
 		for row in rows
 	]
+
+
+def _attendance_day_punches(day, employees=None):
+	"""Every punch on one day, grouped by employee, oldest first.
+
+	One query rather than one per employee, because the daily board walks the
+	whole roster.  The window ends at the day after, not at a ``between`` on the
+	time field, which matches nothing here and would leave the board empty.
+	"""
+	if not frappe.has_permission(CHECKIN_DOCTYPE, "read", throw=False):
+		return {}
+	fields = _existing_fields(CHECKIN_DOCTYPE, ["employee", "log_type", "time", "late_minutes"])
+	filters = [
+		["time", ">=", f"{day} 00:00:00"],
+		["time", "<", f"{add_days(day, 1)} 00:00:00"],
+	]
+	if employees is not None:
+		filters.insert(0, ["employee", "in", list(employees) or ["__no_employee__"]])
+	rows = frappe.get_list(
+		CHECKIN_DOCTYPE,
+		filters=filters,
+		fields=fields,
+		order_by="time asc",
+		limit_page_length=0,
+	)
+	days = {}
+	for row in rows:
+		key = row.get("employee")
+		bucket = days.setdefault(key, {"in_time": None, "out_time": None, "late_minutes": None})
+		if row.get("log_type") == "IN":
+			if bucket["in_time"] is None:
+				bucket["in_time"] = _time_only(row.get("time"))
+				bucket["late_minutes"] = flt(row.get("late_minutes")) or None
+		else:
+			bucket["out_time"] = _time_only(row.get("time"))
+	return days
+
+
+def _leave_for_day(day, employees=None):
+	"""Approved leave on one day, by employee, from the inbox's own doctypes.
+
+	Bulk across the whole roster, so the board does not run one query per
+	person.  Only approved records count, and the first doctype in
+	LEAVE_REGISTRY wins when two overlap, matching the day grid.
+	"""
+	day = str(day)
+	leaves = {}
+	for entry in LEAVE_REGISTRY:
+		doctype, label, start_field, end_field, _days_field, _kind_field, _state_field = entry
+		if doctype in NON_LEAVE_DOCTYPES:
+			continue
+		if not frappe.has_permission(doctype, "read", throw=False):
+			continue
+		fields = _existing_fields(
+			doctype, ["employee", start_field, end_field, "workflow_state", "status", "docstatus"]
+		)
+		if start_field not in fields or end_field not in fields or "employee" not in fields:
+			continue
+		filters = [[start_field, "<=", day], [end_field, ">=", day]]
+		if employees is not None:
+			filters.insert(0, ["employee", "in", list(employees) or ["__no_employee__"]])
+		rows = frappe.get_list(doctype, filters=filters, fields=fields, limit_page_length=0)
+		for row in rows:
+			if _row_state(row) != "approved":
+				continue
+			leaves.setdefault(row.get("employee"), label)
+	return leaves
+
+
+def _holiday_for_day(day):
+	"""Holiday and weekly-off rows on one day, keyed by their Holiday List.
+
+	Bulk: many employees share a Holiday List, so this is one query for the day
+	rather than one per person.  A named holiday wins over a weekly off, as in
+	_holiday_dates.
+	"""
+	day = str(day)
+	if not frappe.db.table_exists("Holiday"):
+		return {}
+	rows = frappe.get_all(
+		"Holiday",
+		filters=[["holiday_date", "=", day]],
+		fields=["parent", "weekly_off", "description"],
+	)
+	holidays = {}
+	for row in rows:
+		weekly_off = bool(cint(row.get("weekly_off")))
+		parent = row.get("parent")
+		if parent in holidays and (not holidays[parent]["weekly_off"] or weekly_off):
+			continue
+		holidays[parent] = {
+			"weekly_off": weekly_off,
+			"description": cstr(row.get("description") or "").strip() or None,
+		}
+	return holidays
+
+
+def _roster_off_status(holiday_list, holidays, fallback_off):
+	"""Whether one employee's day is a holiday or a weekly rest, and its name."""
+	if not holiday_list:
+		return ("weekly_off", None) if fallback_off else (None, None)
+	entry = holidays.get(holiday_list)
+	if not entry:
+		return None, None
+	if entry["weekly_off"]:
+		return "weekly_off", None
+	return "holiday", entry["description"]
+
+
+def _roster_status(punch, leave_label, off):
+	"""One employee's standing on the day, and the times or reason behind it."""
+	if punch and (punch["in_time"] or punch["out_time"]):
+		key = "present" if punch["in_time"] and punch["out_time"] else "in_progress"
+		return key, None, punch["in_time"], punch["out_time"]
+	if leave_label:
+		return "on_leave", leave_label, None, None
+	if off[0]:
+		return off[0], off[1], None, None
+	return "not_checked_in", None, None, None
+
+
+def _roster_counts(rows):
+	"""The board's headline numbers, summed from the rows the reader sees."""
+	counts = {
+		"expected": len(rows),
+		"checked_in": 0,
+		"not_checked_in": 0,
+		"on_leave": 0,
+		"off": 0,
+	}
+	for row in rows:
+		key = row.get("status_key")
+		if key in ("present", "in_progress"):
+			counts["checked_in"] += 1
+		elif key == "on_leave":
+			counts["on_leave"] += 1
+		elif key in ("holiday", "weekly_off"):
+			counts["off"] += 1
+		elif key == "not_checked_in":
+			counts["not_checked_in"] += 1
+	return counts
+
+
+def _attendance_daily_roster(day=None, company=None, limit=TODAY_ROSTER_ROWS):
+	"""The daily board: every expected employee and where they are that day.
+
+	One row per active employee the caller can see, so the board answers "who is
+	in and who is not" rather than only naming the people who punched.  People
+	on leave, a holiday or the weekly rest stay on the list carrying that label
+	instead of disappearing, because the reader is asking about the whole team.
+
+	Nothing is written: a day with no punch, no leave and no holiday reads as
+	``not_checked_in`` purely from what already exists.
+	"""
+	day = str(getdate(day)) if day else nowdate()
+	base = {"readable": True, "day": day, "company": company or None, "rows": [], "truncated": False}
+	if not frappe.has_permission("Employee", "read", throw=False):
+		base["readable"] = False
+		base["counts"] = _roster_counts([])
+		return base
+
+	fields = _existing_fields(
+		"Employee", ["name", "employee_name", "department", "company", "holiday_list"]
+	)
+	filters = {"status": "Active"}
+	if company:
+		filters["company"] = company
+	employee_rows = frappe.get_list(
+		"Employee",
+		filters=filters,
+		fields=fields,
+		order_by="employee_name asc",
+		limit_page_length=0,
+	)
+
+	# the company's default Holiday List is the employee's fallback, resolved
+	# once for the whole board instead of once per person
+	company_defaults = {}
+	if "holiday_list" in fields and _existing_fields("Company", ["default_holiday_list"]):
+		companies = sorted({row.get("company") for row in employee_rows if row.get("company")})
+		if companies:
+			for row in frappe.get_all(
+				"Company",
+				filters={"name": ["in", companies]},
+				fields=["name", "default_holiday_list"],
+			):
+				if row.get("default_holiday_list"):
+					company_defaults[row["name"]] = row["default_holiday_list"]
+
+	names = [row.get("name") for row in employee_rows]
+	punches = _attendance_day_punches(day, names) if names else {}
+	leaves = _leave_for_day(day, names) if names else {}
+	holidays = _holiday_for_day(day)
+	fallback_off = getdate(day).weekday() in DEFAULT_WEEKLY_OFF_DAYS
+
+	rows = []
+	for employee_row in employee_rows:
+		employee = employee_row.get("name")
+		holiday_list = (
+			employee_row.get("holiday_list")
+			or company_defaults.get(employee_row.get("company"))
+		)
+		off = _roster_off_status(holiday_list, holidays, fallback_off)
+		status_key, reason, in_time, out_time = _roster_status(
+			punches.get(employee), leaves.get(employee), off
+		)
+		rows.append(
+			{
+				"employee": employee,
+				"employee_name": employee_row.get("employee_name") or employee,
+				"department": employee_row.get("department") or "",
+				"company": employee_row.get("company") or "",
+				"status_key": status_key,
+				"reason": reason,
+				"in_time": in_time,
+				"out_time": out_time,
+			}
+		)
+
+	cap = cint(limit) or TODAY_ROSTER_ROWS
+	base["rows"] = rows[:cap]
+	base["truncated"] = len(rows) > cap
+	base["counts"] = _roster_counts(rows)
+	return base
+
+
+@frappe.whitelist(methods=["GET"])
+def get_attendance_daily_roster(day=None, company=None):
+	"""The daily board for one day (default today), optionally one company."""
+	assert_portal_access()
+	assert_panel_access("attendance")
+	return _attendance_daily_roster(day, company)
 
 
 @frappe.whitelist(methods=["POST"])

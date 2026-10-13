@@ -43,6 +43,8 @@ from saudi_hr.saudi_hr.admin_api import (
 	get_admin_dashboard,
 	get_admin_config,
 	get_attendance_report,
+	get_attendance_daily_roster,
+	get_attendance_filter_options,
 	get_documents_and_letters,
 	get_employee_detail,
 	get_employee_form_options,
@@ -952,13 +954,14 @@ class _AttendanceTestBase(_ApiTestBase):
 
 		return check
 
-	def _make_checkin(self, offset=0, at="09:15:00", log_type="IN", employee=None):
+	def _make_checkin(self, offset=0, at="09:15:00", log_type="IN", employee=None, on=None):
+		day = on or self._day(offset)
 		return frappe.get_doc(
 			{
 				"doctype": "Saudi Employee Checkin",
 				"employee": employee or self.employee,
 				"log_type": log_type,
-				"time": f"{self._day(offset)} {at}",
+				"time": f"{day} {at}",
 			}
 		).insert(ignore_permissions=True).name
 
@@ -1736,6 +1739,223 @@ class TestAdminApiAttendanceOffDays(_AttendanceTestBase):
 		after = self._day_row("2026-03-04")
 		self.assertFalse(after["missing"])
 		self.assertEqual(after["status_key"], "present")
+
+
+class TestAdminApiAttendanceInProgress(_AttendanceTestBase):
+	"""A working day with punches but no record yet, so the day is still open.
+
+	The day grid is built from Saudi Daily Attendance, so these days used to read
+	as a blank even while the employee was on shift. They now show the real punch
+	times and read as ``in_progress`` without pretending a record exists.
+	"""
+
+	def setUp(self):
+		super().setUp()
+		# a built-in weekend would turn the chosen Tuesday into a rest day
+		frappe.db.set_value("Company", self.company, "default_holiday_list", None)
+		frappe.db.set_value("Employee", self.employee, "holiday_list", None)
+
+	def _day_row(self, day):
+		report = get_attendance_report(employee=self.employee, from_date=day, to_date=day)
+		return report["days"][0]
+
+	def test_a_checkin_without_a_record_shows_the_time_and_reads_in_progress(self):
+		self._make_checkin(on="2026-03-03", at="09:15:00")  # a Tuesday
+		row = self._day_row("2026-03-03")
+		# the punch is shown but the day is still open: no record was written
+		self.assertTrue(row["missing"])
+		self.assertEqual(row["status_key"], "in_progress")
+		self.assertEqual(row["in_time"], "09:15")
+		self.assertIsNone(row["out_time"])
+		self.assertTrue(row["punched"])
+
+	def test_the_first_in_and_the_last_out_are_the_shown_times(self):
+		self._make_checkin(on="2026-03-03", at="09:15:00", log_type="IN")
+		self._make_checkin(on="2026-03-03", at="13:00:00", log_type="OUT")
+		self._make_checkin(on="2026-03-03", at="13:30:00", log_type="IN")
+		self._make_checkin(on="2026-03-03", at="17:00:00", log_type="OUT")
+		row = self._day_row("2026-03-03")
+		self.assertEqual(row["in_time"], "09:15")
+		self.assertEqual(row["out_time"], "17:00")
+
+	def test_an_unpunched_working_day_stays_missing_with_no_times(self):
+		row = self._day_row("2026-03-03")  # a Tuesday
+		self.assertTrue(row["missing"])
+		self.assertEqual(row["status_key"], "missing")
+		self.assertIsNone(row["in_time"])
+		self.assertIsNone(row["out_time"])
+		self.assertNotIn("punched", row)
+
+	def test_an_in_progress_day_is_not_counted_as_present(self):
+		before = self._day_row("2026-03-03")
+		self._make_checkin(on="2026-03-03", at="09:15:00")
+		report = get_attendance_report(employee=self.employee, from_date="2026-03-03", to_date="2026-03-03")
+		# the tally counts records, not punches: nothing was recorded yet
+		self.assertEqual(report["totals"]["present"], 0)
+		self.assertEqual(report["totals"]["days"], 0)
+		self.assertTrue(before["missing"])
+
+	def test_a_holiday_keeps_its_own_label_even_when_punched(self):
+		holiday = frappe.get_doc(
+			{
+				"doctype": "Holiday List",
+				"holiday_list_name": f"QA Holidays {frappe.generate_hash(length=8)}",
+				"from_date": "2026-01-01",
+				"to_date": "2026-12-31",
+				"holidays": [
+					{"holiday_date": "2026-03-03", "description": "Founding Day", "weekly_off": 0}
+				],
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.set_value("Employee", self.employee, "holiday_list", holiday.name)
+		self._make_checkin(on="2026-03-03", at="09:15:00")
+		row = self._day_row("2026-03-03")
+		# a day that was a holiday is not turned into a shift by a stray punch
+		self.assertEqual(row["status_key"], "holiday")
+		self.assertNotIn("punched", row)
+
+	def test_another_employees_punch_is_never_borrowed(self):
+		other = make_qa_employee(self.company, f"inprog-{frappe.generate_hash(length=6)}")
+		self._make_checkin(on="2026-03-03", at="09:15:00", employee=other)
+		row = self._day_row("2026-03-03")
+		self.assertEqual(row["status_key"], "missing")
+		self.assertIsNone(row["in_time"])
+
+
+class TestAdminApiAttendanceCompanyAndBoard(_AttendanceTestBase):
+	"""The company filter, the single-day window and the daily board.
+
+	A fixed weekday (a Tuesday) is used for the board so a built-in weekend
+	cannot turn the day under test into a rest day, and the suite clears both
+	holiday lists in setUp for the same reason.
+	"""
+
+	DAY = "2026-03-03"  # a Tuesday
+
+	def setUp(self):
+		super().setUp()
+		frappe.db.set_value("Company", self.company, "default_holiday_list", None)
+		frappe.db.set_value("Employee", self.employee, "holiday_list", None)
+
+	# ── the single-day window ───────────────────────────────────────────────
+
+	def test_a_single_day_is_its_own_window(self):
+		report = get_attendance_report(employee=self.employee, day=self.DAY)
+		self.assertEqual(report["from_date"], self.DAY)
+		self.assertEqual(report["to_date"], self.DAY)
+		self.assertEqual(report["day"], self.DAY)
+		# a day is more specific than a month, so no month bucket is reported
+		self.assertIsNone(report["month"])
+		self.assertEqual(report["span_days"], 1)
+
+	def test_a_single_day_wins_over_a_month_and_a_range(self):
+		report = get_attendance_report(
+			employee=self.employee,
+			day=self.DAY,
+			month="2026-01",
+			from_date="2026-02-01",
+			to_date="2026-02-05",
+		)
+		self.assertEqual(report["from_date"], self.DAY)
+		self.assertEqual(report["to_date"], self.DAY)
+
+	def test_a_malformed_day_is_refused(self):
+		self.assertRaises(frappe.ValidationError, get_attendance_report, day="2026-3-3")
+
+	# ── the company filter ──────────────────────────────────────────────────
+
+	def test_the_report_carries_the_requested_company(self):
+		self.assertEqual(get_attendance_report(company=self.company)["company"], self.company)
+
+	def test_a_company_with_no_visible_employee_reads_empty(self):
+		report = get_attendance_report(company="__no_such_company__")
+		self.assertEqual(report["departments"], [])
+		self.assertEqual(report["totals"]["days"], 0)
+
+	def test_the_filter_options_list_a_company_that_has_employees(self):
+		options = get_attendance_filter_options()
+		self.assertIn(self.company, options["companies"])
+		self.assertTrue(all(name for name in options["companies"]))
+
+	# ── the daily board ─────────────────────────────────────────────────────
+
+	def _board(self, day=None, company=None):
+		return get_attendance_daily_roster(day=day or self.DAY, company=company)
+
+	def _approved_leave(self, start, end):
+		"""An annual leave marked approved, which is what the board reads."""
+		doc = frappe.get_doc(
+			{
+				"doctype": "Saudi Annual Leave",
+				"employee": self.employee,
+				"company": self.company,
+				"leave_start_date": start,
+				"leave_end_date": end,
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.set_value("Saudi Annual Leave", doc.name, "workflow_state", "Approved")
+		return doc.name
+
+	def _row(self, board, employee):
+		return next(row for row in board["rows"] if row["employee"] == employee)
+
+	def test_the_board_lists_every_employee_not_only_the_ones_who_punched(self):
+		other = make_qa_employee(self.company, f"board-{frappe.generate_hash(length=6)}")
+		self._make_checkin(on=self.DAY, at="09:15:00", log_type="IN")
+		names = [row["employee"] for row in self._board(company=self.company)["rows"]]
+		self.assertIn(self.employee, names)
+		self.assertIn(other, names)
+
+	def test_a_finished_day_reads_present_with_both_times(self):
+		self._make_checkin(on=self.DAY, at="09:15:00", log_type="IN")
+		self._make_checkin(on=self.DAY, at="17:00:00", log_type="OUT")
+		row = self._row(self._board(company=self.company), self.employee)
+		self.assertEqual(row["status_key"], "present")
+		self.assertEqual(row["in_time"], "09:15")
+		self.assertEqual(row["out_time"], "17:00")
+
+	def test_an_open_day_reads_in_progress(self):
+		self._make_checkin(on=self.DAY, at="09:15:00", log_type="IN")
+		row = self._row(self._board(company=self.company), self.employee)
+		self.assertEqual(row["status_key"], "in_progress")
+		self.assertIsNone(row["out_time"])
+
+	def test_a_day_with_no_punch_reads_not_checked_in(self):
+		row = self._row(self._board(company=self.company), self.employee)
+		self.assertEqual(row["status_key"], "not_checked_in")
+		self.assertIsNone(row["in_time"])
+
+	def test_a_person_on_leave_stays_on_the_board(self):
+		self._approved_leave(self.DAY, self.DAY)
+		row = self._row(self._board(company=self.company), self.employee)
+		self.assertEqual(row["status_key"], "on_leave")
+		self.assertEqual(row["reason"], "Annual Leave / إجازة سنوية")
+
+	def test_the_counts_add_up_to_the_rows_shown(self):
+		make_qa_employee(self.company, f"board-{frappe.generate_hash(length=6)}")
+		self._make_checkin(on=self.DAY, at="09:15:00", log_type="IN")
+		board = self._board(company=self.company)
+		counts = board["counts"]
+		self.assertEqual(counts["expected"], len(board["rows"]))
+		self.assertEqual(
+			counts["checked_in"]
+			+ counts["not_checked_in"]
+			+ counts["on_leave"]
+			+ counts["off"],
+			counts["expected"],
+		)
+
+	def test_the_board_day_can_be_moved_off_today(self):
+		self._make_checkin(on=self.DAY, at="09:15:00", log_type="IN")
+		row = self._row(self._board(day=self.DAY, company=self.company), self.employee)
+		self.assertEqual(row["status_key"], "in_progress")
+		self.assertEqual(row["in_time"], "09:15")
+
+	def test_an_unreadable_employee_directory_reads_as_not_readable(self):
+		with patch.object(admin_api.frappe, "has_permission", side_effect=self._deny("Employee")):
+			board = get_attendance_daily_roster(day=self.DAY)
+		self.assertFalse(board["readable"])
+		self.assertEqual(board["rows"], [])
 
 
 class TestAdminApiDashboard(_ApiTestBase):

@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/saudi_hr/css/saudi_portal.css?v=20261015">
+<link rel="stylesheet" href="/assets/saudi_hr/css/saudi_portal.css?v=20261017">
 {% endblock %}
 
 {% block page_content %}
@@ -216,11 +216,22 @@
 						</div>
 					</div>
 					<div class="saudi-field">
+						<label for="attendance-company" data-i18n-key="admin_field_company">الشركة</label>
+						<select id="attendance-company" class="saudi-select">
+							<option value="" data-i18n-key="admin_attendance_all_companies">كل الشركات</option>
+						</select>
+					</div>
+					<div class="saudi-field">
 						<label for="attendance-period" data-i18n-key="admin_attendance_period">نوع التقرير</label>
 						<select id="attendance-period" class="saudi-select">
 							<option value="month" data-i18n-key="admin_attendance_period_month">تقرير شهري</option>
 							<option value="range" data-i18n-key="admin_attendance_period_range">تقرير بنطاق تاريخ</option>
+							<option value="day" data-i18n-key="admin_attendance_period_day">تقرير يوم واحد</option>
 						</select>
+					</div>
+					<div class="saudi-field" id="attendance-day-field" hidden>
+						<label for="attendance-day" data-i18n-key="admin_attendance_day">التاريخ</label>
+						<input type="date" id="attendance-day" class="saudi-input" dir="ltr">
 					</div>
 					<div class="saudi-field" id="attendance-month-field">
 						<label for="attendance-month" data-i18n-key="admin_attendance_month">هذا الشهر</label>
@@ -264,6 +275,31 @@
 						</thead>
 						<tbody id="attendance-today-rows"></tbody>
 					</table>
+				</div>
+
+				<div class="saudi-section-header" style="margin-top:22px;">
+					<div class="saudi-section-header__title" data-i18n-key="admin_attendance_daily_board">حضور اليوم</div>
+					<div class="saudi-field" style="display:flex;gap:8px;align-items:center;margin:0;">
+						<label for="attendance-roster-day" data-i18n-key="admin_attendance_day">التاريخ</label>
+						<input type="date" id="attendance-roster-day" class="saudi-input" dir="ltr">
+					</div>
+				</div>
+				<div class="saudi-stats" id="attendance-roster-totals"></div>
+				<div class="saudi-table-wrap">
+					<table class="saudi-table">
+						<thead>
+							<tr>
+								<th data-i18n-key="admin_col_number">الرقم</th>
+								<th data-i18n-key="admin_attendance_employee">الموظف</th>
+								<th data-i18n-key="admin_attendance_department">القسم</th>
+								<th data-i18n-key="admin_col_status">الحالة</th>
+								<th style="text-align:center;" data-i18n-key="admin_attendance_in">دخول</th>
+								<th style="text-align:center;" data-i18n-key="admin_attendance_out">خروج</th>
+							</tr>
+						</thead>
+						<tbody id="attendance-roster-rows"></tbody>
+					</table>
+					<p class="saudi-table__note" id="attendance-roster-note" hidden></p>
 				</div>
 			</section>
 			{% endif %}
@@ -736,7 +772,7 @@
 {% endblock %}
 
 {% block script %}
-<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261015"></script>
+<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261017"></script>
 <script>
 /* ═══ Page state ═══════════════════════════════════════════════════════════ */
 /* Rendered into a JavaScript literal, so the booleans are written as JS */
@@ -763,6 +799,9 @@ var ADMIN_STATE = {
 	attendance_employees: [],
 	attendance_employees_restricted: false,
 	attendance_months: null,
+	attendance_companies: null,
+	attendance_companies_lang: null,
+	attendance_board: null,
 	attendance_correction: null
 };
 
@@ -1574,15 +1613,22 @@ function attendancePeriod() {
 	var month = document.getElementById("attendance-month");
 	var from = document.getElementById("attendance-from");
 	var to = document.getElementById("attendance-to");
+	var day = document.getElementById("attendance-day");
 	return {
 		month: mode === "month" ? (month ? month.value : "") : null,
 		from_date: mode === "range" && from ? from.value : null,
-		to_date: mode === "range" && to ? to.value : null
+		to_date: mode === "range" && to ? to.value : null,
+		day: mode === "day" && day ? day.value : null
 	};
 }
 
 function attendanceEmployee() {
 	var select = document.getElementById("attendance-employee");
+	return select && select.value ? select.value : null;
+}
+
+function attendanceCompany() {
+	var select = document.getElementById("attendance-company");
 	return select && select.value ? select.value : null;
 }
 
@@ -1595,6 +1641,8 @@ function loadAttendance() {
 			month: period.month,
 			from_date: period.from_date,
 			to_date: period.to_date,
+			day: period.day,
+			company: attendanceCompany(),
 			limit: 25
 		}).then(function (data) {
 			// kept so the language switch can re-render the tables from it
@@ -1604,14 +1652,126 @@ function loadAttendance() {
 	});
 }
 
+/* Today as the server writes it: a plain YYYY-MM-DD the date inputs and the
+   daily board both speak, so the two never disagree about "today". */
+function attendanceToday() {
+	var now = new Date();
+	var month = ("0" + (now.getMonth() + 1)).slice(-2);
+	var day = ("0" + now.getDate()).slice(-2);
+	return now.getFullYear() + "-" + month + "-" + day;
+}
+
+/* The companies that actually hold an employee the caller can see, so picking
+   one never lands on an empty report.  Cached with the language so an English
+   rebuild can reword the "all companies" option without another request. */
+function loadAttendanceCompanies() {
+	return dedupe("attendance-companies", function () {
+		return callAdmin("get_attendance_filter_options", {}).then(function (data) {
+			ADMIN_STATE.attendance_companies = data.companies || [];
+			renderAttendanceCompanyOptions();
+		}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+	});
+}
+
+function renderAttendanceCompanyOptions() {
+	var select = document.getElementById("attendance-company");
+	if (!select) return;
+	var chosen = select.value;
+	var html = "<option value=''>" + esc(t("admin_attendance_all_companies")) + "</option>";
+	(ADMIN_STATE.attendance_companies || []).forEach(function (name) {
+		html += "<option value='" + esc(name) + "'>" + esc(name) + "</option>";
+	});
+	select.innerHTML = html;
+	if (chosen) select.value = chosen;
+	ADMIN_STATE.attendance_companies_lang = CURRENT_LANG;
+}
+
+/* The daily board: everyone expected on the day, not only the people who
+   punched.  The day input defaults to today and the company follows the panel
+   filter, so opening the tab answers "who is in and who is not" at a glance. */
+function loadAttendanceBoard() {
+	var input = document.getElementById("attendance-roster-day");
+	var day = input && input.value ? input.value : null;
+	return dedupe("attendance-board:" + (day || "") + ":" + (attendanceCompany() || ""), function () {
+		return callAdmin("get_attendance_daily_roster", { day: day, company: attendanceCompany() })
+			.then(function (data) {
+				ADMIN_STATE.attendance_board = data;
+				renderAttendanceDailyBoard(data);
+			}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+	});
+}
+
+function renderAttendanceDailyBoard(data) {
+	var tbody = document.getElementById("attendance-roster-rows");
+	var totals = document.getElementById("attendance-roster-totals");
+	var note = document.getElementById("attendance-roster-note");
+	if (!tbody) return;
+	if (!data || data.readable === false) {
+		tbody.innerHTML = emptyRow(6, t("admin_attendance_not_readable"));
+		if (totals) totals.innerHTML = "";
+		if (note) note.hidden = true;
+		return;
+	}
+	var rows = data.rows || [];
+	var counts = data.counts || {};
+	if (totals) {
+		// the headline is the people who have not checked in, so that tile is
+		// toned while the rest stay plain
+		totals.innerHTML = "<div class='saudi-stats'>" + [
+			[t("admin_attendance_roster_expected"), counts.expected || 0],
+			[t("admin_attendance_roster_checked_in"), counts.checked_in || 0],
+			[t("admin_attendance_roster_not_checked_in"), counts.not_checked_in || 0],
+			[t("admin_attendance_roster_on_leave"), counts.on_leave || 0],
+			[t("admin_attendance_roster_off"), counts.off || 0]
+		].map(function (tile) {
+			return "<div class='saudi-stat'><div class='saudi-stat__value'>" + esc(tile[1])
+				+ "</div><div class='saudi-stat__label'>" + esc(tile[0]) + "</div></div>";
+		}).join("") + "</div>";
+	}
+	tbody.innerHTML = rows.length
+		? rows.map(function (row, index) { return attendanceRosterRow(row, index); }).join("")
+		: emptyRow(6, t("admin_attendance_roster_empty"));
+	if (note) {
+		note.textContent = data.truncated ? t("admin_attendance_roster_truncated") : "";
+		note.hidden = !data.truncated;
+	}
+}
+
+/* One person's line on the board.  A checked-in day shows the times; everyone
+   else carries the reason they are away, or the neutral "not checked in" for a
+   day they simply never punched. */
+function attendanceRosterRow(row, index) {
+	var key = row.status_key || "not_checked_in";
+	var labelKey = "admin_attendance_status_" + key;
+	var label = t(labelKey) === labelKey ? key : t(labelKey);
+	if (row.reason) label += " — " + row.reason;
+	return "<tr>" +
+		"<td style='text-align:center;'>" + esc(index + 1) + "</td>" +
+		"<td>" + esc(row.employee_name || row.employee || "") + "</td>" +
+		"<td>" + esc(row.department || "—") + "</td>" +
+		"<td><span class='saudi-chip saudi-chip--" + rosterTone(key) + "'>" + esc(label) + "</span></td>" +
+		"<td style='direction:ltr;text-align:left;'>" + esc(row.in_time ? fmtClock(row.in_time) : "—") + "</td>" +
+		"<td style='direction:ltr;text-align:left;'>" + esc(row.out_time ? fmtClock(row.out_time) : "—") + "</td>" +
+		"</tr>";
+}
+
+/* The board's tones: a punch is a good sign whether the day is finished or
+   still open, a no-show is the one the reader is looking for, and leave,
+   holidays and the weekly rest are neither. */
+function rosterTone(key) {
+	if (key === "present" || key === "in_progress") return "approved";
+	if (key === "not_checked_in") return "rejected";
+	return "muted";
+}
+
 /* The employee list is the same directory the employees panel shows, so the
    report can only ever be run for someone the caller can already see.  The
    requested term is part of the request key, so a search typed while the first
    load is still in flight is asked for rather than folded into it. */
 function loadAttendanceEmployees(search) {
 	var requested = (search === undefined ? attendanceFilterText() : search || "").trim();
-	return dedupe("attendance-employees:" + requested, function () {
-		return callAdmin("list_employees", { search: requested || null, limit: 100 })
+	return dedupe("attendance-employees:" + (attendanceCompany() || "") + ":" + requested, function () {
+		return callAdmin("list_employees", { search: requested || null, company: attendanceCompany(), limit: 100 })
 			.then(function (r) {
 				// cached so a language switch can reword the options without
 				// spending another request on a list that has not changed
@@ -1909,9 +2069,10 @@ function attendanceDayRow(row) {
 }
 
 /* A day the calendar lists but the employee has no record for: the times read
-   as "—" and the two actions offer to register the day by clicking تصحيح. A
-   day still ahead of today is not an absence to be filled in, so it carries no
-   actions at all. */
+   as "—" when none was punched, and the two actions offer to register the day
+   by clicking تصحيح. A day still ahead of today is not an absence to be filled
+   in, so it carries no actions at all. A day with punches but no record yet -
+   the day is not finished - shows its real times instead of a blank. */
 function missingAttendanceDayRow(row) {
 	var canAdd = !row.future;
 	var addBtn = "<button class='saudi-btn saudi-btn--tiny' type='button' data-action='open-attendance-day-correction'"
@@ -1924,7 +2085,7 @@ function missingAttendanceDayRow(row) {
 	return "<tr>"
 		+ "<td style='font-weight:700;' dir='ltr'>" + esc(row.date || "—") + "</td>"
 		+ "<td>" + attendanceStatus(row) + reasonCell + "</td>"
-		+ "<td style='direction:ltr;text-align:left;'>— → —</td>"
+		+ "<td style='direction:ltr;text-align:left;'>" + esc(fmtClock(row.in_time)) + " → " + esc(fmtClock(row.out_time)) + "</td>"
 		+ "<td style='text-align:center;'>—</td>"
 		+ "<td style='text-align:center;'>—</td>"
 		+ "<td>" + (canAdd ? addBtn : "—") + "</td>"
@@ -2050,7 +2211,7 @@ function removeAttendanceDay(dateKey, name) {
    dates next to it. */
 function attendanceSyncPeriod() {
 	var mode = (document.getElementById("attendance-period") || {}).value || "month";
-	var grouped = { "attendance-month-field": "month", "attendance-from-field": "range", "attendance-to-field": "range" };
+	var grouped = { "attendance-month-field": "month", "attendance-from-field": "range", "attendance-to-field": "range", "attendance-day-field": "day" };
 	Object.keys(grouped).forEach(function (id) {
 		var el = document.getElementById(id);
 		if (el) el.hidden = grouped[id] !== mode;
@@ -2066,10 +2227,27 @@ function attendanceBind() {
 	var period = document.getElementById("attendance-period");
 	if (period) period.addEventListener("change", function () { attendanceSyncPeriod(); loadAttendance(); });
 
-	["attendance-month", "attendance-from", "attendance-to"].forEach(function (id) {
+	["attendance-month", "attendance-from", "attendance-to", "attendance-day"].forEach(function (id) {
 		var el = document.getElementById(id);
 		if (el) el.addEventListener("change", function () { loadAttendance(); });
 	});
+
+	// the company narrows the whole panel, so the employee directory, the report
+	// and the daily board are all asked again when it changes
+	var company = document.getElementById("attendance-company");
+	if (company) {
+		company.addEventListener("change", function () {
+			loadAttendanceEmployees(attendanceFilterText());
+			loadAttendance();
+			loadAttendanceBoard();
+		});
+	}
+
+	var rosterDay = document.getElementById("attendance-roster-day");
+	if (rosterDay) {
+		if (!rosterDay.value) rosterDay.value = attendanceToday();
+		rosterDay.addEventListener("change", function () { loadAttendanceBoard(); });
+	}
 
 	var scope = document.getElementById("attendance-employee");
 	if (scope) {
@@ -2387,6 +2565,8 @@ SAUDI_LANG_RENDERERS.push(function () {
 	if (ADMIN_STATE.attendance_employees) renderAttendanceEmployeeOptions();
 	attendanceMonthOptions();
 	if (ADMIN_STATE.attendance) renderAttendanceOverview(ADMIN_STATE.attendance);
+	if (ADMIN_STATE.attendance_companies) renderAttendanceCompanyOptions();
+	if (ADMIN_STATE.attendance_board) renderAttendanceDailyBoard(ADMIN_STATE.attendance_board);
 });
 
 /* ═══ Offboarding Panel ═══════════════════════════════════════════════════ */
@@ -2864,7 +3044,10 @@ SAUDI_PANEL_LOADERS["approvals"] = function () { loadLeave(); };
 SAUDI_PANEL_LOADERS["report"] = function () { loadDashboard(); };
 SAUDI_PANEL_LOADERS["attendance"] = function () {
 	attendanceBind();
-	loadAttendanceEmployees().then(loadAttendance);
+	loadAttendanceCompanies()
+		.then(loadAttendanceEmployees)
+		.then(loadAttendance)
+		.then(loadAttendanceBoard);
 };
 SAUDI_PANEL_LOADERS["clearance"] = function () { loadOffboardingPanel(); };
 SAUDI_PANEL_LOADERS["documents"] = function () { loadDocumentsPanel(); };

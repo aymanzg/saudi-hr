@@ -1024,6 +1024,61 @@ class TestAdminPageBehaviour(FrappeTestCase):
 			[],
 		)
 
+	def test_a_day_with_punches_but_no_record_shows_its_times(self):
+		"""A day that is not finished yet has no record, but its punches are real:
+		the row shows them and reads as in progress instead of a blank."""
+		self.assertEqual(
+			self._run(
+				"renderAttendanceOverview({ readable: true, scope: 'employee',"
+				" employee: { name: '855', employee_name: 'Jane Doe' },"
+				" from_date: '2026-03-01', to_date: '2026-03-31',"
+				" totals: { days: 0, present: 0, absent: 0, half_day: 0, on_leave: 0,"
+				" late_days: 0, late_minutes: 0, hours: 0 }, truncated: false,"
+				" days: [ { name: null, date: '2026-03-31', status: null, missing: true,"
+				" status_key: 'in_progress', in_time: '09:15', out_time: null, punched: true },"
+				" { name: null, date: '2026-03-30', status: null, missing: true, status_key: 'missing',"
+				" in_time: null, out_time: null } ],"
+				" departments: [], today: [] });"
+				"var rows = document.getElementById('attendance-rows').innerHTML;"
+				"check('the arrival is shown', function() { return rows.includes('09:15'); });"
+				"check('reads as in progress', function() {"
+				" return rows.includes(t('admin_attendance_status_in_progress')); });"
+				"check('an unpunched day stays blank', function() {"
+				" return rows.includes('\u2014 \u2192 \u2014'); });"
+			),
+			[],
+		)
+
+	def test_the_daily_board_shows_who_is_in_and_who_is_not(self):
+		"""The board lists everyone expected on the day, not only the people who
+		punched, and marks the ones who have not."""
+		self.assertEqual(
+			self._run(
+				"renderAttendanceDailyBoard({ readable: true, day: '2026-03-03', company: null,"
+				" counts: { expected: 3, checked_in: 1, not_checked_in: 1, on_leave: 1, off: 0 },"
+				" rows: ["
+				" { employee: '1', employee_name: 'In Person', department: 'Ops',"
+				" status_key: 'present', reason: null, in_time: '09:15', out_time: '17:00' },"
+				" { employee: '2', employee_name: 'Away Person', department: 'Ops',"
+				" status_key: 'on_leave', reason: 'Annual Leave', in_time: null, out_time: null },"
+				" { employee: '3', employee_name: 'Missing Person', department: 'Ops',"
+				" status_key: 'not_checked_in', reason: null, in_time: null, out_time: null } ],"
+				" truncated: false });"
+				"var rows = document.getElementById('attendance-roster-rows').innerHTML;"
+				"var totals = document.getElementById('attendance-roster-totals').innerHTML;"
+				"check('everyone listed', function() {"
+				" return rows.includes('In Person') && rows.includes('Away Person')"
+				" && rows.includes('Missing Person'); });"
+				"check('arrival shown', function() { return rows.includes('09:15'); });"
+				"check('leave reason shown', function() { return rows.includes('Annual Leave'); });"
+				"check('not checked in labelled', function() {"
+				" return rows.includes(t('admin_attendance_status_not_checked_in')); });"
+				"check('counts shown', function() {"
+				" return totals.includes(t('admin_attendance_roster_not_checked_in')); });"
+			),
+			[],
+		)
+
 	def test_the_attendance_listeners_are_bound_once(self):
 		"""The loader runs on every visit to the panel, so an unguarded
 		addEventListener would fetch one report per visit after the first."""

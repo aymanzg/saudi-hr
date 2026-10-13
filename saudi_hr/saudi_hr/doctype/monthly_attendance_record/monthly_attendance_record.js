@@ -14,13 +14,17 @@ frappe.ui.form.on("Monthly Attendance Record", {
     refresh: function (frm) {
         if (frm.doc.docstatus === 0) {
             frm.add_custom_button(__("Auto-Fill Days / ملء الأيام تلقائياً"), function () {
+                if (!frm.doc.employee) {
+                    frappe.msgprint(__("Please select Employee first / يرجى تحديد الموظف أولاً"));
+                    return;
+                }
                 if (!frm.doc.month || !frm.doc.year) {
                     frappe.msgprint(__("Please select Month and Year first / يرجى تحديد الشهر والسنة أولاً"));
                     return;
                 }
                 frappe.call({
                     method: "saudi_hr.saudi_hr.doctype.monthly_attendance_record.monthly_attendance_record.get_monthly_days",
-                    args: { month_label: frm.doc.month, year: frm.doc.year },
+                    args: { month_label: frm.doc.month, year: frm.doc.year, employee: frm.doc.employee },
                     callback: function (r) {
                         if (r.message && r.message.length) {
                             frm.clear_table("attendance_details");
@@ -30,9 +34,17 @@ frappe.ui.form.on("Monthly Attendance Record", {
                                 child.day_of_week = row.day_of_week;
                                 child.day_type = row.day_type;
                                 child.status = row.status;
+                                child.time_in = row.time_in;
+                                child.time_out = row.time_out;
+                                child.hours_worked = row.hours_worked;
+                                child.late_minutes = row.late_minutes;
+                                child.overtime_hours = row.overtime_hours;
                             });
                             frm.refresh_field("attendance_details");
                             frappe.msgprint(__(`تم ملء ${r.message.length} يوم / Filled ${r.message.length} days`));
+                            // the summary is derived on the server in validate(); save
+                            // so the totals reflect the rows that were just filled
+                            frm.save();
                         }
                     }
                 });
