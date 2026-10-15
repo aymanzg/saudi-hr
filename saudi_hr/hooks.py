@@ -36,6 +36,11 @@ website_route_rules = [
 	{"from_route": "/saudi-admin", "to_route": "saudi-admin"},
 ]
 
+# ─── Mobile Portal Enforcement ───────────────────────────────────────────────────
+# Users with the "Mobile Portal Only" role are redirected from the Desk to the
+# mobile HTML portal. See saudi_hr/saudi_hr/mobile_portal_guard.py.
+website_path_resolver = ["saudi_hr.saudi_hr.mobile_portal_guard.resolve"]
+
 # ─── Scheduled Tasks ───────────────────────────────────────────────────────────
 # Runs every day at midnight to send expiry alerts
 scheduler_events = {

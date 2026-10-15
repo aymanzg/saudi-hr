@@ -28,6 +28,9 @@ class _InsertableDoc:
 			setattr(self, key, value)
 		return self
 
+	def get(self, key, default=None):
+		return getattr(self, key, default)
+
 	def insert(self):
 		self.inserted = True
 		return self
@@ -99,8 +102,8 @@ class TestRuntimePermissionHardening(FrappeTestCase):
 		), patch.object(api_module, "_build_mobile_leave_doc", return_value=leave_doc), patch.object(
 			api_module, "_attach_files", return_value=[]
 		), patch.object(api_module, "assert_doctype_permissions") as assert_permissions, patch.object(
-			api_module.frappe.db, "commit"
-		):
+			api_module, "_auto_send_for_approval"
+		), patch.object(api_module.frappe.db, "commit"):
 			result = api_module.submit_mobile_leave_request("annual", "2026-04-02")
 
 		assert_permissions.assert_called_once_with("Saudi Annual Leave", "create", doc=leave_doc)

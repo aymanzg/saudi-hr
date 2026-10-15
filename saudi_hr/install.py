@@ -25,7 +25,8 @@ def after_install():
 	ensure_attendance_officer_role()
 	sync_attendance_officer_permissions()
 	sync_department_approver_role_assignments()
-	sync_department_approver_company_permissions()
+	remove_mismatched_company_user_permissions()
+	ensure_mobile_portal_role()
 	sync_dashboard_chart_configs()
 	sync_notification_configs()
 	create_default_saudi_shift_type()
@@ -46,7 +47,8 @@ def after_migrate():
 	ensure_attendance_officer_role()
 	sync_attendance_officer_permissions()
 	sync_department_approver_role_assignments()
-	sync_department_approver_company_permissions()
+	remove_mismatched_company_user_permissions()
+	ensure_mobile_portal_role()
 	sync_dashboard_chart_configs()
 	sync_notification_configs()
 	create_default_saudi_shift_type()
@@ -219,32 +221,80 @@ def sync_department_approver_role_assignments():
 
 
 def sync_department_approver_company_permissions():
-	"""Keep approver users aligned with the companies of employees they approve."""
-	approver_fields = _get_existing_employee_approver_fields()
-	if not approver_fields:
+	"""Disabled: company pinning is no longer applied.
+
+	Historically this added a ``Company`` User Permission for every company an
+	approver had employees in. Because those permissions apply to all doctypes, a
+	user whose own Employee record belonged to a different company then failed
+	the document-level permission check on their own leave/request documents.
+	Company scoping is intentionally dropped so every user can work across all
+	companies; ``remove_mismatched_company_user_permissions`` cleans up the rows
+	this used to create. Kept as a stub for backwards compatibility.
+	"""
+	return
+
+
+def ensure_mobile_portal_role():
+	"""Create the role used to pin selected users to the mobile HTML portal.
+
+	The role has no desk access; ``saudi_hr.saudi_hr.mobile_portal_guard``
+	redirects its holders away from the Desk to /mobile-attendance. Idempotent.
+	"""
+	if frappe.db.exists("Role", "Mobile Portal Only"):
 		return
 
-	from frappe.permissions import add_user_permission
+	frappe.get_doc(
+		{
+			"doctype": "Role",
+			"role_name": "Mobile Portal Only",
+			"desk_access": 0,
+		}
+	).insert(ignore_permissions=True)
 
-	for user in _get_department_approver_users():
-		conditions = " OR ".join(f"{fieldname} = %(user)s" for fieldname in approver_fields)
-		companies = frappe.db.sql(
-			"""
-				SELECT DISTINCT company
-				FROM `tabEmployee`
-				WHERE ({conditions})
-				  AND IFNULL(company, '') != ''
-			""".format(conditions=conditions),
-			{"user": user},
-			as_dict=True,
-		)
 
-		for row in companies:
-			if not frappe.db.exists(
-				"User Permission",
-				{"user": user, "allow": "Company", "for_value": row.company},
-			):
-				add_user_permission("Company", row.company, user, ignore_permissions=True)
+def remove_mismatched_company_user_permissions():
+	"""Remove Company User Permissions that contradict the user's own Employee company.
+
+	A Company User Permission with ``apply_to_all_doctypes`` blocks every document
+	that carries a ``company`` link field, including the user's own leave and
+	attendance requests. When the pinned company is not one the user's Employee
+	record belongs to, self-service submissions fail with a permission error. Only
+	mismatched rows for users who have an Employee record are dropped; users
+	without one (admins, external approvers) are left untouched. Idempotent.
+	"""
+	rows = frappe.get_all(
+		"User Permission",
+		filters={"allow": "Company"},
+		fields=["name", "user", "for_value"],
+	)
+	if not rows:
+		return 0
+
+	companies_by_user = {}
+	users = [row.user for row in rows if row.user]
+	if users:
+		for employee in frappe.get_all(
+			"Employee",
+			filters={"user_id": ["in", users]},
+			fields=["user_id", "company"],
+		):
+			if employee.user_id and employee.company:
+				companies_by_user.setdefault(employee.user_id, set()).add(employee.company)
+
+	removed = 0
+	for row in rows:
+		own_companies = companies_by_user.get(row.user)
+		if not own_companies or row.for_value in own_companies:
+			continue
+		try:
+			frappe.delete_doc("User Permission", row.name, ignore_permissions=True, force=True)
+			removed += 1
+		except Exception:
+			frappe.log_error(
+				title="Saudi HR: failed to remove mismatched Company User Permission",
+				message=f"User Permission {row.name} for user {row.user}\n{frappe.get_traceback()}",
+			)
+	return removed
 
 
 def _get_department_approver_users():
