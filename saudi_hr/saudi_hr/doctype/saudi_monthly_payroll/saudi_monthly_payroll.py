@@ -99,6 +99,21 @@ WORKBOOK_HEADER_ALIASES = {
 	"gosi_registration": {"التأمينات", "رقم اشتراك التأمينات"},
 }
 
+# أعمدة ملف الحوالات البنكية بالترتيب المعتمد من البنك.
+BANK_TRANSFER_SHEET_HEADERS = [
+	"خصومات",
+	"بدلات اخرى",
+	"بدل سكن",
+	"الراتب الاساسي",
+	"عنوان الموظف",
+	"رقم الهوية او الاقامة",
+	"اسم الموظف",
+	"ملاحظات",
+	"اجمال الراتب",
+	"البنك",
+	"IBAN",
+]
+
 
 def _required_workbook_field_labels() -> dict[str, str]:
 	return {
@@ -404,6 +419,7 @@ def fetch_employees(doc_name: str):
 APPROVED_ABSENCE_CASE_STATUS = "Closed / مغلق"
 DISCIPLINARY_APPROVED_STATUSES = ("Decision Issued / صدر القرار", "Closed / مغلقة")
 PENALTY_MONTHLY_CAP_DAYS = 5.0
+DEFAULT_WORKING_HOURS_PER_DAY = 8.0
 DEFAULT_PERIOD_CUTOFF_DAY = 25
 
 
@@ -471,6 +487,89 @@ def apply_attendance_deductions(doc_name: str):
 		"period_to": str(period["to"]),
 		"rows": rows,
 	}
+
+
+@frappe.whitelist(methods=["POST"])
+def bulk_register_payroll_absences(doc_name: str, absence_type=None, note=None):
+	"""Register every unregistered absent/missing day in the payroll window.
+
+	Creates one single-day closed Absence Case per day, exactly like the
+	per-day panel button, so the next Generate Attendance & Deductions deducts
+	them.  A day already covered by a case is skipped, and a day the employee
+	attended, was on leave, or that is a rest day or holiday is never touched.
+	"""
+	from saudi_hr.saudi_hr.admin_api import (
+		ABSENCE_CASE_DOCTYPE,
+		ABSENCE_CLOSED_STATUS,
+		ABSENCE_REGISTERABLE_KEYS,
+		DEFAULT_ABSENCE_TYPE,
+		_absence_case_for_date,
+		_attendance_days,
+		_insert_closed_absence_case,
+	)
+
+	doc = frappe.get_doc("Saudi Monthly Payroll", doc_name)
+	frappe.has_permission("Saudi Monthly Payroll", "write", doc=doc, throw=True)
+	if not frappe.has_permission(ABSENCE_CASE_DOCTYPE, "create", throw=False):
+		frappe.throw(
+			_("You do not have permission to register absence cases.<br>ليس لديك صلاحية لتسجيل حالات الغياب."),
+			frappe.PermissionError,
+		)
+
+	period = _resolve_attendance_period(doc)
+	absence_type = cstr(absence_type or "").strip() or DEFAULT_ABSENCE_TYPE
+	note = cstr(note or "").strip()
+	description = _(
+		"Registered as absence from the payroll bulk action for period {0} to {1}.<br>"
+		"تم تسجيل الغياب من إجراء المسير الجماعي للفترة من {0} إلى {1}."
+	).format(period["from"], period["to"])
+	if note:
+		description += "<br>" + frappe.utils.escape_html(note)
+
+	created = 0
+	skipped = 0
+	employees = []
+	for row in doc.employees:
+		if not row.employee:
+			continue
+		registered = 0
+		for day in _attendance_days({"from_date": period["from"], "to_date": period["to"]}, row.employee):
+			if day.get("status_key") not in ABSENCE_REGISTERABLE_KEYS:
+				continue
+			day_value = cstr(day.get("date"))
+			if not day_value or day_value > today():
+				continue
+			if _absence_case_for_date(row.employee, day_value):
+				skipped += 1
+				continue
+			_insert_closed_absence_case(row.employee, day_value, absence_type, description)
+			created += 1
+			registered += 1
+		if registered:
+			employees.append({"employee": row.employee, "days": registered})
+
+	_add_payroll_audit_comment(
+		doc,
+		_("Registered {0} absence day(s) across {1} employee(s) for the period {2} to {3}.").format(
+			created, len(employees), period["from"], period["to"]
+		),
+	)
+	return {
+		"created": created,
+		"skipped": skipped,
+		"employees": employees,
+		"period_from": str(period["from"]),
+		"period_to": str(period["to"]),
+		"status": ABSENCE_CLOSED_STATUS,
+	}
+
+
+@frappe.whitelist(methods=["GET"])
+def absence_type_options():
+	"""Absence-type choices for the bulk register dialog, same source as the panel."""
+	from saudi_hr.saudi_hr.admin_api import _absence_type_options
+
+	return _absence_type_options()
 
 
 def _resolve_attendance_period(doc):
@@ -541,6 +640,15 @@ def _build_attendance_deductions(doc, period):
 		penalty_cap = round(PENALTY_MONTHLY_CAP_DAYS * daily_wage, 2)
 		penalty_deduction = round(min(penalty_raw, penalty_cap), 2) if daily_wage else 0.0
 
+		# Late is deducted pro-rata per minute against the shared 5-day cap.
+		# minutes are already grace-adjusted at punch time, so grace is not
+		# applied again here. An open/whole-day shift never deducts late.
+		hours_per_day = _employee_working_hours_per_day(row.employee)
+		per_minute = (daily_wage / hours_per_day / 60.0) if (daily_wage and hours_per_day) else 0.0
+		late_minutes = flt(counts["late_minutes"]) if _employee_shift_is_scheduled(row.employee, period["from"]) else 0.0
+		late_raw = round(late_minutes * per_minute, 2) if per_minute else 0.0
+		late_deduction = round(min(late_raw, max(0.0, penalty_cap - penalty_deduction)), 2) if daily_wage else 0.0
+
 		results.append(
 			{
 				"employee": row.employee,
@@ -551,11 +659,13 @@ def _build_attendance_deductions(doc, period):
 				"late_hours": counts["late_hours"],
 				"approved_absence_days": round(flt(approved_absence), 2),
 				"absence_deduction": absence_deduction,
-				"late_deduction": 0.0,
+				"late_deduction": late_deduction,
 				"penalty_days": round(penalty_days, 2),
 				"penalty_deduction": penalty_deduction,
 				"flags": "\n".join(
-					_attendance_flags(counts, payable_absence, penalty_days, penalty_raw, penalty_cap, daily_wage)
+					_attendance_flags(
+						counts, payable_absence, penalty_days, penalty_raw, penalty_cap, daily_wage, late_deduction
+					)
 				),
 			}
 		)
@@ -588,6 +698,45 @@ def _attendance_window_counts(employee, period_from, period_to):
 		"late_minutes": round(late_minutes, 1),
 		"late_hours": round(late_minutes / 60.0, 2),
 	}
+
+
+def _employee_working_hours_per_day(employee: str) -> float:
+	"""Contract working hours/day, falling back to the standard 8."""
+	if not employee:
+		return DEFAULT_WORKING_HOURS_PER_DAY
+	fields = _existing_fields("Saudi Employment Contract", ["employee", "working_hours_per_day"])
+	if "employee" not in fields or "working_hours_per_day" not in fields:
+		return DEFAULT_WORKING_HOURS_PER_DAY
+	rows = frappe.get_all(
+		"Saudi Employment Contract",
+		filters={"employee": employee, "docstatus": ["<", 2]},
+		fields=["working_hours_per_day"],
+		order_by="start_date desc, modified desc",
+		limit_page_length=1,
+		as_list=False,
+	)
+	hours = flt(rows[0].get("working_hours_per_day")) if rows else 0.0
+	return hours if hours > 0 else DEFAULT_WORKING_HOURS_PER_DAY
+
+
+def _employee_shift_is_scheduled(employee: str, on_date) -> bool:
+	"""True when the employee's active shift has a real start time.
+
+	An open/whole-day shift (blank, or 00:00-23:59) must never produce a late
+	deduction: its "late" minutes are just time-since-midnight, not lateness.
+	"""
+	from saudi_hr.saudi_hr.attendance_policy import (
+		_build_schedule_window,
+		_get_shift_assignment,
+		_get_shift_type,
+	)
+
+	assignment = _get_shift_assignment(employee, on_date)
+	shift_type = assignment.shift_type if assignment else None
+	if not shift_type:
+		return False
+	window = _build_schedule_window(on_date, _get_shift_type(shift_type))
+	return bool(window.get("expected_start"))
 
 
 def _approved_absence_days(employee, period_from, period_to):
@@ -640,7 +789,7 @@ def _procedure_penalty_days(procedure):
 	return parse_penalty_to_days(penalty_type)
 
 
-def _attendance_flags(counts, payable_absence, penalty_days, penalty_raw, penalty_cap, daily_wage):
+def _attendance_flags(counts, payable_absence, penalty_days, penalty_raw, penalty_cap, daily_wage, late_deduction=0.0):
 	flags = []
 	uncovered = flt(counts["absent"]) - flt(payable_absence)
 	if uncovered > 0:
@@ -651,12 +800,20 @@ def _attendance_flags(counts, payable_absence, penalty_days, penalty_raw, penalt
 			).format(_fmt_days(uncovered))
 		)
 	if counts["late_days"]:
-		flags.append(
-			_(
-				"{0} late day(s), {1} hour(s). Deducted only through an approved Disciplinary Procedure. / "
-				"{0} يوم تأخير، {1} ساعة. لا يُخصم إلا بإجراء تأديبي معتمد."
-			).format(counts["late_days"], counts["late_hours"])
-		)
+		if flt(late_deduction) > 0:
+			flags.append(
+				_(
+					"{0} late day(s), {1} hour(s). Deducted from late hours in payroll. / "
+					"{0} يوم تأخير، {1} ساعة. مُخصم من ساعات التأخر في الرواتب."
+				).format(counts["late_days"], counts["late_hours"])
+			)
+		else:
+			flags.append(
+				_(
+					"{0} late day(s), {1} hour(s). Not deducted (open shift, or capped at five days' wage). / "
+					"{0} يوم تأخير، {1} ساعة. لم يُخصم (وردية مفتوحة، أو ضمن حد خمسة أيام أجر)."
+				).format(counts["late_days"], counts["late_hours"])
+			)
 	if penalty_days and daily_wage and flt(penalty_raw) > flt(penalty_cap):
 		flags.append(
 			_(
@@ -908,6 +1065,145 @@ def download_employee_setup_template(doc_name: str, file_url: str | None = None)
 	file_name = f"employee-setup-template-{doc.name}.xlsx"
 	file_doc = save_file(file_name, make_xlsx(template_rows, "Employee Setup").getvalue(), doc.doctype, doc.name, is_private=1)
 	return {"file_url": file_doc.file_url, "file_name": file_doc.file_name, "row_count": len(template_rows) - 1}
+
+
+@frappe.whitelist()
+def download_bank_transfer_sheet(doc_name: str):
+	"""إنشاء ملف الحوالات البنكية بصيغة Excel جاهزة للرفع في البنك."""
+	doc = frappe.get_doc("Saudi Monthly Payroll", doc_name)
+	frappe.has_permission("Saudi Monthly Payroll", "read", doc=doc, throw=True)
+
+	file_name = f"bank-transfer-sheet-{doc.name}-{frappe.generate_hash(length=6)}.xlsx"
+	file_doc = save_file(
+		file_name,
+		_build_bank_transfer_sheet_workbook(doc).getvalue(),
+		doc.doctype,
+		doc.name,
+		is_private=1,
+	)
+	return {
+		"file_url": file_doc.file_url,
+		"file_name": file_doc.file_name,
+		"row_count": len(doc.employees or []),
+	}
+
+
+def _bank_transfer_sheet_notes(doc) -> str:
+	"""قيمة عمود ملاحظات في ملف الحوالات البنكية: راتب شهر {رقم}."""
+	month_number = _month_name_to_num(doc.month)
+	return f"راتب شهر {month_number}"
+
+
+def _existing_fields(doctype: str, candidate_fields: list[str]) -> list[str]:
+	if not frappe.db.exists("DocType", doctype):
+		return []
+	meta = frappe.get_meta(doctype)
+	return [f for f in candidate_fields if f == "name" or meta.has_field(f)]
+
+
+def _bank_transfer_employee_lookup(employees: list[str]) -> dict[str, dict]:
+	"""جمع بيانات الهوية والبنك للموظفين مع بديل من عقد العمل أو تصريح العمل."""
+	lookup = {emp: {} for emp in employees if emp}
+	if not lookup:
+		return lookup
+
+	for row in frappe.get_all(
+		"Employee",
+		filters={"name": ["in", list(lookup)]},
+		fields=_existing_fields(
+			"Employee",
+			["name", "iban", "bank_name", "custom_id_number", "custom_id_type"],
+		),
+		limit_page_length=0,
+		as_list=False,
+	):
+		emp = row.get("name")
+		if emp in lookup:
+			lookup[emp] = {
+				"id_number": cstr(row.get("custom_id_number") or "").strip(),
+				"id_type": cstr(row.get("custom_id_type") or "").strip(),
+				"iban": cstr(row.get("iban") or "").strip(),
+				"bank_name": cstr(row.get("bank_name") or "").strip(),
+			}
+
+	for doctype, candidate_fields in (
+		("Saudi Employment Contract", ["employee", "iqama_number"]),
+		("Work Permit Iqama", ["employee", "iqama_number"]),
+	):
+		fields = _existing_fields(doctype, candidate_fields)
+		if "employee" not in fields or "iqama_number" not in fields:
+			continue
+		for row in frappe.get_all(
+			doctype,
+			filters={"employee": ["in", list(lookup)]},
+			fields=fields,
+			order_by="modified desc",
+			limit_page_length=0,
+			as_list=False,
+		):
+			emp = row.get("employee")
+			if emp in lookup and not lookup[emp].get("id_number") and row.get("iqama_number"):
+				lookup[emp]["id_number"] = cstr(row.get("iqama_number")).strip()
+
+	return lookup
+
+
+def _build_bank_transfer_sheet_workbook(doc) -> BytesIO:
+	rows = doc.employees or []
+	if not rows:
+		frappe.throw(
+			_("No payroll rows were found on this document.<br>لا توجد صفوف موظفين في هذا المسير."),
+			title=_("Empty Payroll / مسير فارغ"),
+		)
+
+	employees = [cstr(row.get("employee") or "").strip() for row in rows]
+	lookup = _bank_transfer_employee_lookup(employees)
+	notes = _bank_transfer_sheet_notes(doc)
+
+	workbook = Workbook()
+	sheet = workbook.active
+	sheet.title = "Bank Transfer"
+	sheet.sheet_view.rightToLeft = True
+
+	header_fill = PatternFill(fill_type="solid", fgColor="EAF2E3")
+	bold_font = Font(bold=True)
+	header_alignment = Alignment(horizontal="center", vertical="center")
+
+	for column_index, header in enumerate(BANK_TRANSFER_SHEET_HEADERS, start=1):
+		cell = sheet.cell(row=1, column=column_index, value=header)
+		cell.font = bold_font
+		cell.fill = header_fill
+		cell.alignment = header_alignment
+		sheet.column_dimensions[cell.column_letter].width = 22
+
+	sheet.freeze_panes = "A2"
+	sheet.auto_filter.ref = (
+		f"A1:{sheet.cell(row=1, column=len(BANK_TRANSFER_SHEET_HEADERS)).column_letter}{len(rows) + 1}"
+	)
+
+	for row_index, row in enumerate(rows, start=2):
+		emp = cstr(row.get("employee") or "").strip()
+		details = lookup.get(emp) or {}
+		values = [
+			flt(row.get("total_deductions"), 2),
+			round(flt(row.get("transport_allowance")) + flt(row.get("other_allowances")), 2),
+			flt(row.get("housing_allowance"), 2),
+			flt(row.get("basic_salary"), 2),
+			cstr(row.get("work_location") or "").strip(),
+			details.get("id_number", ""),
+			cstr(row.get("employee_name") or "").strip(),
+			notes,
+			flt(row.get("net_salary"), 2),
+			details.get("bank_name", ""),
+			details.get("iban", ""),
+		]
+		for column_index, value in enumerate(values, start=1):
+			sheet.cell(row=row_index, column=column_index, value=value)
+
+	output = BytesIO()
+	workbook.save(output)
+	output.seek(0)
+	return output
 
 
 @frappe.whitelist(methods=["POST"])

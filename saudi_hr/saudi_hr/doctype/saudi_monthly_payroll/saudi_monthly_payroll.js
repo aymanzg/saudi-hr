@@ -92,6 +92,13 @@ function _add_buttons(frm) {
             _generate_attendance_deductions(frm);
         }, __('Actions / إجراءات'));
 
+        // زر تسجيل الغياب الجماعي
+        if (!frm.is_new() && frm.doc.employees && frm.doc.employees.length > 0) {
+            frm.add_custom_button(__('Register Absences / تسجيل الغياب'), function() {
+                _bulk_register_absences(frm);
+            }, __('Actions / إجراءات'));
+        }
+
         if (frm.doc.source_workbook) {
             frm.add_custom_button(__('Import Attached Workbook / استيراد الملف المرفق'), function() {
                 _import_workbook(frm);
@@ -171,6 +178,13 @@ function _add_buttons(frm) {
                 payroll_document: frm.doc.name,
             });
         }, __('Compliance / الامتثال'));
+    }
+
+    // زر تنزيل ملف الحوالات البنكية (يظهر بعد الحفظ وعند وجود صفوف)
+    if (!frm.is_new() && frm.doc.employees && frm.doc.employees.length > 0) {
+        frm.add_custom_button(__('Download Bank Transfer Sheet / تنزيل ملف الحوالات البنكية'), function() {
+            _download_bank_transfer_sheet(frm);
+        }, __('Actions / إجراءات'));
     }
 }
 
@@ -586,6 +600,79 @@ function _generate_attendance_deductions(frm) {
 }
 
 
+function _bulk_register_absences(frm) {
+    if (!frm.doc.employees || frm.doc.employees.length === 0) {
+        frappe.msgprint(__('No employees. Please fetch employees first.<br>لا يوجد موظفون. جلب الموظفين أولاً.'));
+        return;
+    }
+
+    const run = function() {
+        frappe.call({
+            method: 'saudi_hr.saudi_hr.doctype.saudi_monthly_payroll.saudi_monthly_payroll.absence_type_options',
+            callback(r) {
+                const options = (r.message && r.message.length) ? r.message : [''];
+                frappe.prompt(
+                    [
+                        {
+                            fieldtype: 'Select',
+                            label: __('Absence Type / نوع الغياب'),
+                            fieldname: 'absence_type',
+                            options: options,
+                            default: options[0],
+                            reqd: 0
+                        },
+                        {
+                            fieldtype: 'Data',
+                            label: __('Note / ملاحظة'),
+                            fieldname: 'note',
+                            reqd: 0
+                        }
+                    ],
+                    function(values) {
+                        frappe.call({
+                            method: 'saudi_hr.saudi_hr.doctype.saudi_monthly_payroll.saudi_monthly_payroll.bulk_register_payroll_absences',
+                            args: {
+                                doc_name: frm.doc.name,
+                                absence_type: values.absence_type,
+                                note: values.note
+                            },
+                            freeze: true,
+                            freeze_message: __('Registering absences...<br>جارٍ تسجيل الغياب...'),
+                            callback(res) {
+                                if (!res.message) {
+                                    return;
+                                }
+                                frm.reload_doc();
+                                frappe.show_alert({
+                                    message: __('Registered {0} absence day(s), skipped {1}.<br>تم تسجيل {0} يوم غياب، وتم تجاوز {1}.', [res.message.created, res.message.skipped]),
+                                    indicator: 'green'
+                                }, 5);
+                                if (res.message.created > 0) {
+                                    frappe.confirm(
+                                        __('Registered {0} day(s). Generate attendance deductions now?<br>تم تسجيل {0} يوم. احتساب خصومات الحضور الآن؟', [res.message.created]),
+                                        function() {
+                                            _generate_attendance_deductions(frm);
+                                        }
+                                    );
+                                }
+                            }
+                        });
+                    },
+                    __('Register Absences / تسجيل الغياب'),
+                    __('Register / تسجيل')
+                );
+            }
+        });
+    };
+
+    if (frm.is_new()) {
+        frm.save().then(run);
+    } else {
+        run();
+    }
+}
+
+
 function _confirm_attendance_deductions(frm, preview) {
     const rows = (preview.rows || []).filter(function(row) {
         return row.absence_deduction || row.penalty_deduction || row.flags;
@@ -970,6 +1057,36 @@ function _download_simple_payroll_import_template(frm) {
                 window.open(r.message.file_url, '_blank');
                 frappe.show_alert({
                     message: __('Simple payroll template is ready / تم تجهيز قالب رفع الرواتب المبسط'),
+                    indicator: 'green'
+                }, 5);
+            }
+        });
+    };
+
+    if (frm.is_new()) {
+        frm.save().then(do_download);
+    } else {
+        do_download();
+    }
+}
+
+
+function _download_bank_transfer_sheet(frm) {
+    const do_download = function() {
+        frappe.call({
+            method: 'saudi_hr.saudi_hr.doctype.saudi_monthly_payroll.saudi_monthly_payroll.download_bank_transfer_sheet',
+            args: {
+                doc_name: frm.doc.name
+            },
+            freeze: true,
+            freeze_message: __('Generating bank transfer sheet...<br>جاري إنشاء ملف الحوالات البنكية...'),
+            callback(r) {
+                if (!r.message || !r.message.file_url) {
+                    return;
+                }
+                window.open(r.message.file_url, '_blank');
+                frappe.show_alert({
+                    message: __(`Bank transfer sheet generated with ${r.message.row_count} rows.`),
                     indicator: 'green'
                 }, 5);
             }

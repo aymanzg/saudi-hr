@@ -1790,3 +1790,241 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 		self.assertIn("A", warning)
 		self.assertIn("Generate Attendance", warning)
 
+	# ─── خصم التأخر / Late deduction ─────────────────────────────────────────
+
+	def _late_deduction(self, basic, late_minutes, penalty_days=0.0, scheduled=True):
+		doc = self._build_attendance_doc(basic=basic)
+		counts = {"present": 20, "absent": 0, "late_days": 1, "late_minutes": late_minutes, "late_hours": late_minutes / 60.0}
+		with patch.object(payroll_module.frappe, "has_permission", return_value=True), patch.object(
+			payroll_module, "_attendance_window_counts", return_value=counts
+		), patch.object(payroll_module, "_approved_absence_days", return_value=0), patch.object(
+			payroll_module, "_approved_penalty_days", return_value=penalty_days
+		), patch.object(
+			payroll_module, "_employee_working_hours_per_day", return_value=8.0
+		), patch.object(
+			payroll_module, "_employee_shift_is_scheduled", return_value=scheduled
+		):
+			return payroll_module._build_attendance_deductions(
+				doc, {"from": getdate("2026-10-01"), "to": getdate("2026-10-25")}
+			)[0]
+
+	def test_late_deduction_is_pro_rata_per_minute(self):
+		# basic 3000 → daily 100 → per minute 100 / 8 / 60 = 0.208333…
+		row = self._late_deduction(basic=3000, late_minutes=60)
+		self.assertAlmostEqual(row["late_deduction"], 12.5, places=2)
+		self.assertIn("Deducted from late hours", row["flags"])
+
+	def test_late_deduction_is_zero_for_an_open_shift(self):
+		row = self._late_deduction(basic=3000, late_minutes=300, scheduled=False)
+		self.assertEqual(row["late_deduction"], 0.0)
+		self.assertIn("open shift", row["flags"])
+
+	def test_late_deduction_shares_the_five_day_cap_with_penalty(self):
+		# daily 100 → cap 500; penalty already takes 480, leaving 20 for late.
+		row = self._late_deduction(basic=3000, late_minutes=600, penalty_days=4.8)
+		self.assertEqual(row["penalty_deduction"], 480.0)
+		self.assertEqual(row["late_deduction"], 20.0)
+
+	def test_no_late_deduction_without_a_basic_salary(self):
+		row = self._late_deduction(basic=0, late_minutes=120)
+		self.assertEqual(row["late_deduction"], 0.0)
+
+	def test_working_hours_fall_back_to_eight(self):
+		with patch.object(payroll_module, "_existing_fields", return_value=["employee", "working_hours_per_day"]), patch.object(
+			payroll_module.frappe, "get_all", return_value=[]
+		):
+			self.assertEqual(payroll_module._employee_working_hours_per_day("EMP-1"), 8.0)
+
+		with patch.object(payroll_module, "_existing_fields", return_value=["employee", "working_hours_per_day"]), patch.object(
+			payroll_module.frappe, "get_all", return_value=[frappe._dict(working_hours_per_day=9.0)]
+		):
+			self.assertEqual(payroll_module._employee_working_hours_per_day("EMP-1"), 9.0)
+
+	# ─── تسجيل الغياب الجماعي / Bulk absence register ────────────────────────
+
+	def _bulk_doc(self):
+		return SimpleNamespace(employees=[SimpleNamespace(employee="EMP-1"), SimpleNamespace(employee=None)])
+
+	def test_bulk_register_creates_a_case_per_absent_day(self):
+		from saudi_hr.saudi_hr import admin_api
+
+		days = [
+			{"date": "2026-10-01", "status_key": "missing"},
+			{"date": "2026-10-02", "status_key": "present"},
+			{"date": "2026-10-03", "status_key": "absent"},
+			{"date": "2026-10-04", "status_key": "holiday"},
+		]
+		created = []
+		doc = self._bulk_doc()
+		with patch.object(payroll_module.frappe, "get_doc", return_value=doc), patch.object(
+			payroll_module.frappe, "has_permission", return_value=True
+		), patch.object(
+			payroll_module, "_resolve_attendance_period", return_value={"from": getdate("2026-10-01"), "to": getdate("2026-10-04")}
+		), patch.object(
+			payroll_module, "_add_payroll_audit_comment"
+		), patch.object(
+			admin_api, "_attendance_days", return_value=days
+		), patch.object(
+			admin_api, "_absence_case_for_date", return_value=None
+		), patch.object(
+			admin_api, "_insert_closed_absence_case", side_effect=lambda *a, **k: created.append(a) or SimpleNamespace(name="CASE")
+		):
+			result = payroll_module.bulk_register_payroll_absences("SAU-PAY-X")
+
+		self.assertEqual(result["created"], 2)
+		self.assertEqual(len(created), 2)
+		self.assertEqual(result["skipped"], 0)
+		self.assertEqual(result["employees"], [{"employee": "EMP-1", "days": 2}])
+
+	def test_bulk_register_skips_days_already_covered(self):
+		from saudi_hr.saudi_hr import admin_api
+
+		days = [
+			{"date": "2026-10-01", "status_key": "missing"},
+			{"date": "2026-10-02", "status_key": "missing"},
+		]
+		created = []
+		doc = self._bulk_doc()
+		with patch.object(payroll_module.frappe, "get_doc", return_value=doc), patch.object(
+			payroll_module.frappe, "has_permission", return_value=True
+		), patch.object(
+			payroll_module, "_resolve_attendance_period", return_value={"from": getdate("2026-10-01"), "to": getdate("2026-10-02")}
+		), patch.object(
+			payroll_module, "_add_payroll_audit_comment"
+		), patch.object(
+			admin_api, "_attendance_days", return_value=days
+		), patch.object(
+			admin_api, "_absence_case_for_date", side_effect=lambda emp, day: "CASE-1" if day == "2026-10-01" else None
+		), patch.object(
+			admin_api, "_insert_closed_absence_case", side_effect=lambda *a, **k: created.append(a) or SimpleNamespace(name="CASE")
+		):
+			result = payroll_module.bulk_register_payroll_absences("SAU-PAY-X")
+
+		self.assertEqual(result["created"], 1)
+		self.assertEqual(result["skipped"], 1)
+
+	# ─── ملف الحوالات البنكية ────────────────────────────────────────────────
+
+	def test_build_bank_transfer_sheet_workbook_has_expected_headers_and_values(self):
+		row1 = {
+			"employee": "EMP-1",
+			"employee_name": "أحمد محمد",
+			"work_location": "جدة",
+			"basic_salary": 5000,
+			"housing_allowance": 800,
+			"transport_allowance": 300,
+			"other_allowances": 200,
+			"total_deductions": 700,
+			"net_salary": 5600,
+		}
+		row2 = {
+			"employee": "EMP-2",
+			"employee_name": "Sara Ali",
+			"work_location": "الرياض",
+			"basic_salary": 3000,
+			"housing_allowance": 0,
+			"transport_allowance": 0,
+			"other_allowances": 0,
+			"total_deductions": 300,
+			"net_salary": 2700,
+		}
+		doc = SimpleNamespace(
+			name="SAU-PAY-2026-0001",
+			doctype="Saudi Monthly Payroll",
+			month="September / سبتمبر",
+			year=2026,
+			employees=[row1, row2],
+		)
+		lookup = {
+			"EMP-1": {"id_number": "1122334455", "id_type": "National ID", "iban": "SA0001", "bank_name": "Bank A"},
+			"EMP-2": {"id_number": "", "id_type": "", "iban": "", "bank_name": ""},
+		}
+
+		with patch.object(payroll_module, "_bank_transfer_employee_lookup", return_value=lookup):
+			content = payroll_module._build_bank_transfer_sheet_workbook(doc)
+
+		workbook = load_workbook(content)
+		sheet = workbook.active
+		headers = [
+			sheet.cell(row=1, column=i).value
+			for i in range(1, len(payroll_module.BANK_TRANSFER_SHEET_HEADERS) + 1)
+		]
+		self.assertEqual(headers, payroll_module.BANK_TRANSFER_SHEET_HEADERS)
+		self.assertTrue(sheet.sheet_view.rightToLeft)
+		self.assertEqual(sheet.freeze_panes, "A2")
+
+		# الصف الأول
+		self.assertEqual(sheet.cell(row=2, column=1).value, 700)  # خصومات
+		self.assertEqual(sheet.cell(row=2, column=2).value, 500)  # بدلات اخرى (300 + 200)
+		self.assertEqual(sheet.cell(row=2, column=3).value, 800)  # بدل سكن
+		self.assertEqual(sheet.cell(row=2, column=4).value, 5000)  # الراتب الاساسي
+		self.assertEqual(sheet.cell(row=2, column=5).value, "جدة")  # العنوان (مدينة)
+		self.assertEqual(sheet.cell(row=2, column=6).value, "1122334455")  # رقم الهوية
+		self.assertEqual(sheet.cell(row=2, column=7).value, "أحمد محمد")  # اسم الموظف
+		self.assertEqual(sheet.cell(row=2, column=8).value, "راتب شهر 9")  # ملاحظات
+		self.assertEqual(sheet.cell(row=2, column=9).value, 5600)  # اجمال الراتب
+		self.assertEqual(sheet.cell(row=2, column=10).value, "Bank A")  # البنك
+		self.assertEqual(sheet.cell(row=2, column=11).value, "SA0001")  # IBAN
+
+		# الصف الثاني: بيانات البنك/الهوية الفارغة تبقى موجودة بدون نص
+		self.assertFalse(sheet.cell(row=3, column=6).value)
+		self.assertFalse(sheet.cell(row=3, column=10).value)
+		self.assertFalse(sheet.cell(row=3, column=11).value)
+
+	def test_build_bank_transfer_sheet_workbook_throws_when_empty(self):
+		doc = SimpleNamespace(
+			name="SAU-PAY-2026-0002",
+			month="September / سبتمبر",
+			year=2026,
+			employees=[],
+		)
+		with self.assertRaises(frappe.ValidationError):
+			payroll_module._build_bank_transfer_sheet_workbook(doc)
+
+	def test_bank_transfer_employee_lookup_falls_back_to_contract_iqama(self):
+		employee_rows = [
+			frappe._dict(name="EMP-1", custom_id_number="", custom_id_type="", iban="SA0001", bank_name="Bank A")
+		]
+		contract_rows = [frappe._dict(employee="EMP-1", iqama_number="1122334455")]
+
+		def fake_get_all(doctype, **kwargs):
+			if doctype == "Employee":
+				return employee_rows
+			if doctype == "Saudi Employment Contract":
+				return contract_rows
+			return []
+
+		with patch.object(payroll_module.frappe, "get_all", side_effect=fake_get_all):
+			lookup = payroll_module._bank_transfer_employee_lookup(["EMP-1"])
+
+		self.assertEqual(lookup["EMP-1"]["id_number"], "1122334455")
+		self.assertEqual(lookup["EMP-1"]["iban"], "SA0001")
+		self.assertEqual(lookup["EMP-1"]["bank_name"], "Bank A")
+
+	def test_bank_transfer_employee_lookup_empty_without_employees(self):
+		self.assertEqual(payroll_module._bank_transfer_employee_lookup([]), {})
+
+	def test_download_bank_transfer_sheet_uses_read_permission_and_returns_file(self):
+		doc = SimpleNamespace(
+			name="SAU-PAY-2026-0003",
+			doctype="Saudi Monthly Payroll",
+			month="September / سبتمبر",
+			year=2026,
+			employees=[{"employee": "EMP-1"}],
+		)
+		fake_file = SimpleNamespace(file_url="/private/files/bank.xlsx", file_name="bank.xlsx")
+
+		with patch.object(payroll_module.frappe, "get_doc", return_value=doc), patch.object(
+			payroll_module.frappe, "has_permission"
+		) as has_perm, patch.object(
+			payroll_module, "save_file", return_value=fake_file
+		), patch.object(
+			payroll_module, "_bank_transfer_employee_lookup", return_value={}
+		):
+			result = payroll_module.download_bank_transfer_sheet("SAU-PAY-2026-0003")
+
+		has_perm.assert_called_once()
+		self.assertEqual(result["file_url"], "/private/files/bank.xlsx")
+		self.assertEqual(result["row_count"], 1)
+
+
