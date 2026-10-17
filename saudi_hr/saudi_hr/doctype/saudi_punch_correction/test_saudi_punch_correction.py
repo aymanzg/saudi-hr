@@ -3,6 +3,7 @@ from frappe.tests.utils import FrappeTestCase
 from frappe.utils import add_days, get_datetime, nowdate
 
 from saudi_hr.saudi_hr.attendance_policy import (
+	_build_schedule_window,
 	calculate_attendance_variance,
 	resolve_mobile_attendance_policy,
 )
@@ -451,3 +452,82 @@ class TestSaudiPunchCorrection(FrappeTestCase):
 				get_punch_correction_context(employee=other, attendance_date=self.day)
 		finally:
 			frappe.set_user("Administrator")
+
+
+class TestOpenShiftGuards(FrappeTestCase):
+	"""An open (00:00-23:59) shift must never mark anyone late or early."""
+
+	@staticmethod
+	def _shift(start, end, late_marking=1, early_marking=1):
+		from types import SimpleNamespace
+
+		return SimpleNamespace(
+			start_time=start,
+			end_time=end,
+			late_entry_grace_period=0,
+			early_exit_grace_period=0,
+			begin_check_in_before_shift_start_time=0,
+			allow_check_out_after_shift_end_time=0,
+			enable_late_entry_marking=late_marking,
+			enable_early_exit_marking=early_marking,
+		)
+
+	def test_whole_day_window_is_unscheduled(self):
+		window = _build_schedule_window("2026-10-01", self._shift("00:00:00", "23:59:59"))
+		self.assertEqual(window, {})
+
+	def test_blank_window_is_unscheduled(self):
+		self.assertEqual(_build_schedule_window("2026-10-01", None), {})
+
+	def test_a_normal_shift_keeps_its_window(self):
+		window = _build_schedule_window("2026-10-01", self._shift("09:00:00", "17:00:00"))
+		self.assertIsNotNone(window["expected_start"])
+		self.assertIsNotNone(window["expected_end"])
+
+	def test_a_short_night_shift_is_not_treated_as_open(self):
+		"""00:00-08:00 is a real night shift, so its start is still measured."""
+		window = _build_schedule_window("2026-10-01", self._shift("00:00:00", "08:00:00"))
+		self.assertIsNotNone(window["expected_start"])
+
+	def test_no_variance_against_an_unscheduled_window(self):
+		window = _build_schedule_window("2026-10-01", self._shift("00:00:00", "23:59:59"))
+		policy = {
+			"expected_start": window.get("expected_start"),
+			"expected_end": window.get("expected_end"),
+			"enable_late_entry_marking": 1,
+			"enable_early_exit_marking": 1,
+		}
+		variance = calculate_attendance_variance("IN", get_datetime("2026-10-01 08:00:00"), policy)
+		self.assertEqual(variance["late_minutes"], 0)
+		out = calculate_attendance_variance("OUT", get_datetime("2026-10-01 17:00:00"), policy)
+		self.assertEqual(out["early_exit_minutes"], 0)
+
+	def test_late_marking_flag_gates_the_variance(self):
+		policy = {
+			"expected_start": get_datetime("2026-10-01 09:00:00"),
+			"late_after": get_datetime("2026-10-01 09:00:00"),
+			"enable_late_entry_marking": 0,
+		}
+		variance = calculate_attendance_variance("IN", get_datetime("2026-10-01 09:40:00"), policy)
+		self.assertEqual(variance["late_minutes"], 0)
+		self.assertEqual(variance["late_entry"], 0)
+
+	def test_early_marking_flag_gates_the_variance(self):
+		policy = {
+			"expected_end": get_datetime("2026-10-01 17:00:00"),
+			"early_before": get_datetime("2026-10-01 17:00:00"),
+			"enable_early_exit_marking": 0,
+		}
+		variance = calculate_attendance_variance("OUT", get_datetime("2026-10-01 16:00:00"), policy)
+		self.assertEqual(variance["early_exit_minutes"], 0)
+		self.assertEqual(variance["early_exit"], 0)
+
+	def test_a_scheduled_shift_still_marks_late(self):
+		policy = {
+			"expected_start": get_datetime("2026-10-01 09:00:00"),
+			"late_after": get_datetime("2026-10-01 09:00:00"),
+			"enable_late_entry_marking": 1,
+		}
+		variance = calculate_attendance_variance("IN", get_datetime("2026-10-01 09:40:00"), policy)
+		self.assertEqual(variance["late_minutes"], 40)
+		self.assertEqual(variance["late_entry"], 1)

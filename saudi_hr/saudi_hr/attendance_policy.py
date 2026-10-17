@@ -70,6 +70,20 @@ def _combine_shift_datetime(attendance_date, time_value):
 	return get_datetime(f"{attendance_date} {time_value}")
 
 
+def _is_whole_day_window(start_dt, end_dt):
+	"""A blank or full-day window is an open shift: nobody is late or early.
+
+	A shift stored as 00:00-23:59 looks scheduled but really means "any time",
+	so measuring punches against it would flag every normal check-in as late
+	(minutes since midnight) and every check-out as early (minutes until 23:59).
+	"""
+	if not start_dt and not end_dt:
+		return True
+	if start_dt and end_dt and (end_dt - start_dt).total_seconds() >= 23 * 3600:
+		return True
+	return False
+
+
 def _build_schedule_window(attendance_date, shift_type_doc):
 	if not shift_type_doc:
 		return {}
@@ -78,6 +92,9 @@ def _build_schedule_window(attendance_date, shift_type_doc):
 	end_dt = _combine_shift_datetime(attendance_date, shift_type_doc.end_time)
 	if start_dt and end_dt and end_dt <= start_dt:
 		end_dt = add_to_date(end_dt, days=1)
+
+	if _is_whole_day_window(start_dt, end_dt):
+		return {}
 
 	checkin_window_start = add_to_date(
 		start_dt,
@@ -97,6 +114,8 @@ def _build_schedule_window(attendance_date, shift_type_doc):
 		"checkout_window_end": checkout_window_end,
 		"late_after": late_after,
 		"early_before": early_before,
+		"enable_late_entry_marking": shift_type_doc.enable_late_entry_marking,
+		"enable_early_exit_marking": shift_type_doc.enable_early_exit_marking,
 	}
 
 
@@ -172,6 +191,8 @@ def resolve_mobile_attendance_policy(employee, attendance_date, location=None):
 		"checkout_window_end": window.get("checkout_window_end"),
 		"late_after": window.get("late_after"),
 		"early_before": window.get("early_before"),
+		"enable_late_entry_marking": window.get("enable_late_entry_marking"),
+		"enable_early_exit_marking": window.get("enable_early_exit_marking"),
 		"enforce_schedule": int((location or {}).get("enforce_schedule") or 0),
 		"voice_policy": voice_policy,
 		"voice_challenge_ttl_seconds": max(30, voice_ttl),
@@ -188,10 +209,16 @@ def calculate_attendance_variance(log_type, event_time, policy):
 		if policy.get("late_after") and event_time <= policy["late_after"]:
 			late_minutes = 0
 
+	if not policy.get("enable_late_entry_marking", 1):
+		late_minutes = 0
+
 	if log_type == "OUT" and policy.get("expected_end") and event_time < policy["expected_end"]:
 		early_exit_minutes = max(0, int((policy["expected_end"] - event_time).total_seconds() // 60))
 		if policy.get("early_before") and event_time >= policy["early_before"]:
 			early_exit_minutes = 0
+
+	if not policy.get("enable_early_exit_marking", 1):
+		early_exit_minutes = 0
 
 	return {
 		"late_minutes": late_minutes,

@@ -771,7 +771,11 @@ def _build_daily_attendance(employee, attendance_date, in_time, out_time, locati
 			"late_entry": late_variance.get("late_entry"),
 			"late_minutes": late_variance.get("late_minutes"),
 			"early_exit": out_variance.get("early_exit")
-			or (1 if working_hours < _get_contract_hours_per_day(employee) else 0),
+				or (
+					1
+					if policy.get("expected_end") and working_hours < _get_contract_hours_per_day(employee)
+					else 0
+				),
 			"early_exit_minutes": out_variance.get("early_exit_minutes"),
 		}
 	)
