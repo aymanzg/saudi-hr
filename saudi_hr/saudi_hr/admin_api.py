@@ -76,6 +76,7 @@ POST_ONLY_METHODS = frozenset(
 		"submit_leave_request",
 		"correct_attendance_day",
 		"remove_attendance_day",
+		"register_absence_case",
 		"create_eosb_settlement",
 		"issue_hr_document",
 		"create_termination_notice",
@@ -267,6 +268,15 @@ EMPLOYEE_REQUEST_LIMIT = 40
 ATTENDANCE_DOCTYPE = "Saudi Daily Attendance"
 CHECKIN_DOCTYPE = "Saudi Employee Checkin"
 PUNCH_CORRECTION_DOCTYPE = "Saudi Punch Correction"
+# Payroll only counts an Absence Case in this status (APPROVED_ABSENCE_CASE_STATUS
+# in saudi_monthly_payroll.py), so a case registered from the admin panel is
+# written straight to it and deducts the day.
+ABSENCE_CASE_DOCTYPE = "Absence Case"
+ABSENCE_CLOSED_STATUS = "Closed / مغلق"
+# A day must read as an absence for payroll to have anything to deduct; a day the
+# employee attended, was on leave, or that is a rest day or holiday does not.
+ABSENCE_REGISTERABLE_KEYS = ("absent", "missing")
+DEFAULT_ABSENCE_TYPE = "Unauthorised Absence / غياب بدون إذن"
 EMPLOYEE_ATTENDANCE_DAYS = 15
 DEFAULT_ATTENDANCE_DAYS = 30
 MAX_ATTENDANCE_DAYS = 180
@@ -407,7 +417,7 @@ def _attendance_rows(employee, limit=EMPLOYEE_ATTENDANCE_DAYS, from_date=None, t
 	)
 
 
-def _attendance_view(row, corrections=None):
+def _attendance_view(row, corrections=None, absence_case=None):
 	day = str(row.get("attendance_date")) if row.get("attendance_date") else None
 	corrected = bool(corrections and corrections.get(day))
 	return {
@@ -424,6 +434,7 @@ def _attendance_view(row, corrections=None):
 		"note": cstr(row.get("note") or "").strip() or None,
 		"corrected": corrected,
 		"correction_reason": (corrections.get(day) if corrected else None),
+		"absence_case": absence_case,
 		"missing": False,
 		"desk_url": desk_route(ATTENDANCE_DOCTYPE, row.get("name")),
 	}
@@ -611,6 +622,8 @@ def get_admin_config():
 		"panels": panels,
 		"default_panel": panels[0] if panels else "",
 		"can_manage_employees": _can_manage_employees(),
+		"can_register_absence": _can_register_absence(),
+		"absence_types": _absence_type_options(),
 		"leave_types": [_doctype_entry(entry) for entry in LEAVE_REGISTRY],
 		"lang": frappe.db.get_value("User", frappe.session.user, "language") or "en",
 	}
@@ -618,6 +631,25 @@ def get_admin_config():
 
 def _can_manage_employees():
 	return bool(frappe.has_permission("Employee", "create", throw=False))
+
+
+def _can_register_absence():
+	"""Whether the button is worth showing: the panel to reach it and the right
+	to create the case it makes.  The endpoint checks the same pair again."""
+	return bool(
+		frappe.has_permission(ABSENCE_CASE_DOCTYPE, "create", throw=False)
+		and "attendance" in visible_panels()
+	)
+
+
+def _absence_type_options():
+	"""The absence_type choices, read from the doctype so the dialog cannot drift
+	from what the record accepts."""
+	if not frappe.db.exists("DocType", ABSENCE_CASE_DOCTYPE):
+		return [DEFAULT_ABSENCE_TYPE]
+	options = frappe.get_meta(ABSENCE_CASE_DOCTYPE).get_field("absence_type").options or ""
+	choices = [line.strip() for line in options.splitlines() if line.strip()]
+	return choices or [DEFAULT_ABSENCE_TYPE]
 
 
 @frappe.whitelist(methods=["GET"])
@@ -1837,13 +1869,14 @@ def _attendance_days(window, employee):
 	corrections = _attendance_corrections(employee, window["from_date"], window["to_date"])
 	holidays = _holiday_dates(employee, window["from_date"], window["to_date"])
 	leaves = _leave_dates(employee, window["from_date"], window["to_date"])
+	absence_cases = _absence_case_dates(employee, window["from_date"], window["to_date"])
 	punches = _attendance_window_punches(employee, window["from_date"], window["to_date"])
 	days = []
 	for key in _each_date(window["from_date"], window["to_date"]):
 		if key in by_date:
-			days.append(_attendance_view(by_date[key], corrections))
+			days.append(_attendance_view(by_date[key], corrections, absence_cases.get(key)))
 			continue
-		view = _off_attendance_view(key, employee, holidays.get(key), leaves.get(key))
+		view = _off_attendance_view(key, employee, holidays.get(key), leaves.get(key), absence_cases.get(key))
 		punch = punches.get(key)
 		# only a plain working day is enriched: a rest day or an approved leave
 		# keeps its own label, because that is what the day was
@@ -1974,14 +2007,67 @@ def _leave_dates(employee, from_date, to_date):
 	return days
 
 
-def _off_attendance_view(day, employee, holiday, leave):
+def _absence_case_rows(employee, from_date, to_date):
+	"""Absence Case records for the employee that overlap the window.
+
+	Read through the caller's permissions, so a role that cannot see Absence
+	Case records simply gets an empty map instead of a permission error, and
+	the day table falls back to hiding the register button.
+	"""
+	if not employee or not frappe.db.exists("DocType", ABSENCE_CASE_DOCTYPE):
+		return []
+	if not frappe.has_permission(ABSENCE_CASE_DOCTYPE, "read", throw=False):
+		return []
+	return frappe.get_list(
+		ABSENCE_CASE_DOCTYPE,
+		filters=[
+			["employee", "=", employee],
+			["absence_start_date", "<=", str(to_date)],
+		],
+		fields=["name", "status", "workflow_state", "absence_start_date", "absence_end_date"],
+		limit_page_length=0,
+	)
+
+
+def _absence_case_dates(employee, from_date, to_date):
+	"""Absence Case coverage in the window, by date.
+
+	A case with no end date covers its start day alone, matching the controller
+	(_calculate_absence_days), and a case that runs past the window is clipped
+	to it.  The first case seen for a day wins, mirroring _leave_dates.
+	"""
+	days = {}
+	for row in _absence_case_rows(employee, from_date, to_date):
+		start = getdate(row.get("absence_start_date"))
+		end = getdate(row.get("absence_end_date")) if row.get("absence_end_date") else start
+		if start > getdate(to_date) or end < getdate(from_date):
+			continue
+		entry = {
+			"name": row.get("name"),
+			"status": row.get("status"),
+			"workflow_state": row.get("workflow_state"),
+		}
+		low = max(start, getdate(from_date))
+		high = min(end, getdate(to_date))
+		for day in _each_date(str(low), str(high)):
+			days.setdefault(day, entry)
+	return days
+
+
+def _absence_case_for_date(employee, day):
+	"""The name of an Absence Case covering the day, or None."""
+	entry = _absence_case_dates(employee, day, day).get(day)
+	return entry.get("name") if entry else None
+
+
+def _off_attendance_view(day, employee, holiday, leave, absence_case=None):
 	"""A day with no attendance row, described as leave, a holiday or a rest day.
 
 	Leave wins over a holiday.  The rest of the record still comes from
 	_missing_attendance_view, so the dialog treats it exactly like any other day
 	with no row: only the status the table shows changes.
 	"""
-	view = _missing_attendance_view(day, employee)
+	view = _missing_attendance_view(day, employee, absence_case)
 	if leave:
 		view.update({"status_key": "on_leave", "status": leave, "reason": leave})
 	elif holiday:
@@ -2000,7 +2086,7 @@ def _off_attendance_view(day, employee, holiday, leave):
 	return view
 
 
-def _missing_attendance_view(day, employee):
+def _missing_attendance_view(day, employee, absence_case=None):
 	"""A calendar day the employee has no attendance row for yet.
 
 	``name`` stays None so the page cannot point the edit dialog at a record
@@ -2022,6 +2108,7 @@ def _missing_attendance_view(day, employee):
 		"note": None,
 		"corrected": False,
 		"correction_reason": None,
+		"absence_case": absence_case,
 		"missing": True,
 		"future": day > today,
 		"desk_url": None,
@@ -2683,6 +2770,114 @@ def remove_attendance_day(attendance=None, employee=None, date=None):
 		frappe.delete_doc(ATTENDANCE_DOCTYPE, target.name, force=True, ignore_permissions=True)
 
 	return {"employee": employee, "date": date_value, "removed": True}
+
+
+@frappe.whitelist(methods=["POST"])
+def _insert_closed_absence_case(employee, day, absence_type, description):
+	"""Create the single-day Absence Case already closed for payroll deduction.
+
+	Shared by the per-day panel button and the payroll bulk register, so both
+	write exactly the same closed status payroll counts.
+	"""
+	case = frappe.get_doc(
+		{
+			"doctype": ABSENCE_CASE_DOCTYPE,
+			"employee": employee,
+			"absence_type": absence_type,
+			"absence_start_date": day,
+			"absence_end_date": day,
+			"status": ABSENCE_CLOSED_STATUS,
+			"description": description,
+		}
+	)
+	case.flags.ignore_permissions = True
+	case.insert()
+	frappe.db.set_value(
+		ABSENCE_CASE_DOCTYPE,
+		case.name,
+		{"workflow_state": "Completed", "status": ABSENCE_CLOSED_STATUS},
+	)
+	return case
+
+
+def register_absence_case(employee=None, date=None, absence_type=None, note=None):
+	"""Register one absent day as a closed Absence Case, so payroll deducts it.
+
+	The day is written as a single-day Absence Case already in the status payroll
+	counts, because the panel is used by the people who would otherwise walk the
+	case through the approval workflow by hand.  A day the employee attended, was
+	on leave, or that is a rest day or holiday is refused, so the button can never
+	turn a worked day into a deduction.
+	"""
+	assert_portal_access()
+	assert_panel_access("attendance")
+
+	if not frappe.has_permission(ABSENCE_CASE_DOCTYPE, "create", throw=False):
+		frappe.throw(
+			_("You do not have permission to register an absence case.<br>"
+			  "ليس لديك صلاحية لتسجيل حالة غياب."),
+			frappe.PermissionError,
+		)
+
+	employee = cstr(employee or "").strip()
+	date_value = cstr(date or "").strip()
+	if not employee or not date_value:
+		frappe.throw(
+			_("An employee and a date are required.<br>الموظف والتاريخ مطلوبان."),
+			title=_("Missing Details / بيانات ناقصة"),
+		)
+	if not frappe.db.exists("Employee", employee):
+		frappe.throw(
+			_("The employee does not exist.<br>الموظف غير موجود."),
+			title=_("Employee Not Found / الموظف غير موجود"),
+		)
+	try:
+		day = str(getdate(date_value))
+	except Exception:
+		frappe.throw(
+			_("Date must be written as YYYY-MM-DD.<br>التاريخ يجب أن يكون بالصيغة YYYY-MM-DD."),
+			frappe.ValidationError,
+		)
+	if day > nowdate():
+		frappe.throw(
+			_("A day that is still in the future cannot be registered.<br>"
+			  "لا يمكن تسجيل يوم في المستقبل."),
+			frappe.ValidationError,
+		)
+
+	existing = _absence_case_for_date(employee, day)
+	if existing:
+		frappe.throw(
+			_("An absence case already covers this day: {0}.<br>"
+			  "توجد حالة غياب تغطي هذا اليوم: {0}.").format(existing),
+			title=_("Absence Already Registered / الغياب مسجل مسبقاً"),
+		)
+
+	status_key = _attendance_days({"from_date": day, "to_date": day}, employee)[0].get("status_key")
+	if status_key not in ABSENCE_REGISTERABLE_KEYS:
+		frappe.throw(
+			_("Only an absent or unregistered working day can be registered as absence.<br>"
+			  "يمكن تسجيل يوم غياب أو يوم عمل غير مسجل فقط."),
+			title=_("Not An Absence / ليس غياباً"),
+		)
+
+	absence_type = cstr(absence_type or "").strip() or DEFAULT_ABSENCE_TYPE
+	description = _(
+		"Registered as absence from the admin attendance panel on {0}.<br>"
+		"تم تسجيل الغياب من لوحة الحضور الإدارية بتاريخ {0}."
+	).format(frappe.utils.formatdate(day, "dd-MM-yyyy"))
+	note = cstr(note or "").strip()
+	if note:
+		description += "<br>" + frappe.utils.escape_html(note)
+
+	case = _insert_closed_absence_case(employee, day, absence_type, description)
+
+	return {
+		"absence_case": case.name,
+		"status": ABSENCE_CLOSED_STATUS,
+		"employee": employee,
+		"date": day,
+	}
 
 
 def _attendance_doc_for(attendance, employee, date_value):

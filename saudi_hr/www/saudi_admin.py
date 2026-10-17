@@ -17,6 +17,8 @@ def get_context(context):
 
 	from saudi_hr.saudi_hr.admin_api import (
 		ADMIN_PORTAL_ROLES,
+		_absence_type_options,
+		_can_register_absence,
 		assert_portal_access,
 		get_admin_dashboard,
 		visible_panels,
@@ -51,6 +53,10 @@ def get_context(context):
 		raise frappe.Redirect
 
 	context.can_manage_employees = bool(frappe.has_permission("Employee", "create", throw=False))
+	# registering an absence case is a second capability: it needs the attendance
+	# panel and the right to create the case, so the button is only offered here
+	context.can_register_absence = _can_register_absence()
+	context.absence_types = _absence_type_options()
 	context.admin_roles = sorted(ADMIN_PORTAL_ROLES.intersection(frappe.get_roles()))
 	# a restricted role opens a subset of the shell; the template renders only
 	# those rail items and panels, and the API refuses the rest independently

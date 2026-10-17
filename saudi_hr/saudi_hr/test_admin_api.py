@@ -18,8 +18,10 @@ from frappe.utils import add_days, get_time, getdate, now_datetime, nowdate
 
 from saudi_hr.saudi_hr import admin_api
 from saudi_hr.saudi_hr.admin_api import (
+	ABSENCE_CLOSED_STATUS,
 	ATTENDANCE_OFFICER_ROLE,
 	ATTENDANCE_STATUS_KEYS,
+	DEFAULT_ABSENCE_TYPE,
 	LEAVE_REGISTRY,
 	PANEL_ACCESS,
 	PORTAL_PANELS,
@@ -57,6 +59,7 @@ from saudi_hr.saudi_hr.admin_api import (
 	list_exit_clearances,
 	list_leave_requests,
 	remove_attendance_day,
+	register_absence_case,
 	save_exit_clearance,
 	settle_final_settlement,
 	submit_eosb,
@@ -1430,6 +1433,130 @@ class TestAdminApiAttendanceCorrection(_AttendanceTestBase):
 			correct_attendance_day,
 			employee=self.employee, date=add_days(getdate(nowdate()), 5), time="08:00:00",
 		)
+
+
+class TestAdminApiRegisterAbsence(_AttendanceTestBase):
+	"""Registering one absent day as a closed Absence Case from the report.
+
+	The case is written straight to the status payroll counts, so the action is
+	the way a manager turns a day the report shows as absent into a deduction
+	without walking the case through the approval workflow by hand.
+	"""
+
+	def _plain_working_day_patches(self, day):
+		"""Make the day a plain working day whatever the site's calendar says."""
+		return (
+			patch.object(admin_api, "_holiday_dates", return_value={}),
+			patch.object(admin_api, "_leave_dates", return_value={}),
+		)
+
+	def test_registering_an_absent_day_creates_a_closed_case(self):
+		self._make_attendance(0, status="Absent / غائب")
+		result = register_absence_case(employee=self.employee, date=self.today)
+
+		self.assertEqual(result["date"], self.today)
+		self.assertEqual(result["status"], ABSENCE_CLOSED_STATUS)
+		case = frappe.get_doc("Absence Case", result["absence_case"])
+		self.assertEqual(case.employee, self.employee)
+		self.assertEqual(str(case.absence_start_date), self.today)
+		self.assertEqual(str(case.absence_end_date), self.today)
+		self.assertEqual(case.status, ABSENCE_CLOSED_STATUS)
+		self.assertEqual(case.workflow_state, "Completed")
+		self.assertEqual(case.absence_type, DEFAULT_ABSENCE_TYPE)
+		self.assertEqual(case.absence_days, 1)
+
+	def test_registering_a_missing_working_day_creates_a_case(self):
+		day = self._day(-3)
+		holiday_patch, leave_patch = self._plain_working_day_patches(day)
+		with holiday_patch, leave_patch:
+			result = register_absence_case(employee=self.employee, date=day)
+
+		self.assertTrue(frappe.db.exists("Absence Case", result["absence_case"]))
+
+	def test_the_absence_type_and_note_are_stored(self):
+		self._make_attendance(0, status="Absent / غائب")
+		result = register_absence_case(
+			employee=self.employee,
+			date=self.today,
+			absence_type="No Call No Show / غياب بدون إشعار",
+			note="did not answer the phone",
+		)
+		case = frappe.get_doc("Absence Case", result["absence_case"])
+		self.assertEqual(case.absence_type, "No Call No Show / غياب بدون إشعار")
+		self.assertIn("did not answer the phone", case.description)
+
+	def test_a_day_already_covered_by_a_case_is_refused(self):
+		self._make_attendance(0, status="Absent / غائب")
+		register_absence_case(employee=self.employee, date=self.today)
+		self.assertRaises(
+			frappe.ValidationError, register_absence_case, employee=self.employee, date=self.today
+		)
+
+	def test_a_future_day_is_refused(self):
+		self.assertRaises(
+			frappe.ValidationError,
+			register_absence_case,
+			employee=self.employee,
+			date=add_days(getdate(self.today), 3),
+		)
+
+	def test_a_worked_day_is_refused(self):
+		self._make_attendance(0, status="Present / حاضر")
+		self.assertRaises(
+			frappe.ValidationError, register_absence_case, employee=self.employee, date=self.today
+		)
+
+	def test_a_leave_day_is_refused(self):
+		day = self._day(-3)
+		with patch.object(admin_api, "_holiday_dates", return_value={}), patch.object(
+			admin_api, "_leave_dates", return_value={day: "Annual Leave"}
+		):
+			self.assertRaises(
+				frappe.ValidationError, register_absence_case, employee=self.employee, date=day
+			)
+
+	def test_a_rest_day_is_refused(self):
+		day = self._day(-3)
+		with patch.object(admin_api, "_leave_dates", return_value={}), patch.object(
+			admin_api, "_holiday_dates", return_value={day: {"weekly_off": True, "description": None}}
+		):
+			self.assertRaises(
+				frappe.ValidationError, register_absence_case, employee=self.employee, date=day
+			)
+
+	def test_a_role_without_absence_create_is_refused(self):
+		officer = self._make_user([ATTENDANCE_OFFICER_ROLE])
+		frappe.set_user(officer)
+		self.assertRaises(
+			frappe.PermissionError, register_absence_case, employee=self.employee, date=self.today
+		)
+
+	def test_the_report_day_carries_the_registered_case(self):
+		self._make_attendance(0, status="Absent / غائب")
+		before = get_attendance_report(employee=self.employee, day=self.today)["days"][0]
+		self.assertIsNone(before["absence_case"])
+
+		result = register_absence_case(employee=self.employee, date=self.today)
+		after = get_attendance_report(employee=self.employee, day=self.today)["days"][0]
+		self.assertEqual(after["absence_case"]["name"], result["absence_case"])
+		self.assertEqual(after["absence_case"]["status"], ABSENCE_CLOSED_STATUS)
+
+	def test_the_registered_case_is_counted_by_payroll(self):
+		from saudi_hr.saudi_hr.doctype.saudi_monthly_payroll import saudi_monthly_payroll as payroll
+
+		self._make_attendance(0, status="Absent / غائب")
+		register_absence_case(employee=self.employee, date=self.today)
+
+		counts = payroll._attendance_window_counts(self.employee, self.today, self.today)
+		approved = payroll._approved_absence_days(self.employee, self.today, self.today)
+		self.assertEqual(counts["absent"], 1)
+		self.assertEqual(approved, 1)
+		self.assertEqual(min(counts["absent"], approved), 1)
+
+	def test_the_config_offers_the_button_to_a_creator(self):
+		config = get_admin_config()
+		self.assertTrue(config["can_register_absence"])
+		self.assertIn(DEFAULT_ABSENCE_TYPE, config["absence_types"])
 
 
 class TestAdminApiAttendanceOverview(_AttendanceTestBase):

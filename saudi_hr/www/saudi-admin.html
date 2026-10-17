@@ -768,16 +768,53 @@
 	</div>
 </div>
 
+<!-- ============ REGISTER ABSENCE CASE DIALOG ============ -->
+<div class="saudi-modal saudi-modal--center" id="attendance-absence-modal" style="display:none;" role="dialog"
+	aria-modal="true" aria-labelledby="attendance-absence-title">
+	<div class="saudi-modal__dialog">
+		<div class="saudi-modal__header">
+			<div class="saudi-modal__title" id="attendance-absence-title" data-i18n-key="admin_attendance_register_absence">
+				تسجيل غياب
+			</div>
+			<button class="saudi-btn saudi-btn--ghost" type="button" data-action="close-attendance-absence"
+				data-i18n-key="cancel">إلغاء</button>
+		</div>
+
+		<div class="saudi-modal__body">
+			<div id="attendance-absence-summary"></div>
+			<div style="font-size:13px;color:var(--text-muted);" data-i18n-key="admin_attendance_absence_hint">
+				سيتم تسجيل هذا اليوم كحالة غياب مغلقة، ويُخصم من الراتب.
+			</div>
+			<div class="saudi-field" style="margin-top:8px;">
+				<label for="attendance-absence-type" data-i18n-key="admin_attendance_absence_type">نوع الغياب</label>
+				<select id="attendance-absence-type"></select>
+			</div>
+			<div class="saudi-field" style="margin-top:8px;">
+				<label for="attendance-absence-note" data-i18n-key="admin_attendance_absence_note">ملاحظة (اختياري)</label>
+				<textarea id="attendance-absence-note" rows="3"></textarea>
+			</div>
+		</div>
+
+		<div class="saudi-modal__footer">
+			<button class="saudi-btn" type="button" data-action="close-attendance-absence" data-i18n-key="cancel">إلغاء</button>
+			<button class="saudi-btn saudi-btn--primary" type="button" data-action="save-attendance-absence"
+				data-i18n-key="admin_attendance_register_absence">تسجيل غياب</button>
+		</div>
+	</div>
+</div>
+
 <div class="saudi-toast" id="saudi-toast" role="status" aria-live="polite"></div>
 {% endblock %}
 
 {% block script %}
-<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261017"></script>
+<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261017b"></script>
 <script>
 /* ═══ Page state ═══════════════════════════════════════════════════════════ */
 /* Rendered into a JavaScript literal, so the booleans are written as JS */
 var ADMIN_CFG = {
 	can_manage_employees: {{ 'true' if can_manage_employees else 'false' }},
+	can_register_absence: {{ 'true' if can_register_absence else 'false' }},
+	absence_types: {{ (absence_types or []) | tojson }},
 	panels: {{ (admin_panels or []) | tojson }},
 	default_panel: {{ (default_panel or "dashboard") | tojson }}
 };
@@ -793,6 +830,7 @@ var ADMIN_STATE = {
 	trapping: false,
 	employees_restricted: false,
 	attendance: null,
+	attendance_absence: null,
 	attendance_bound: false,
 	attendance_open: false,
 	attendance_chosen: null,
@@ -834,6 +872,9 @@ document.addEventListener("DOMContentLoaded", function () {
 			case "close-attendance-day-correction": closeAttendanceDayCorrection(); break;
 			case "save-attendance-day-correction": saveAttendanceDayCorrection(); break;
 			case "remove-attendance-day": removeAttendanceDay(trigger.getAttribute("data-date"), trigger.getAttribute("data-name")); break;
+			case "open-attendance-absence": openAttendanceAbsence(trigger.getAttribute("data-date")); break;
+			case "close-attendance-absence": closeAttendanceAbsence(); break;
+			case "save-attendance-absence": saveAttendanceAbsence(); break;
 			case "start-offboarding": startOffboarding(); break;
 			case "open-offboarding-case": openOffboardingCase(trigger.getAttribute("data-name")); break;
 			case "apply-offboarding-action": applyOffboardingAction(trigger.getAttribute("data-doctype"), trigger.getAttribute("data-name"), trigger.getAttribute("data-action-name")); break;
@@ -887,6 +928,9 @@ document.addEventListener("DOMContentLoaded", function () {
 			if (document.getElementById("attendance-day-correction-modal").style.display === "flex") {
 				closeAttendanceDayCorrection();
 			}
+			if (document.getElementById("attendance-absence-modal").style.display === "flex") {
+				closeAttendanceAbsence();
+			}
 			if (document.getElementById("doc-request-modal").style.display === "flex") {
 				closeDocRequestModal();
 			}
@@ -924,6 +968,7 @@ var ADMIN_WRITES = {
 	submit_leave_request: 1,
 	correct_attendance_day: 1,
 	remove_attendance_day: 1,
+	register_absence_case: 1,
 	create_eosb_settlement: 1,
 	issue_hr_document: 1,
 	create_termination_notice: 1,
@@ -2052,7 +2097,7 @@ function attendanceDayRow(row) {
 			+ " data-date='" + esc(row.date) + "'>" + esc(t("admin_attendance_correct_add_note")) + "</button>";
 	return "<tr>"
 		+ "<td style='font-weight:700;' dir='ltr'>" + esc(row.date || "—") + "</td>"
-		+ "<td>" + attendanceStatus(row) + (row.corrected ? " " + correctedChip() : "") + "</td>"
+		+ "<td>" + attendanceStatus(row) + (row.corrected ? " " + correctedChip() : "") + absenceCaseChip(row) + "</td>"
 		+ "<td style='direction:ltr;text-align:left;'>" + esc(fmtClock(row.in_time)) + " → " + esc(fmtClock(row.out_time)) + "</td>"
 		+ "<td style='text-align:center;'>" + (row.hours ? esc(fmtHours(row.hours)) : "—") + "</td>"
 		+ "<td style='text-align:center;'>" + (row.late_minutes ? esc(fmtMinutes(row.late_minutes)) : "—") + "</td>"
@@ -2064,7 +2109,8 @@ function attendanceDayRow(row) {
 			+ " <button class='saudi-btn saudi-btn--tiny saudi-btn--danger' type='button'"
 			+ " data-action='remove-attendance-day' data-date='" + esc(row.date) + "'"
 			+ " data-name='" + esc(row.name || "") + "'>"
-			+ esc(t("admin_attendance_remove")) + "</button></td>"
+			+ esc(t("admin_attendance_remove")) + "</button>"
+			+ attendanceAbsenceButton(row) + "</td>"
 		+ "</tr>";
 }
 
@@ -2084,17 +2130,37 @@ function missingAttendanceDayRow(row) {
 		: "";
 	return "<tr>"
 		+ "<td style='font-weight:700;' dir='ltr'>" + esc(row.date || "—") + "</td>"
-		+ "<td>" + attendanceStatus(row) + reasonCell + "</td>"
+		+ "<td>" + attendanceStatus(row) + reasonCell + absenceCaseChip(row) + "</td>"
 		+ "<td style='direction:ltr;text-align:left;'>" + esc(fmtClock(row.in_time)) + " → " + esc(fmtClock(row.out_time)) + "</td>"
 		+ "<td style='text-align:center;'>—</td>"
 		+ "<td style='text-align:center;'>—</td>"
 		+ "<td>" + (canAdd ? addBtn : "—") + "</td>"
-		+ "<td style='text-align:center;'>" + (canAdd
+		+ "<td style='text-align:center;white-space:nowrap;'>" + (canAdd
 			? "<button class='saudi-btn saudi-btn--tiny saudi-btn--primary' type='button'"
 				+ " data-action='open-attendance-day-correction' data-date='" + esc(row.date) + "'>"
 				+ esc(t("admin_attendance_correct_edit")) + "</button>"
-			: "—") + "</td>"
+			: "—")
+			+ attendanceAbsenceButton(row) + "</td>"
 		+ "</tr>";
+}
+
+/* Only the days payroll would count as an absence can be registered, and only
+   for a role that may create the case. A day with a case already hides the
+   button and shows a chip instead, so the state is visible at a glance. */
+function attendanceAbsenceButton(row) {
+	if (!ADMIN_CFG.can_register_absence || row.future || row.absence_case) return "";
+	if (row.status_key !== "absent" && row.status_key !== "missing") return "";
+	return " <button class='saudi-btn saudi-btn--tiny' type='button' data-action='open-attendance-absence'"
+		+ " data-date='" + esc(row.date) + "'>" + esc(t("admin_attendance_register_absence")) + "</button>";
+}
+
+function absenceCaseChip(row) {
+	if (!row.absence_case) return "";
+	var label = row.absence_case.status
+		? t("admin_attendance_absence_chip") + " · " + row.absence_case.status
+		: String(t("admin_attendance_absence_chip"));
+	return " <span class='saudi-chip saudi-chip--muted' title='" + esc(row.absence_case.name || "") + "'>"
+		+ esc(label) + "</span>";
 }
 
 function correctedChip() {
@@ -2204,6 +2270,77 @@ function removeAttendanceDay(dateKey, name) {
 		showToast(t("admin_attendance_removed"), "success");
 		return loadAttendance();
 	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+/* Registering an absence case deducts the day from pay, so it is confirmed in a
+   dialog that also names the type of absence and carries an optional note. The
+   day is addressed by its date, like the correction modal, because a day the
+   report lists as missing has no record name to carry. */
+function openAttendanceAbsence(dateKey) {
+	var days = (ADMIN_STATE.attendance && ADMIN_STATE.attendance.days) || [];
+	var row = days.find(function (d) { return d.date === dateKey; });
+	if (!row) return;
+	ADMIN_STATE.attendance_absence = row;
+	var modal = document.getElementById("attendance-absence-modal");
+	var summary = document.getElementById("attendance-absence-summary");
+	var typeBox = document.getElementById("attendance-absence-type");
+	var noteBox = document.getElementById("attendance-absence-note");
+	if (!modal || !summary || !typeBox || !noteBox) return;
+
+	var employee = (ADMIN_STATE.attendance && ADMIN_STATE.attendance.employee) || {};
+	var displayed = String(employee.employee_name || employee.name || "").trim();
+	if (summary) {
+		summary.innerHTML = kvBlock([
+			[t("admin_attendance_day"), row.date || "—"],
+			[t("admin_attendance_employee"), displayed]
+		]);
+	}
+	var types = ADMIN_CFG.absence_types || [];
+	typeBox.innerHTML = types.map(function (type) {
+		return "<option value='" + esc(type) + "'>" + esc(type) + "</option>";
+	}).join("");
+	noteBox.value = "";
+
+	ADMIN_STATE.lastFocus = document.activeElement;
+	modal.style.display = "flex";
+	document.body.classList.add("saudi-modal-open");
+	trappedFocus(true);
+	typeBox.focus();
+}
+
+function closeAttendanceAbsence() {
+	var modal = document.getElementById("attendance-absence-modal");
+	if (!modal) return;
+	modal.style.display = "none";
+	document.body.classList.remove("saudi-modal-open");
+	trappedFocus(false);
+	if (ADMIN_STATE.lastFocus && ADMIN_STATE.lastFocus.focus) ADMIN_STATE.lastFocus.focus();
+	ADMIN_STATE.lastFocus = null;
+}
+
+function saveAttendanceAbsence() {
+	var row = ADMIN_STATE.attendance_absence;
+	if (!row) return;
+	var typeBox = document.getElementById("attendance-absence-type");
+	var noteBox = document.getElementById("attendance-absence-note");
+	var absenceType = typeBox ? typeBox.value : "";
+	var note = (noteBox && noteBox.value || "").trim();
+	var btn = document.querySelector("[data-action='save-attendance-absence']");
+	btn.disabled = true;
+	callAdmin("register_absence_case", {
+		employee: row.employee,
+		date: row.date,
+		absence_type: absenceType,
+		note: note
+	}).then(function () {
+		showToast(t("admin_attendance_absence_saved"), "success");
+		closeAttendanceAbsence();
+		return loadAttendance();
+	}).catch(function (err) {
+		onApiError(err, t("admin_action_failed"));
+	}).then(function () {
+		btn.disabled = false;
+	});
 }
 
 /* Month and date range are two controls for one choice, so only the one in use
