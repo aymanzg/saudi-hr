@@ -13,7 +13,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from saudi_hr.saudi_hr.doctype.employee_loan.employee_loan import apply_payroll_loan_deductions, get_due_loan_deduction, revert_payroll_loan_deductions
-from saudi_hr.saudi_hr.utils import assert_doctype_permissions, assert_positive_basic_salary, calculate_prorated_sick_leave_deduction, get_contract_nationality_lookup, get_employee_nationality, get_employee_salary_components, get_gosi_rates, get_overlap_days, parse_penalty_to_days, text_matches_tokens
+from saudi_hr.saudi_hr.utils import assert_doctype_permissions, assert_positive_basic_salary, calculate_prorated_sick_leave_deduction, get_contract_nationality_lookup, get_employee_gosi_nationality, get_employee_salary_components, get_gosi_base, get_gosi_rates, get_overlap_days, is_gosi_company_paid, parse_penalty_to_days, round_gosi_amount, text_matches_tokens
 
 GOSI_MAX_BASE = 45000.0
 PREFERRED_SOURCE_WORKBOOK_SHEETS = ("مسير الرواتب", "كشف الرواتب طباعة", "كشف الرواتب", "كشف المصدر")
@@ -197,6 +197,9 @@ class SaudiMonthlyPayroll(Document):
 		self.total_employees = len(self.employees)
 		self.total_gross = round(sum(flt(r.gross_salary) for r in self.employees), 2)
 		self.total_gosi_deductions = round(sum(flt(r.gosi_employee_deduction) for r in self.employees), 2)
+		self.total_gosi_company_paid = round(
+			sum(flt(getattr(r, "gosi_company_paid_amount", 0.0)) for r in self.employees), 2
+		)
 		self.total_sick_deductions = round(sum(flt(r.sick_leave_deduction) for r in self.employees), 2)
 		self.total_loan_deductions = round(sum(flt(r.loan_deduction) for r in self.employees), 2)
 		adjustment_deductions = 0.0
@@ -344,14 +347,15 @@ def fetch_employees(doc_name: str):
 		other = flt(contract["other_allowances"]) if contract else 0.0
 		gross = round(basic + housing + transport + other, 2)
 
-		nationality = emp.get("nationality") or nationality_map.get(emp["name"]) or ""
+		nationality = _resolve_employee_nationality(emp, nationality_map)
 		if not nationality:
 			warnings.append(_get_unknown_nationality_warning(emp.get("employee_name") or emp["name"]))
-		gosi_rate = flt(
-			get_gosi_rates(nationality, employee=emp["name"], as_on_date=month_start).get("employee_rate")
+		gosi = _calculate_employee_gosi(
+			emp["name"], nationality, basic, housing, transport, other, month_start
 		)
-		gosi_base = min(basic, GOSI_MAX_BASE)
-		gosi_deduction = round(gosi_base * gosi_rate / 100, 2)
+		gosi_deduction = gosi["deduction"]
+		gosi_company_paid = gosi["company_paid"]
+		gosi_company_paid_amount = gosi["company_paid_amount"]
 
 		sick_deduction = calculate_prorated_sick_leave_deduction(
 			sick_map.get(emp["name"], []),
@@ -370,7 +374,7 @@ def fetch_employees(doc_name: str):
 			"employee": emp["name"],
 			"employee_name": emp.get("employee_name", ""),
 			"department": emp.get("department", ""),
-			"nationality": emp.get("nationality", ""),
+			"nationality": nationality,
 			"work_location": "",
 			"designation": "",
 			"salary_mode": "",
@@ -384,6 +388,8 @@ def fetch_employees(doc_name: str):
 			"other_allowances": other,
 			"gross_salary": gross,
 			"gosi_employee_deduction": gosi_deduction,
+			"gosi_company_paid": gosi_company_paid,
+			"gosi_company_paid_amount": gosi_company_paid_amount,
 			"sick_leave_deduction": round(sick_deduction, 2),
 			"loan_deduction": loan_deduction,
 			"total_deductions": total_deductions,
@@ -1423,6 +1429,7 @@ def create_journal_entry_from_payroll(doc_name: str):
 
 	# ── حسابات الإجمالي ─────────────────────────────────────────────────────
 	total_gosi = flt(doc.total_gosi_deductions)
+	total_gosi_company_paid = flt(getattr(doc, "total_gosi_company_paid", 0.0))
 	total_loan = flt(doc.total_loan_deductions)
 	total_net = flt(doc.total_net_payable)
 
@@ -1435,6 +1442,7 @@ def create_journal_entry_from_payroll(doc_name: str):
 	expense_account = _find_company_account(company_accounts, root_type="Expense", name_terms=("salary",)) or _find_company_account(company_accounts, root_type="Expense")
 	payable_account = _get_payroll_payable_account(company, accounts=company_accounts)
 	gosi_payable_account = _find_company_account(company_accounts, root_type="Liability", name_terms=("gosi",)) or payable_account
+	gosi_expense_account = _find_company_account(company_accounts, root_type="Expense", name_terms=("gosi",)) or _find_company_account(company_accounts, root_type="Expense", name_terms=("insurance",)) or expense_account
 	loan_receivable_account = _find_company_account(company_accounts, root_type="Asset", name_terms=("loan",)) or _find_company_account(company_accounts, account_type="Receivable")
 
 	if not expense_account or not payable_account:
@@ -1457,6 +1465,18 @@ def create_journal_entry_from_payroll(doc_name: str):
 		accounts.append({
 			"account": gosi_payable_account,
 			"credit_in_account_currency": total_gosi,
+			"cost_center": company_cost_center,
+		})
+	# حصة الموظف التي تحمّلتها الشركة: مصروف إضافي على الشركة وتلتزم به لـ GOSI
+	if total_gosi_company_paid > 0:
+		accounts.append({
+			"account": gosi_expense_account,
+			"debit_in_account_currency": total_gosi_company_paid,
+			"cost_center": company_cost_center,
+		})
+		accounts.append({
+			"account": gosi_payable_account,
+			"credit_in_account_currency": total_gosi_company_paid,
 			"cost_center": company_cost_center,
 		})
 	if total_loan > 0 and loan_receivable_account:
@@ -2005,6 +2025,55 @@ def _merge_journal_entry_accounts(accounts: list[dict]) -> list[dict]:
 
 # ─── Private Helpers ────────────────────────────────────────────────────────────
 
+def _resolve_employee_nationality(emp: dict, contract_map: dict | None = None) -> str:
+	"""جنسية الموظف لتحديد نسبة التأمينات: سجل الموظف أولاً ثم عقد العمل.
+
+	يُفضّل custom_nationality ثم nationality القادمة في صف الموظف، ثم يُستعلم
+	عن سجل الموظف، وأخيراً عقد العمل كاحتياطي.
+	"""
+	fallback = (contract_map or {}).get(emp.get("name")) or ""
+	for key in ("custom_nationality", "nationality"):
+		value = (emp.get(key) or "").strip()
+		if value:
+			return value
+	if emp.get("name"):
+		return get_employee_gosi_nationality(emp["name"], fallback=fallback)
+	return fallback
+
+
+def _calculate_employee_gosi(
+	employee: str,
+	nationality: str,
+	basic,
+	housing,
+	transport,
+	other,
+	as_on_date,
+) -> dict:
+	"""احتساب اشتراك التأمينات للموظف مع دعم تحمّل الشركة والتقريب لريال كامل.
+
+	- الوعاء: الأساسي + بدل السكن (راجع get_gosi_base).
+	- النسبة: نسبة الموظف من الإعدادات أو المخصّصة على سجله.
+	- إذا كانت الشركة تتحمّل الاشتراك: لا يُخصم من الأجر وتُسجَّل الحصة.
+	"""
+	settings = frappe.get_single("Saudi HR Settings")
+	include_total_salary = cint(getattr(settings, "gosi_base_on_total_salary", 0))
+	extra_allowances = flt(transport) + flt(other)
+	gosi_base = get_gosi_base(basic, housing, include_total_salary, extra_allowances)
+	gosi_rate = flt(
+		get_gosi_rates(nationality, employee=employee, as_on_date=as_on_date).get("employee_rate")
+	)
+	computed = round_gosi_amount(gosi_base * gosi_rate / 100)
+	company_paid = is_gosi_company_paid(employee)
+	return {
+		"rate": gosi_rate,
+		"base": gosi_base,
+		"deduction": 0.0 if company_paid else computed,
+		"company_paid": company_paid,
+		"company_paid_amount": computed if company_paid else 0.0,
+	}
+
+
 def _build_employee_row(emp: dict, month: str, year: int) -> dict:
 	"""بناء بيانات صف الموظف الواحد في الجدول الفرعي."""
 	salary = get_employee_salary_components(emp["name"])
@@ -2017,17 +2086,14 @@ def _build_employee_row(emp: dict, month: str, year: int) -> dict:
 	gross = round(basic + housing + transport + other, 2)
 
 	# اقتطاع GOSI للموظف
-	nationality = emp.get("nationality") or get_employee_nationality(emp["name"]) or ""
+	nationality = _resolve_employee_nationality(emp)
 	month_num = _month_name_to_num(month)
-	gosi_rate = flt(
-		get_gosi_rates(
-			nationality,
-			employee=emp["name"],
-			as_on_date=f"{int(year)}-{month_num:02d}-01",
-		).get("employee_rate")
+	gosi = _calculate_employee_gosi(
+		emp["name"], nationality, basic, housing, transport, other, f"{int(year)}-{month_num:02d}-01"
 	)
-	gosi_base = min(basic, GOSI_MAX_BASE)
-	gosi_deduction = round(gosi_base * gosi_rate / 100, 2)
+	gosi_deduction = gosi["deduction"]
+	gosi_company_paid = gosi["company_paid"]
+	gosi_company_paid_amount = gosi["company_paid_amount"]
 
 	# خصم الإجازة المرضية (إن وجدت في الشهر الحالي)
 	month_start = f"{year}-{month_num:02d}-01"
@@ -2071,7 +2137,7 @@ def _build_employee_row(emp: dict, month: str, year: int) -> dict:
 		"employee_name": emp.get("employee_name", ""),
 		"department": emp.get("department", ""),
 		"cost_center": _get_company_default_cost_center(emp.get("company") or ""),
-		"nationality": emp.get("nationality", ""),
+		"nationality": nationality,
 		"work_location": "",
 		"designation": "",
 		"salary_mode": "",
@@ -2085,6 +2151,8 @@ def _build_employee_row(emp: dict, month: str, year: int) -> dict:
 		"other_allowances": other,
 		"gross_salary": gross,
 		"gosi_employee_deduction": gosi_deduction,
+		"gosi_company_paid": gosi_company_paid,
+		"gosi_company_paid_amount": gosi_company_paid_amount,
 		"sick_leave_deduction": round(sick_deduction, 2),
 		"loan_deduction": loan_deduction,
 		"absence_deduction": 0.0,
@@ -3324,8 +3392,10 @@ def _month_name_to_num(month_label: str) -> int:
 
 def _get_employee_fetch_fields() -> list[str]:
 	fields = ["name", "employee_name", "department", "company"]
-	if frappe.get_meta("Employee").has_field("nationality"):
-		fields.append("nationality")
+	meta = frappe.get_meta("Employee")
+	for fieldname in ("nationality", "custom_nationality"):
+		if meta.has_field(fieldname):
+			fields.append(fieldname)
 	return fields
 
 

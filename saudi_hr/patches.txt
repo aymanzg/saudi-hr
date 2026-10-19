@@ -3,3 +3,4 @@ saudi_hr.patches.add_employee_attendance_photo_requirement
 saudi_hr.patches.rename_employees_to_employee_number
 saudi_hr.patches.remove_mismatched_company_user_permissions
 saudi_hr.patches.zero_open_shift_early_exit
+saudi_hr.patches.apply_client_gosi_rules

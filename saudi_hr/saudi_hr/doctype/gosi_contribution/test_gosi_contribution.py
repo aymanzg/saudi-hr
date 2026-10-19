@@ -42,9 +42,20 @@ class TestGOSIPensionSchedule(FrappeTestCase):
 class TestGOSIRates(FrappeTestCase):
 	def setUp(self):
 		self.employee = frappe.db.get_value("Employee", {"status": "Active"}, "name")
+		self._schedule_was = frappe.db.get_single_value(
+			"Saudi HR Settings", "gosi_apply_new_system_schedule"
+		)
+
+	def tearDown(self):
+		frappe.db.set_single_value(
+			"Saudi HR Settings", "gosi_apply_new_system_schedule", self._schedule_was or 0
+		)
 
 	def _set_first_contribution(self, date_value):
 		frappe.db.set_value("Employee", self.employee, "gosi_first_contribution_date", date_value)
+
+	def _enable_new_system_schedule(self, enabled):
+		frappe.db.set_single_value("Saudi HR Settings", "gosi_apply_new_system_schedule", 1 if enabled else 0)
 
 	def test_non_saudi_pays_occupational_hazards_only(self):
 		rates = get_gosi_rates("Indian")
@@ -59,8 +70,17 @@ class TestGOSIRates(FrappeTestCase):
 		self.assertEqual(rates["employer_rate"], 11.75)
 		self.assertIn("Previous System", rates["system"])
 
+	def test_default_flat_rate_ignores_new_system_schedule(self):
+		"""الإعداد الافتراضي يعطّل جدول النظام الجديد فتثبت النسبة 9.75%."""
+		self._enable_new_system_schedule(False)
+		self._set_first_contribution("2024-09-01")
+		rates = get_gosi_rates("Saudi", employee=self.employee, as_on_date="2026-07-25")
+		self.assertEqual(rates["employee_rate"], 9.75)
+		self.assertEqual(rates["employer_rate"], 11.75)
+
 	def test_new_system_saudi_rates_in_july_2026(self):
-		"""المعاشات 10% في يوليو 2026 => العامل 10.75% وصاحب العمل 12.75%."""
+		"""عند تفعيل جدول النظام الجديد: المعاشات 10% في يوليو 2026 => العامل 10.75%."""
+		self._enable_new_system_schedule(True)
 		self._set_first_contribution("2024-09-01")
 		rates = get_gosi_rates("Saudi", employee=self.employee, as_on_date="2026-07-25")
 		self.assertEqual(rates["employee_rate"], 10.75)
@@ -68,12 +88,14 @@ class TestGOSIRates(FrappeTestCase):
 		self.assertIn("New System", rates["system"])
 
 	def test_new_system_saudi_rates_in_first_half_of_2026(self):
+		self._enable_new_system_schedule(True)
 		self._set_first_contribution("2024-09-01")
 		rates = get_gosi_rates("Saudi", employee=self.employee, as_on_date="2026-03-01")
 		self.assertEqual(rates["employee_rate"], 10.25)
 		self.assertEqual(rates["employer_rate"], 12.25)
 
 	def test_new_system_reaches_eleven_percent_pension_in_2028(self):
+		self._enable_new_system_schedule(True)
 		self._set_first_contribution("2024-09-01")
 		rates = get_gosi_rates("Saudi", employee=self.employee, as_on_date="2028-08-01")
 		self.assertEqual(rates["employee_rate"], 11.75)
@@ -110,18 +132,22 @@ class TestGOSIContributionDocument(FrappeTestCase):
 			}
 		).insert(ignore_permissions=True)
 
-	def test_contribution_uses_rate_of_its_own_month(self):
+	def test_contribution_uses_flat_rate_by_default(self):
 		doc = self._make_contribution("2024-09-01", "March", 2026)
-		self.assertEqual(doc.employee_contribution_rate, 10.25)
-		self.assertEqual(doc.employee_contribution, 1025.0)
+		self.assertEqual(doc.employee_contribution_rate, 9.75)
+		self.assertEqual(doc.employee_contribution, 975.0)
 
 		later = self._make_contribution("2024-09-01", "August", 2026)
-		self.assertEqual(later.employee_contribution_rate, 10.75)
-		self.assertEqual(later.employee_contribution, 1075.0)
+		self.assertEqual(later.employee_contribution_rate, 9.75)
+		self.assertEqual(later.employee_contribution, 975.0)
+
+	def test_contribution_rounds_to_whole_riyal(self):
+		doc = self._make_contribution("2024-09-01", "August", 2026, base=10050)
+		self.assertEqual(doc.employee_contribution_rate, 9.75)
+		self.assertEqual(doc.employee_contribution, 980.0)
 
 	def test_branch_breakdown_matches_total_rates(self):
 		doc = self._make_contribution("2024-09-01", "August", 2026)
-		self.assertEqual(doc.saudi_employee_pension_rate, 10.0)
 		self.assertEqual(doc.saudi_employee_unemployment_rate, 0.75)
 		self.assertEqual(doc.saudi_employer_hazard_rate, 2.0)
 		self.assertAlmostEqual(
@@ -133,7 +159,53 @@ class TestGOSIContributionDocument(FrappeTestCase):
 	def test_contribution_base_is_capped_at_forty_five_thousand(self):
 		doc = self._make_contribution("2020-01-01", "August", 2026, base=60000)
 		self.assertEqual(doc.contribution_base, 45000)
-		self.assertEqual(doc.employee_contribution, round(45000 * 0.0975, 2))
+		self.assertEqual(doc.employee_contribution, round(45000 * 0.0975))
+
+	def test_company_paid_zeroes_employee_share_and_records_it(self):
+		seed = frappe.db.get_value(
+			"Employee",
+			{"status": "Active"},
+			["company", "gender", "date_of_birth", "date_of_joining"],
+			as_dict=True,
+		)
+		self.assertTrue(seed, "an active Employee fixture is required")
+		employee = (
+			frappe.get_doc(
+				{
+					"doctype": "Employee",
+					"first_name": f"GOSI Company Paid {frappe.generate_hash(length=8)}",
+					"company": seed.company,
+					"gender": seed.gender,
+					"date_of_birth": seed.date_of_birth or "1990-01-01",
+					"date_of_joining": "2020-01-01",
+					"status": "Left",
+					"relieving_date": "2026-01-01",
+					"custom_nationality": "السعودية",
+					"custom_gosi_company_pays": 1,
+				}
+			)
+			.insert(ignore_permissions=True)
+			.name
+		)
+		frappe.db.set_value("Employee", employee, "gosi_first_contribution_date", "2024-09-01")
+		doc = frappe.get_doc(
+			{
+				"doctype": "GOSI Contribution",
+				"employee": employee,
+				"nationality": "Saudi",
+				"month": "August",
+				"year": 2026,
+				"contribution_base": 10000,
+			}
+		).insert(ignore_permissions=True)
+		self.assertTrue(doc.gosi_company_paid)
+		self.assertEqual(doc.gosi_company_paid_amount, 975.0)
+		self.assertEqual(doc.employee_contribution, 0.0)
+		self.assertEqual(doc.employer_contribution, round(10000 * 0.1175))
+		self.assertEqual(
+			doc.total_contribution,
+			round(10000 * 0.1175) + 975,
+		)
 
 
 class TestGOSINationalityGuard(FrappeTestCase):
@@ -146,7 +218,7 @@ class TestGOSINationalityGuard(FrappeTestCase):
 			as_dict=True,
 		)
 		self.assertTrue(seed, "an active Employee fixture is required")
-		return frappe.get_doc(
+		emp = frappe.get_doc(
 			{
 				"doctype": "Employee",
 				"first_name": f"GOSI Guard {frappe.generate_hash(length=8)}",
@@ -157,7 +229,12 @@ class TestGOSINationalityGuard(FrappeTestCase):
 				"status": "Active",
 				"nationality": None,
 			}
-		).insert(ignore_permissions=True).name
+		).insert(ignore_permissions=True)
+		# حقل الجنسية يحمل قيمة افتراضية، فتُمسح هنا ليختبر المنع فعلاً.
+		for fieldname in ("nationality", "custom_nationality"):
+			if emp.meta.has_field(fieldname):
+				frappe.db.set_value("Employee", emp.name, fieldname, "", update_modified=False)
+		return emp.name
 
 	def test_contribution_without_resolvable_nationality_is_rejected(self):
 		employee = self._make_employee_without_nationality()

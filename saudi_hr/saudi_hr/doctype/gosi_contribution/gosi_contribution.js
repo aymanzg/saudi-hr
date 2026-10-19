@@ -39,10 +39,10 @@ frappe.ui.form.on('GOSI Contribution', {
                 const emp = r.message;
                 frm.set_value('employee_name', emp.employee_name);
                 frm.set_value('company', emp.company);
-                frm.set_value('nationality', emp.nationality || '');
-                // Fetch basic salary as contribution base
+                frm.set_value('nationality', emp.nationality || emp.custom_nationality || '');
+                // Fetch basic + housing as contribution base
                 frappe.call({
-                    method: 'saudi_hr.saudi_hr.doctype.gosi_contribution.gosi_contribution.get_employee_basic_salary',
+                    method: 'saudi_hr.saudi_hr.doctype.gosi_contribution.gosi_contribution.get_employee_gosi_base',
                     args: { employee: frm.doc.employee },
                     callback(s) {
                         if (s.message) {
@@ -60,6 +60,7 @@ frappe.ui.form.on('GOSI Contribution', {
     contribution_base(frm)          { _calc_contributions(frm); },
     employee_contribution_rate(frm) { _calc_contributions(frm); },
     employer_contribution_rate(frm) { _calc_contributions(frm); },
+    gosi_company_paid(frm)          { _calc_contributions(frm); },
 
     month(frm) { _set_period_label(frm); },
     year(frm)  { _set_period_label(frm); },
@@ -70,8 +71,8 @@ function _apply_rates(frm) {
     const nat = (frm.doc.nationality || '').toLowerCase();
     const is_saudi = nat === 'sa' || nat.includes('saudi') || nat.includes('سعودي');
     if (is_saudi) {
-        frm.set_value('employee_contribution_rate', 10.0);
-        frm.set_value('employer_contribution_rate', 12.0);
+        frm.set_value('employee_contribution_rate', 9.75);
+        frm.set_value('employer_contribution_rate', 11.75);
     } else {
         frm.set_value('employee_contribution_rate', 0.0);
         frm.set_value('employer_contribution_rate', 2.0);
@@ -85,11 +86,17 @@ function _calc_contributions(frm) {
     if (base > 45000) {
         frm.set_value('contribution_base', 45000);
     }
-    const emp_cont  = flt((capped * flt(frm.doc.employee_contribution_rate) / 100).toFixed(2));
-    const er_cont   = flt((capped * flt(frm.doc.employer_contribution_rate)  / 100).toFixed(2));
+    const company_paid = cint(frm.doc.gosi_company_paid);
+    const employee_share = Math.round(capped * flt(frm.doc.employee_contribution_rate) / 100);
+    const company_paid_amount = company_paid ? employee_share : 0;
+    const emp_cont  = company_paid ? 0 : employee_share;
+    const er_cont   = Math.round(capped * flt(frm.doc.employer_contribution_rate)  / 100);
     frm.set_value('employee_contribution', emp_cont);
     frm.set_value('employer_contribution', er_cont);
-    frm.set_value('total_contribution', flt((emp_cont + er_cont).toFixed(2)));
+    if (company_paid) {
+        frm.set_value('gosi_company_paid_amount', company_paid_amount);
+    }
+    frm.set_value('total_contribution', emp_cont + er_cont + company_paid_amount);
 }
 
 function _set_period_label(frm) {

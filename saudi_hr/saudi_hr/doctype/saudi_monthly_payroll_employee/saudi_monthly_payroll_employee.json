@@ -194,6 +194,20 @@
    "read_only": 1
   },
   {
+   "default": "0",
+   "fieldname": "gosi_company_paid",
+   "fieldtype": "Check",
+   "label": "GOSI Paid by Company / التأمينات على الشركة",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gosi_company_paid_amount",
+   "fieldtype": "Currency",
+   "label": "GOSI Covered by Company / حصة التأمينات التي تحمّلتها الشركة",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
    "fieldname": "sick_leave_deduction",
    "fieldtype": "Currency",
    "label": "Sick Leave Deduction / خصم الإجازة المرضية",

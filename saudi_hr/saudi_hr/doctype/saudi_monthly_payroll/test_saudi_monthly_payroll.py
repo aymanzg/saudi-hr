@@ -32,10 +32,10 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 			row = payroll_module._build_employee_row(emp, "March / مارس", 2026)
 
 		self.assertEqual(row["gross_salary"], 1350)
-		self.assertEqual(row["gosi_employee_deduction"], 100)
+		self.assertEqual(row["gosi_employee_deduction"], 120)
 		self.assertEqual(row["loan_deduction"], 125)
-		self.assertEqual(row["total_deductions"], 225)
-		self.assertEqual(row["net_salary"], 1125)
+		self.assertEqual(row["total_deductions"], 245)
+		self.assertEqual(row["net_salary"], 1105)
 		self.assertEqual(row["loan_installments"], "INST-1")
 
 	def test_build_employee_row_rejects_zero_basic_salary(self):
@@ -136,6 +136,7 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 		     patch.object(payroll_module, "_get_employee_fetch_fields", return_value=["name", "employee_name", "department", "company", "nationality"]), \
 		     patch.object(payroll_module, "get_employee_salary_components", side_effect=[{"basic_salary": 0}]), \
 		     patch.object(payroll_module, "get_gosi_rates", return_value={"employee_rate": 10.0}), \
+		     patch.object(payroll_module, "is_gosi_company_paid", return_value=False), \
 		     patch.object(payroll_module, "get_due_loan_deduction", return_value={"loan_deduction": 0, "installment_names": []}), \
 		     patch.object(payroll_module, "_get_company_default_cost_center", return_value="Main - AMD"):
 			result = payroll_module.fetch_employees("SAU-PAY-TEST")
@@ -146,7 +147,7 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 		self.assertEqual(result["skipped_count"], 1)
 		self.assertEqual(len(fake_doc.employees), 1)
 		self.assertEqual(fake_doc.employees[0]["employee"], "EMP-VALID")
-		self.assertEqual(fake_doc.total_net_payable, 5350.0)
+		self.assertEqual(fake_doc.total_net_payable, 5300.0)
 		self.assertIn("Zero Employee", result["warnings"][0])
 		self.assertIn("skipped 1", fake_doc.comments[0][1])
 
@@ -2026,5 +2027,163 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 		has_perm.assert_called_once()
 		self.assertEqual(result["file_url"], "/private/files/bank.xlsx")
 		self.assertEqual(result["row_count"], 1)
+
+
+class TestGosiDeductionRules(FrappeTestCase):
+	def _emp(self, **overrides):
+		emp = {
+			"name": "EMP-0001",
+			"employee_name": "Demo Employee",
+			"department": "HR",
+			"nationality": "السعودية",
+		}
+		emp.update(overrides)
+		return emp
+
+	def test_gosi_base_is_basic_plus_housing(self):
+		with patch.object(
+			payroll_module, "get_employee_salary_components", return_value={
+				"basic_salary": 3334,
+				"housing_allowance": 833,
+				"transport_allowance": 333,
+				"other_allowances": 0,
+			}
+		), patch.object(payroll_module.frappe, "get_all", side_effect=[[], []]), patch.object(
+			payroll_module, "get_gosi_rates", return_value={"employee_rate": 9.75}
+		), patch.object(
+			payroll_module.frappe, "get_single", return_value=SimpleNamespace(gosi_base_on_total_salary=0)
+		), patch.object(
+			payroll_module, "is_gosi_company_paid", return_value=False
+		), patch.object(
+			payroll_module, "get_due_loan_deduction", return_value={"loan_deduction": 0, "installment_names": []}
+		):
+			row = payroll_module._build_employee_row(self._emp(), "October / أكتوبر", 2026)
+
+		self.assertEqual(row["gosi_employee_deduction"], 406)
+
+	def test_gosi_rounds_to_whole_riyal(self):
+		with patch.object(
+			payroll_module, "get_employee_salary_components", return_value={
+				"basic_salary": 4889,
+				"housing_allowance": 1222,
+				"transport_allowance": 489,
+				"other_allowances": 0,
+			}
+		), patch.object(payroll_module.frappe, "get_all", side_effect=[[], []]), patch.object(
+			payroll_module, "get_gosi_rates", return_value={"employee_rate": 9.75}
+		), patch.object(
+			payroll_module.frappe, "get_single", return_value=SimpleNamespace(gosi_base_on_total_salary=0)
+		), patch.object(
+			payroll_module, "is_gosi_company_paid", return_value=False
+		), patch.object(
+			payroll_module, "get_due_loan_deduction", return_value={"loan_deduction": 0, "installment_names": []}
+		):
+			row = payroll_module._build_employee_row(self._emp(), "October / أكتوبر", 2026)
+
+		self.assertEqual(row["gosi_employee_deduction"], 596)
+
+	def test_company_paid_records_amount_without_deduction(self):
+		with patch.object(
+			payroll_module, "get_employee_salary_components", return_value={
+				"basic_salary": 3334,
+				"housing_allowance": 833,
+				"transport_allowance": 333,
+				"other_allowances": 0,
+			}
+		), patch.object(payroll_module.frappe, "get_all", return_value=[]), patch.object(
+			payroll_module, "get_gosi_rates", return_value={"employee_rate": 9.75}
+		), patch.object(
+			payroll_module.frappe, "get_single", return_value=SimpleNamespace(gosi_base_on_total_salary=0)
+		), patch.object(
+			payroll_module, "is_gosi_company_paid", return_value=True
+		), patch.object(
+			payroll_module, "get_due_loan_deduction", return_value={"loan_deduction": 0, "installment_names": []}
+		):
+			row = payroll_module._build_employee_row(self._emp(), "October / أكتوبر", 2026)
+
+		self.assertEqual(row["gosi_employee_deduction"], 0.0)
+		self.assertTrue(row["gosi_company_paid"])
+		self.assertEqual(row["gosi_company_paid_amount"], 406)
+
+	def test_resolve_nationality_prefers_employee_record_over_contract(self):
+		emp = self._emp(nationality="", custom_nationality="السعودية")
+		self.assertEqual(
+			payroll_module._resolve_employee_nationality(emp, {"EMP-0001": "باكستان"}),
+			"السعودية",
+		)
+
+	def test_journal_posts_company_paid_gosi_as_balanced_extra_expense(self):
+		row = SimpleNamespace(
+			gross_salary=5000.0,
+			overtime_addition=0.0,
+			sick_leave_deduction=0.0,
+			absence_deduction=0.0,
+			late_deduction=0.0,
+			penalty_deduction=0.0,
+			other_deductions=0.0,
+			cost_center=None,
+			gosi_employee_deduction=0.0,
+			gosi_company_paid_amount=406.0,
+		)
+		fake_doc = SimpleNamespace(
+			name="SAU-PAY-TEST",
+			company="Test Co",
+			month="October",
+			year=2026,
+			employees=[row],
+			total_gosi_deductions=0.0,
+			total_gosi_company_paid=406.0,
+			total_loan_deductions=0.0,
+			total_net_payable=5000.0,
+			total_employees=1,
+			payroll_journal_entry="",
+		)
+		captured = {}
+
+		class FakeJE:
+			def __init__(self, payload):
+				captured["payload"] = payload
+				self.name = "JE-TEST-0001"
+
+			def insert(self):
+				pass
+
+			def submit(self):
+				pass
+
+		def fake_get_doc(*args, **kwargs):
+			if args and args[0] == "Saudi Monthly Payroll":
+				return fake_doc
+			payload = args[0] if args else kwargs
+			return FakeJE(payload)
+
+		accounts = [
+			{"name": "Salaries", "account_name": "Salaries", "account_type": "", "root_type": "Expense"},
+			{"name": "GOSI Payable", "account_name": "GOSI Payable", "account_type": "", "root_type": "Liability"},
+			{"name": "GOSI Expense", "account_name": "GOSI Expense", "account_type": "", "root_type": "Expense"},
+			{"name": "Payroll Payable", "account_name": "Payroll Payable", "account_type": "Payable", "root_type": "Liability"},
+		]
+		with patch.object(payroll_module.frappe, "get_doc", side_effect=fake_get_doc), \
+		     patch.object(payroll_module.frappe, "has_permission", return_value=True), \
+		     patch.object(payroll_module.frappe, "get_all", return_value=accounts), \
+		     patch.object(payroll_module, "_get_payroll_payable_account", return_value="Payroll Payable"), \
+		     patch.object(payroll_module, "_get_company_default_cost_center", return_value="Main"), \
+		     patch.object(payroll_module, "assert_doctype_permissions", return_value=None), \
+		     patch.object(fake_doc, "db_set", create=True):
+			payroll_module.create_journal_entry_from_payroll("SAU-PAY-TEST")
+
+		rows = captured["payload"]["accounts"]
+		debit = sum(r.get("debit_in_account_currency", 0.0) for r in rows)
+		credit = sum(r.get("credit_in_account_currency", 0.0) for r in rows)
+		self.assertEqual(round(debit, 2), round(credit, 2))
+		self.assertTrue(any(
+			r.get("account") == "GOSI Expense" and r.get("debit_in_account_currency") == 406.0
+			for r in rows
+		))
+		self.assertTrue(any(
+			r.get("account") == "GOSI Payable" and r.get("credit_in_account_currency") == 406.0
+			for r in rows
+		))
+
 
 

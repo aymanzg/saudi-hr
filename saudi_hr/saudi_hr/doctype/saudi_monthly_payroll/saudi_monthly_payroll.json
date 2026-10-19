@@ -37,9 +37,10 @@
   "total_gross",
   "column_break_3",
   "total_gosi_deductions",
-    "total_sick_deductions",
-    "total_loan_deductions",
-    "total_other_deductions",
+  "total_gosi_company_paid",
+  "total_sick_deductions",
+  "total_loan_deductions",
+  "total_other_deductions",
   "total_overtime",
   "total_net_payable",
   "notes_section",
@@ -238,6 +239,13 @@
    "fieldname": "total_gosi_deductions",
    "fieldtype": "Currency",
    "label": "Total GOSI Deductions / إجمالي اقتطاعات التأمينات",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_gosi_company_paid",
+   "fieldtype": "Currency",
+   "label": "Total GOSI Paid by Company / إجمالي التأمينات التي تحمّلتها الشركة",
    "options": "currency",
    "read_only": 1
   },

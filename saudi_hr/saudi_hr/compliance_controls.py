@@ -1039,6 +1039,38 @@ CUSTOM_FIELDS = {
 				"وقد تكون خاطئة إذا كانت للعامل مدد اشتراك سابقة لدى صاحب عمل آخر."
 			),
 		},
+		{
+			"fieldname": "custom_gosi_company_pays",
+			"fieldtype": "Check",
+			"label": "Company Pays GOSI on Employee Behalf / الشركة تدفع التأمينات بدلاً عن الموظف",
+			"insert_after": "gosi_subscription_date_source",
+			"default": "0",
+			"description": (
+				"عند التفعيل يُصرف راتب الموظف دون اقتطاع حصة التأمينات، وتُسجَّل الحصة التي "
+				"تحمّلتها الشركة في كشف الراتب (حصة تتحمّلها الشركة) دون خصمها من الأجر. "
+				"Each payroll row records the employee share the company covered without deducting it."
+			),
+		},
+		{
+			"fieldname": "custom_gosi_employee_rate",
+			"fieldtype": "Percent",
+			"label": "GOSI Employee Rate Override / نسبة اشتراك الموظف (تجاوز)",
+			"insert_after": "custom_gosi_company_pays",
+			"description": (
+				"نسبة حصة الموظف المخصّصة لهذا الموظف. إذا تُركت فارغة تُستخدم النسبة العامة "
+				"من إعدادات التأمينات. Per-employee employee contribution rate; blank uses the global rate."
+			),
+		},
+		{
+			"fieldname": "custom_gosi_employer_rate",
+			"fieldtype": "Percent",
+			"label": "GOSI Employer Rate Override / نسبة اشتراك صاحب العمل (تجاوز)",
+			"insert_after": "custom_gosi_employee_rate",
+			"description": (
+				"نسبة حصة صاحب العمل المخصّصة لهذا الموظف. إذا تُركت فارغة تُستخدم النسبة العامة "
+				"من إعدادات التأمينات. Per-employee employer contribution rate; blank uses the global rate."
+			),
+		},
 	],
 	"End of Service Benefit": [
 		{
@@ -1379,7 +1411,6 @@ def ensure_gosi_settings_defaults():
 	if not flt(settings.get("gosi_saned_rate")):
 		settings.gosi_saned_rate = 0.75
 		settings.gosi_occupational_hazards_rate = flt(settings.get("gosi_occupational_hazards_rate")) or 2.0
-		settings.gosi_apply_new_system_schedule = 1
 		changed = True
 
 	if changed:

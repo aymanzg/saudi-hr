@@ -23,6 +23,7 @@
   "gosi_non_saudi_employer_rate",
   "gosi_saned_rate",
   "gosi_occupational_hazards_rate",
+  "gosi_base_on_total_salary",
   "leave_section",
   "annual_leave_years_threshold",
   "annual_leave_before_threshold",
@@ -141,8 +142,8 @@
    "label": "Saudi Employer Rate % (Previous System) / نسبة صاحب عمل سعودي — النظام السابق"
   },
   {
-   "default": "1",
-   "description": "تطبيق جدول نظام التأمينات الجديد (م/273) على من بدأ اشتراكه في 3 يوليو 2024 أو بعده: ترتفع نسبة المعاشات من 9% إلى 11% على كل طرف بواقع 0.5% سنوياً من يوليو 2025 حتى يوليو 2028.",
+   "default": "0",
+   "description": "تطبيق جدول نظام التأمينات الجديد (م/273) على من بدأ اشتراكه في 3 يوليو 2024 أو بعده: ترتفع نسبة المعاشات من 9% إلى 11% على كل طرف بواقع 0.5% سنوياً من يوليو 2025 حتى يوليو 2028. عند الإيقاف تُستخدم النسبة الثابتة (9.75% للموظف السعودي).",
    "fieldname": "gosi_apply_new_system_schedule",
    "fieldtype": "Check",
    "label": "Apply New System Schedule / تطبيق جدول النظام الجديد"
@@ -178,6 +179,13 @@
    "fieldname": "gosi_occupational_hazards_rate",
    "fieldtype": "Percent",
    "label": "Occupational Hazards Rate % / نسبة الأخطار المهنية"
+  },
+  {
+   "default": "0",
+   "description": "عند التفعيل يكون وعاء اشتراك التأمينات كل البدلات (الأساسي + السكن + النقل + البدلات الأخرى) بدلاً من الأساسي + بدل السكن. When enabled, the GOSI base includes all allowances instead of basic + housing.",
+   "fieldname": "gosi_base_on_total_salary",
+   "fieldtype": "Check",
+   "label": "GOSI Base on Total Salary / وعاء التأمينات على الراتب الشامل"
   },
   {
    "fieldname": "leave_section",

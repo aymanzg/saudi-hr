@@ -724,6 +724,9 @@ def calculate_eosb_components(joining_date, termination_date, last_basic_salary,
 # غير السعوديين: فرع الأخطار المهنية فقط 2% على صاحب العمل.
 # وعاء الاشتراك = الأجر الأساسي + بدل السكن بحد أقصى 45,000 ريال شهرياً.
 # ---------------------------------------------------------------------------
+# الحد الأقصى لوعاء اشتراك التأمينات
+GOSI_MAX_BASE = 45000.0
+
 GOSI_NEW_SYSTEM_START_DATE = "2024-07-03"
 GOSI_OLD_SYSTEM_PENSION_RATE = 9.0
 GOSI_DEFAULT_SANED_RATE = 0.75
@@ -835,16 +838,49 @@ def backfill_gosi_first_contribution_dates(dry_run=1, company=None):
 	}
 
 
+def round_gosi_amount(value) -> float:
+	"""تقريب اشتراك التأمينات إلى ريال كامل (تقريب تجاري: النصف لأعلى).
+
+	المبالغ تُطابق بها العميل على ريال كامل (406.28 → 406، 595.82 → 596)،
+	والتقريب المدمج في بايثون يقرّب النصف للزوج، لذا يُستخدم هنا تقريب تجاري.
+	"""
+	from decimal import ROUND_HALF_UP, Decimal
+
+	return float(Decimal(str(flt(value))).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def get_gosi_base(basic, housing, include_total_salary: bool = False, extra_allowances=0.0) -> float:
+	"""وعاء اشتراك التأمينات: الراتب الأساسي + بدل السكن (مع تقييد 45,000).
+
+	ضريبة اشتراك التأمينات تُحتسب على الأجر الخاضع للاشتراك (الأساسي + السكن)،
+	وليس على الأساسي وحده. خيار الإعدادات يوسّع الوعاء لكل البدلات عند تفعيله.
+	"""
+	base = flt(basic) + flt(housing)
+	if include_total_salary:
+		base += flt(extra_allowances)
+	return min(base, GOSI_MAX_BASE)
+
+
 def get_gosi_rates(nationality: str, employee: str = None, as_on_date=None) -> dict:
 	"""
 	إرجاع معدلات GOSI حسب الجنسية ونظام الاشتراك المطبَّق على العامل.
+
+	أولوية النسب: النسبة المخصّصة على سجل الموظف تتقدّم على الإعدادات العامة،
+	ثم تُطبَّق نسب السعودي/غير السعودي وفق نظام الاشتراك.
 	"""
 	settings = frappe.get_single("Saudi HR Settings")
 
 	if not is_saudi_nationality(nationality):
+		employee_rate = flt(settings.gosi_non_saudi_employee_rate)
+		employer_rate = flt(settings.gosi_non_saudi_employer_rate) or GOSI_DEFAULT_OCCUPATIONAL_HAZARDS_RATE
+		override = _get_gosi_rate_overrides(employee)
+		if override.get("employee_rate") is not None:
+			employee_rate = override["employee_rate"]
+		if override.get("employer_rate") is not None:
+			employer_rate = override["employer_rate"]
 		return {
-			"employee_rate": flt(settings.gosi_non_saudi_employee_rate),
-			"employer_rate": flt(settings.gosi_non_saudi_employer_rate) or GOSI_DEFAULT_OCCUPATIONAL_HAZARDS_RATE,
+			"employee_rate": employee_rate,
+			"employer_rate": employer_rate,
 			"pension_rate": 0.0,
 			"system": "Non-Saudi / غير سعودي",
 		}
@@ -858,18 +894,46 @@ def get_gosi_rates(nationality: str, employee: str = None, as_on_date=None) -> d
 			getattr(settings, "gosi_occupational_hazards_rate", None) or GOSI_DEFAULT_OCCUPATIONAL_HAZARDS_RATE
 		)
 		pension = get_gosi_pension_rate(True, as_on_date)
-		return {
+		rates = {
 			"employee_rate": round(pension + saned, 4),
 			"employer_rate": round(pension + saned + hazards, 4),
 			"pension_rate": pension,
 			"system": "New System / نظام التأمينات الجديد",
 		}
+	else:
+		rates = {
+			"employee_rate": flt(settings.gosi_saudi_employee_rate) or 9.75,
+			"employer_rate": flt(settings.gosi_saudi_employer_rate) or 11.75,
+			"pension_rate": GOSI_OLD_SYSTEM_PENSION_RATE,
+			"system": "Previous System / النظام السابق",
+		}
 
+	override = _get_gosi_rate_overrides(employee)
+	if override.get("employee_rate") is not None:
+		rates["employee_rate"] = override["employee_rate"]
+	if override.get("employer_rate") is not None:
+		rates["employer_rate"] = override["employer_rate"]
+	return rates
+
+
+def _get_gosi_rate_overrides(employee: str = None) -> dict:
+	"""النسب المخصّصة على سجل الموظف (إن وُجدت) لتجاوز الإعدادات العامة."""
+	if not employee:
+		return {}
+	meta = frappe.get_meta("Employee")
+	fields = [
+		fieldname
+		for fieldname in ("custom_gosi_employee_rate", "custom_gosi_employer_rate")
+		if meta.has_field(fieldname)
+	]
+	if not fields:
+		return {}
+	row = frappe.db.get_value("Employee", employee, fields, as_dict=True) or {}
+	employee_rate = flt(row.get("custom_gosi_employee_rate"))
+	employer_rate = flt(row.get("custom_gosi_employer_rate"))
 	return {
-		"employee_rate": flt(settings.gosi_saudi_employee_rate) or 9.75,
-		"employer_rate": flt(settings.gosi_saudi_employer_rate) or 11.75,
-		"pension_rate": GOSI_OLD_SYSTEM_PENSION_RATE,
-		"system": "Previous System / النظام السابق",
+		"employee_rate": employee_rate if employee_rate > 0 else None,
+		"employer_rate": employer_rate if employer_rate > 0 else None,
 	}
 
 
@@ -881,6 +945,12 @@ def is_saudi_nationality(nationality: str) -> bool:
 
 
 def get_employee_nationality(employee: str) -> str:
+	"""جنسية الموظف بصيغة قابلة للربط بحقل Country.
+
+	تُستخدم هذه الدالة حيث تُربط الجنسية بدولة (مثل سجل التدريب)، فلا تصلح
+	التسمية العربية في custom_nationality. لتحديد اشتراك التأمينات استخدم
+	get_employee_gosi_nationality التي تعطي الأولوية لسجل الموظف.
+	"""
 	if not employee:
 		return ""
 
@@ -888,6 +958,37 @@ def get_employee_nationality(employee: str) -> str:
 		return frappe.db.get_value("Employee", employee, "nationality") or ""
 
 	return get_contract_nationality_lookup([employee]).get(employee) or ""
+
+
+def get_employee_gosi_nationality(employee: str, fallback: str = "") -> str:
+	"""جنسية الموظف لتحديد نسبة التأمينات — الأولوية لسجل الموظف.
+
+	يُفضّل custom_nationality (التسمية العربية المعتمدة في ملف الموظف) ثم
+	حقل nationality القياسي ثم عقد العمل، وأخيراً القيمة الاحتياطية المُمرّرة.
+	"""
+	if not employee:
+		return fallback or ""
+
+	candidates = []
+	if frappe.get_meta("Employee").has_field("nationality"):
+		candidates.append(frappe.db.get_value("Employee", employee, "nationality"))
+	if frappe.get_meta("Employee").has_field("custom_nationality"):
+		candidates.append(frappe.db.get_value("Employee", employee, "custom_nationality"))
+	candidates.append(get_contract_nationality_lookup([employee]).get(employee))
+	candidates.append(fallback)
+	for value in candidates:
+		if (value or "").strip():
+			return value
+	return ""
+
+
+def is_gosi_company_paid(employee: str = None) -> bool:
+	"""هل تتحمّل الشركة اشتراك الموظف بدلاً منه (فيُصرف راتبه دون اقتطاع)."""
+	if not employee:
+		return False
+	if not frappe.get_meta("Employee").has_field("custom_gosi_company_pays"):
+		return False
+	return bool(cint(frappe.db.get_value("Employee", employee, "custom_gosi_company_pays")))
 
 
 def get_contract_nationality_lookup(employees: list[str]) -> dict[str, str]:

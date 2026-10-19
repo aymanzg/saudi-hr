@@ -522,6 +522,7 @@ class TestFetchEmployees(unittest.TestCase):
 		     patch.object(m, "get_employee_salary_components",
 		                  return_value={"basic_salary": 0}), \
 		     patch.object(m, "get_gosi_rates", return_value={"employee_rate": 10.0}), \
+		     patch.object(m, "is_gosi_company_paid", return_value=False), \
 		     patch.object(m, "get_due_loan_deduction",
 		                  return_value={"loan_deduction": 0, "installment_names": []}), \
 		     patch.object(m, "_get_company_default_cost_center", return_value="Main - AMD"):

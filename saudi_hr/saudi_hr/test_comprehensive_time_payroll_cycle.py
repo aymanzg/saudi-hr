@@ -190,13 +190,14 @@ class TestComprehensiveTimePayrollCycle(FrappeTestCase):
 			}
 		).insert(ignore_permissions=True)
 		self.assertEqual(gosi.contribution_base, 45000)
+		from saudi_hr.saudi_hr.utils import round_gosi_amount
 		self.assertEqual(
 			gosi.employee_contribution,
-			round(45000 * (gosi.employee_contribution_rate / 100), 2),
+			round_gosi_amount(45000 * (gosi.employee_contribution_rate / 100)),
 		)
 		self.assertEqual(
 			gosi.employer_contribution,
-			round(45000 * (gosi.employer_contribution_rate / 100), 2),
+			round_gosi_amount(45000 * (gosi.employer_contribution_rate / 100)),
 		)
 
 		wps = frappe.get_doc(

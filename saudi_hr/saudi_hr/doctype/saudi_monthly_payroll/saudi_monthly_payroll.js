@@ -1365,12 +1365,15 @@ function _calc_row(frm, cdt, cdn) {
     const other    = flt(row.other_allowances);
     const gross    = basic + housing + trans + other;
 
-    // GOSI اقتطاع الموظف
+    // GOSI اقتطاع الموظف — الوعاء = الأساسي + بدل السكن، نسبة ثابتة 9.75%، تقريب لريال
     const nat = (row.nationality || '').toLowerCase();
     const is_saudi = nat === 'sa' || nat.includes('saudi') || nat.includes('سعودي');
-    const gosi_rate = is_saudi ? 10.0 : 0.0;
-    const gosi_base = Math.min(basic, 45000);
-    const gosi_ded  = parseFloat((gosi_base * gosi_rate / 100).toFixed(2));
+    const gosi_rate = is_saudi ? 9.75 : 0.0;
+    const gosi_base = Math.min(basic + housing, 45000);
+    const gosi_computed = Math.round(gosi_base * gosi_rate / 100);
+    const company_paid = cint(row.gosi_company_paid);
+    const gosi_ded  = company_paid ? 0 : gosi_computed;
+    const gosi_covered = company_paid ? gosi_computed : 0;
 
     const total_deductions = gosi_ded
         + flt(row.sick_leave_deduction)
@@ -1384,6 +1387,7 @@ function _calc_row(frm, cdt, cdn) {
 
     frappe.model.set_value(cdt, cdn, 'gross_salary', parseFloat(gross.toFixed(2)));
     frappe.model.set_value(cdt, cdn, 'gosi_employee_deduction', gosi_ded);
+    frappe.model.set_value(cdt, cdn, 'gosi_company_paid_amount', gosi_covered);
     frappe.model.set_value(cdt, cdn, 'total_deductions', parseFloat(total_deductions.toFixed(2)));
     frappe.model.set_value(cdt, cdn, 'net_salary', net);
 
@@ -1394,10 +1398,11 @@ function _calc_row(frm, cdt, cdn) {
 // ─── Totals ───────────────────────────────────────────────────────────────────
 
 function _update_totals(frm) {
-    let total_gross = 0, total_gosi = 0, total_sick = 0, total_loan = 0, total_other = 0, total_ot = 0, total_net = 0;
+    let total_gross = 0, total_gosi = 0, total_gosi_company = 0, total_sick = 0, total_loan = 0, total_other = 0, total_ot = 0, total_net = 0;
     (frm.doc.employees || []).forEach(row => {
         total_gross += flt(row.gross_salary);
         total_gosi  += flt(row.gosi_employee_deduction);
+        total_gosi_company += flt(row.gosi_company_paid_amount);
         total_sick  += flt(row.sick_leave_deduction);
         total_loan  += flt(row.loan_deduction);
         total_other += flt(row.absence_deduction)
@@ -1411,6 +1416,7 @@ function _update_totals(frm) {
     frm.set_value('total_employees',      (frm.doc.employees || []).length);
     frm.set_value('total_gross',          parseFloat(total_gross.toFixed(2)));
     frm.set_value('total_gosi_deductions',parseFloat(total_gosi.toFixed(2)));
+    frm.set_value('total_gosi_company_paid',parseFloat(total_gosi_company.toFixed(2)));
     frm.set_value('total_sick_deductions',parseFloat(total_sick.toFixed(2)));
     frm.set_value('total_loan_deductions',parseFloat(total_loan.toFixed(2)));
     frm.set_value('total_other_deductions',parseFloat(total_other.toFixed(2)));

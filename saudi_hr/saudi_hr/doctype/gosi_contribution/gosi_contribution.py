@@ -8,9 +8,14 @@ from saudi_hr.saudi_hr.utils import (
 	assert_employee_salary_access,
 	get_contract_nationality_lookup,
 	get_employee_basic_salary as get_current_basic_salary,
+	get_employee_gosi_nationality,
 	get_employee_nationality,
+	get_employee_salary_components,
+	get_gosi_base,
 	get_gosi_rates,
+	is_gosi_company_paid,
 	is_saudi_nationality,
+	round_gosi_amount,
 )
 
 # الحد الأقصى لوعاء الاشتراك في التأمينات
@@ -28,7 +33,7 @@ class GOSIContribution(Document):
 
 	def _set_nationality(self):
 		if not self.nationality:
-			self.nationality = get_employee_nationality(self.employee) or ""
+			self.nationality = get_employee_gosi_nationality(self.employee) or get_employee_nationality(self.employee) or ""
 		if not self.nationality:
 			# بدون الجنسية تُطبَّق نسبة غير السعوديين (2%) على السعوديين خطأً،
 			# وهو فرق جوهري في الاشتراك، فلا يُسمح بالحفظ دون تحديدها.
@@ -96,9 +101,20 @@ class GOSIContribution(Document):
 
 	def _calculate_contributions(self):
 		base = flt(self.contribution_base)
-		self.employee_contribution = round(base * (flt(self.employee_contribution_rate) / 100), 2)
-		self.employer_contribution = round(base * (flt(self.employer_contribution_rate) / 100), 2)
-		self.total_contribution = round(self.employee_contribution + self.employer_contribution, 2)
+		employee_contribution = round_gosi_amount(base * (flt(self.employee_contribution_rate) / 100))
+		employer_contribution = round_gosi_amount(base * (flt(self.employer_contribution_rate) / 100))
+		company_paid_amount = 0.0
+		if self.meta.has_field("gosi_company_paid") and is_gosi_company_paid(self.employee):
+			self.gosi_company_paid = 1
+			company_paid_amount = employee_contribution
+			self.gosi_company_paid_amount = company_paid_amount
+			employee_contribution = 0.0
+		self.employee_contribution = employee_contribution
+		self.employer_contribution = employer_contribution
+		# ما يلتزم به صاحب العمل تجاه GOSI = حصته + حصة الموظف إن تحمّلها
+		self.total_contribution = round_gosi_amount(
+			employee_contribution + employer_contribution + company_paid_amount
+		)
 
 	def _set_period_label(self):
 		self.period_label = f"{self.month} {self.year}"
@@ -237,6 +253,21 @@ def get_employee_basic_salary(employee):
 	return get_current_basic_salary(employee)
 
 
+@frappe.whitelist()
+def get_employee_gosi_base(employee):
+	"""وعاء اشتراك التأمينات للموظف (الأساسي + بدل السكن) لتعبئة النموذج."""
+	assert_employee_salary_access(employee)
+	components = get_employee_salary_components(employee)
+	settings = frappe.get_single("Saudi HR Settings")
+	include_total_salary = flt(settings.get("gosi_base_on_total_salary"))
+	return get_gosi_base(
+		components["basic_salary"],
+		components["housing_allowance"],
+		include_total_salary,
+		components["transport_allowance"] + components["other_allowances"],
+	)
+
+
 @frappe.whitelist(methods=["POST"])
 def generate_gosi_for_month(company: str, month: str, year: int):
 	"""
@@ -261,8 +292,13 @@ def generate_gosi_for_month(company: str, month: str, year: int):
 		):
 			continue
 
-		# الحصول على الراتب الأساسي
-		base = get_current_basic_salary(emp.name)
+		# الحصول على الأجر الخاضع للاشتراك (الأساسي + بدل السكن)
+		components = get_employee_salary_components(emp.name)
+		base = get_gosi_base(
+			components["basic_salary"],
+			components["housing_allowance"],
+			extra_allowances=components["transport_allowance"] + components["other_allowances"],
+		)
 
 		doc = frappe.get_doc({
 			"doctype": "GOSI Contribution",
@@ -270,8 +306,8 @@ def generate_gosi_for_month(company: str, month: str, year: int):
 			"company": company,
 			"month": month,
 			"year": year,
-			"nationality": emp.get("nationality") or contract_nationalities.get(emp.name) or "",
-			"contribution_base": min(base, GOSI_MAX_BASE),
+			"nationality": emp.get("nationality") or emp.get("custom_nationality") or contract_nationalities.get(emp.name) or "",
+			"contribution_base": base,
 		})
 		doc.insert()
 		created += 1
@@ -288,6 +324,8 @@ def generate_gosi_for_month(company: str, month: str, year: int):
 
 def _get_employee_fetch_fields():
 	fields = ["name", "employee_name"]
-	if frappe.get_meta("Employee").has_field("nationality"):
-		fields.append("nationality")
+	meta = frappe.get_meta("Employee")
+	for fieldname in ("nationality", "custom_nationality"):
+		if meta.has_field(fieldname):
+			fields.append(fieldname)
 	return fields
