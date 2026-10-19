@@ -1921,7 +1921,7 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 		row2 = {
 			"employee": "EMP-2",
 			"employee_name": "Sara Ali",
-			"work_location": "الرياض",
+			"work_location": "",
 			"basic_salary": 3000,
 			"housing_allowance": 0,
 			"transport_allowance": 0,
@@ -1957,7 +1957,7 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 		# الصف الأول (الترتيب من اليمين إلى اليسار)
 		self.assertEqual(sheet.cell(row=2, column=1).value, "Bank A")  # البنك
 		self.assertEqual(sheet.cell(row=2, column=2).value, "SA0001")  # رقم الحساب
-		self.assertEqual(sheet.cell(row=2, column=3).value, 5600)  # اجمال الراتب
+		self.assertEqual(sheet.cell(row=2, column=3).value, 5600)  # اجمالي الراتب
 		self.assertEqual(sheet.cell(row=2, column=4).value, "راتب شهر 9")  # ملاحظات
 		self.assertEqual(sheet.cell(row=2, column=5).value, "أحمد محمد")  # اسم الموظف
 		self.assertEqual(sheet.cell(row=2, column=6).value, "1122334455")  # رقم الهوية
@@ -1967,10 +1967,11 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 		self.assertEqual(sheet.cell(row=2, column=10).value, 500)  # بدلات اخرى (300 + 200)
 		self.assertEqual(sheet.cell(row=2, column=11).value, 700)  # خصومات
 
-		# الصف الثاني: بيانات البنك/الهوية الفارغة تبقى موجودة بدون نص
+		# الصف الثاني: بيانات البنك/الهوية الفارغة تبقى موجودة بدون نص، والعنوان يرجع إلى جدة
 		self.assertFalse(sheet.cell(row=3, column=1).value)
 		self.assertFalse(sheet.cell(row=3, column=2).value)
 		self.assertFalse(sheet.cell(row=3, column=6).value)
+		self.assertEqual(sheet.cell(row=3, column=7).value, "جدة")
 
 	def test_build_bank_transfer_sheet_workbook_throws_when_empty(self):
 		doc = SimpleNamespace(

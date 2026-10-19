@@ -103,7 +103,7 @@ WORKBOOK_HEADER_ALIASES = {
 BANK_TRANSFER_SHEET_HEADERS = [
 	"البنك",
 	"رقم الحساب",
-	"اجمال الراتب",
+	"اجمالي الراتب",
 	"ملاحظات",
 	"اسم الموظف",
 	"رقم الهوية او الاقامة",
@@ -1197,7 +1197,7 @@ def _build_bank_transfer_sheet_workbook(doc) -> BytesIO:
 			notes,
 			cstr(row.get("employee_name") or "").strip(),
 			details.get("id_number", ""),
-			cstr(row.get("work_location") or "").strip(),
+			cstr(row.get("work_location") or "").strip() or "جدة",
 			flt(row.get("basic_salary"), 2),
 			flt(row.get("housing_allowance"), 2),
 			round(flt(row.get("transport_allowance")) + flt(row.get("other_allowances")), 2),
