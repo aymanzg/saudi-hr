@@ -1954,23 +1954,23 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 		self.assertTrue(sheet.sheet_view.rightToLeft)
 		self.assertEqual(sheet.freeze_panes, "A2")
 
-		# الصف الأول
-		self.assertEqual(sheet.cell(row=2, column=1).value, 700)  # خصومات
-		self.assertEqual(sheet.cell(row=2, column=2).value, 500)  # بدلات اخرى (300 + 200)
-		self.assertEqual(sheet.cell(row=2, column=3).value, 800)  # بدل سكن
-		self.assertEqual(sheet.cell(row=2, column=4).value, 5000)  # الراتب الاساسي
-		self.assertEqual(sheet.cell(row=2, column=5).value, "جدة")  # العنوان (مدينة)
+		# الصف الأول (الترتيب من اليمين إلى اليسار)
+		self.assertEqual(sheet.cell(row=2, column=1).value, "Bank A")  # البنك
+		self.assertEqual(sheet.cell(row=2, column=2).value, "SA0001")  # رقم الحساب
+		self.assertEqual(sheet.cell(row=2, column=3).value, 5600)  # اجمال الراتب
+		self.assertEqual(sheet.cell(row=2, column=4).value, "راتب شهر 9")  # ملاحظات
+		self.assertEqual(sheet.cell(row=2, column=5).value, "أحمد محمد")  # اسم الموظف
 		self.assertEqual(sheet.cell(row=2, column=6).value, "1122334455")  # رقم الهوية
-		self.assertEqual(sheet.cell(row=2, column=7).value, "أحمد محمد")  # اسم الموظف
-		self.assertEqual(sheet.cell(row=2, column=8).value, "راتب شهر 9")  # ملاحظات
-		self.assertEqual(sheet.cell(row=2, column=9).value, 5600)  # اجمال الراتب
-		self.assertEqual(sheet.cell(row=2, column=10).value, "Bank A")  # البنك
-		self.assertEqual(sheet.cell(row=2, column=11).value, "SA0001")  # IBAN
+		self.assertEqual(sheet.cell(row=2, column=7).value, "جدة")  # العنوان (مدينة)
+		self.assertEqual(sheet.cell(row=2, column=8).value, 5000)  # الراتب الاساسي
+		self.assertEqual(sheet.cell(row=2, column=9).value, 800)  # بدل سكن
+		self.assertEqual(sheet.cell(row=2, column=10).value, 500)  # بدلات اخرى (300 + 200)
+		self.assertEqual(sheet.cell(row=2, column=11).value, 700)  # خصومات
 
 		# الصف الثاني: بيانات البنك/الهوية الفارغة تبقى موجودة بدون نص
+		self.assertFalse(sheet.cell(row=3, column=1).value)
+		self.assertFalse(sheet.cell(row=3, column=2).value)
 		self.assertFalse(sheet.cell(row=3, column=6).value)
-		self.assertFalse(sheet.cell(row=3, column=10).value)
-		self.assertFalse(sheet.cell(row=3, column=11).value)
 
 	def test_build_bank_transfer_sheet_workbook_throws_when_empty(self):
 		doc = SimpleNamespace(

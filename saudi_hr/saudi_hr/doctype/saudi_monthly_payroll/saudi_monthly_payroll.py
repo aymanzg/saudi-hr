@@ -99,19 +99,19 @@ WORKBOOK_HEADER_ALIASES = {
 	"gosi_registration": {"التأمينات", "رقم اشتراك التأمينات"},
 }
 
-# أعمدة ملف الحوالات البنكية بالترتيب المعتمد من البنك.
+# أعمدة ملف الحوالات البنكية بالترتيب المعتمد من البنك (من اليمين إلى اليسار).
 BANK_TRANSFER_SHEET_HEADERS = [
-	"خصومات",
-	"بدلات اخرى",
-	"بدل سكن",
-	"الراتب الاساسي",
-	"عنوان الموظف",
-	"رقم الهوية او الاقامة",
-	"اسم الموظف",
-	"ملاحظات",
-	"اجمال الراتب",
 	"البنك",
-	"IBAN",
+	"رقم الحساب",
+	"اجمال الراتب",
+	"ملاحظات",
+	"اسم الموظف",
+	"رقم الهوية او الاقامة",
+	"عنوان الموظف",
+	"الراتب الاساسي",
+	"بدل سكن",
+	"بدلات اخرى",
+	"خصومات",
 ]
 
 
@@ -1191,17 +1191,17 @@ def _build_bank_transfer_sheet_workbook(doc) -> BytesIO:
 		emp = cstr(row.get("employee") or "").strip()
 		details = lookup.get(emp) or {}
 		values = [
-			flt(row.get("total_deductions"), 2),
-			round(flt(row.get("transport_allowance")) + flt(row.get("other_allowances")), 2),
-			flt(row.get("housing_allowance"), 2),
-			flt(row.get("basic_salary"), 2),
-			cstr(row.get("work_location") or "").strip(),
-			details.get("id_number", ""),
-			cstr(row.get("employee_name") or "").strip(),
-			notes,
-			flt(row.get("net_salary"), 2),
 			details.get("bank_name", ""),
 			details.get("iban", ""),
+			flt(row.get("net_salary"), 2),
+			notes,
+			cstr(row.get("employee_name") or "").strip(),
+			details.get("id_number", ""),
+			cstr(row.get("work_location") or "").strip(),
+			flt(row.get("basic_salary"), 2),
+			flt(row.get("housing_allowance"), 2),
+			round(flt(row.get("transport_allowance")) + flt(row.get("other_allowances")), 2),
+			flt(row.get("total_deductions"), 2),
 		]
 		for column_index, value in enumerate(values, start=1):
 			sheet.cell(row=row_index, column=column_index, value=value)
