@@ -1648,19 +1648,19 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 		doc = SimpleNamespace(
 			period_from=None,
 			period_to=None,
-			period_cutoff_day=25,
+			period_cutoff_day=21,
 			month="November / نوفمبر",
 			year=2026,
 			company="amd",
 			name="SAU-PAY-2026-0011",
 		)
-		with patch.object(payroll_module.frappe.db, "get_value", return_value="2026-10-25"):
+		with patch.object(payroll_module.frappe.db, "get_value", return_value="2026-10-21"):
 			period = payroll_module._resolve_attendance_period(doc)
 
-		self.assertEqual(period["from"], getdate("2026-10-26"))
-		self.assertEqual(period["to"], getdate("2026-11-25"))
-		self.assertEqual(doc.period_from, getdate("2026-10-26"))
-		self.assertEqual(doc.period_to, getdate("2026-11-25"))
+		self.assertEqual(period["from"], getdate("2026-10-22"))
+		self.assertEqual(period["to"], getdate("2026-11-21"))
+		self.assertEqual(doc.period_from, getdate("2026-10-22"))
+		self.assertEqual(doc.period_to, getdate("2026-11-21"))
 
 	def test_resolve_attendance_period_without_previous_starts_at_month_start(self):
 		doc = SimpleNamespace(
@@ -1676,7 +1676,7 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 			period = payroll_module._resolve_attendance_period(doc)
 
 		self.assertEqual(period["from"], getdate("2026-11-01"))
-		self.assertEqual(period["to"], getdate("2026-11-25"))
+		self.assertEqual(period["to"], getdate("2026-11-21"))
 
 	def _build_attendance_doc(self, basic=3000):
 		row = SimpleNamespace(

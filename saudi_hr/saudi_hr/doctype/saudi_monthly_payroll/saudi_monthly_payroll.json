@@ -114,8 +114,8 @@
    "fieldtype": "Column Break"
   },
   {
-   "default": "25",
-   "description": "Day of the month the pay period closes, e.g. 25 makes the cycle 26th to 25th. / يوم إقفال فترة الأجر، مثلاً 25 يجعل الدورة من 26 إلى 25.",
+   "default": "21",
+   "description": "Day of the month the pay period closes, e.g. 21 makes the cycle 22nd to 21st. / يوم إقفال فترة الأجر، مثلاً 21 يجعل الدورة من 22 إلى 21.",
    "fieldname": "period_cutoff_day",
    "fieldtype": "Int",
    "label": "Cut-off Day / يوم القطع"
