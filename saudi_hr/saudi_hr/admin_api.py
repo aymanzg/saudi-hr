@@ -2800,6 +2800,7 @@ def _insert_closed_absence_case(employee, day, absence_type, description):
 	return case
 
 
+@frappe.whitelist(methods=["POST"])
 def register_absence_case(employee=None, date=None, absence_type=None, note=None):
 	"""Register one absent day as a closed Absence Case, so payroll deducts it.
 
