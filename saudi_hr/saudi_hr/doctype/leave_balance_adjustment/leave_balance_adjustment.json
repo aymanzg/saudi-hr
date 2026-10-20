@@ -16,6 +16,8 @@
   "leave_year",
   "adjustment_days",
   "column_break_2",
+  "is_opening_balance",
+  "balance_as_of_date",
   "balance_reference",
   "reason",
   "amended_from"
@@ -88,6 +90,21 @@
   {
    "fieldname": "column_break_2",
    "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "عند التفعيل يُعتبر هذا التعديل الرصيد الافتتاحي للموظف، ويبدأ الاستحقاق الشهري منه. / When set, this adjustment is treated as the employee's opening balance and monthly accrual starts from the as-of date.",
+   "fieldname": "is_opening_balance",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Opening Balance / رصيد افتتاحي"
+  },
+  {
+   "depends_on": "is_opening_balance",
+   "description": "تاريخ سريان الرصيد الافتتاحي؛ يبدأ تراكم الإجازة الشهري من هذا التاريخ. / Effective date of the opening balance; monthly accrual starts here.",
+   "fieldname": "balance_as_of_date",
+   "fieldtype": "Date",
+   "label": "Balance As Of / الرصيد حتى تاريخ"
   },
   {
    "fieldname": "balance_reference",

@@ -22,8 +22,10 @@ def get_columns():
 		{"fieldname": "department", "label": _("Department / القسم"), "fieldtype": "Link", "options": "Department", "width": 140},
 		{"fieldname": "date_of_joining", "label": _("Joining Date / تاريخ الانضمام"), "fieldtype": "Date", "width": 130},
 		{"fieldname": "years_of_service", "label": _("Years / السنوات"), "fieldtype": "Float", "precision": 2, "width": 100},
-		{"fieldname": "entitlement", "label": _("Entitlement / الاستحقاق"), "fieldtype": "Int", "width": 120},
-		{"fieldname": "leave_allocated", "label": _("Allocated / المُخصص"), "fieldtype": "Float", "precision": 1, "width": 120},
+		{"fieldname": "entitlement", "label": _("Annual Entitlement / الاستحقاق السنوي"), "fieldtype": "Float", "precision": 2, "width": 130},
+		{"fieldname": "opening_balance", "label": _("Opening Balance / رصيد افتتاحي"), "fieldtype": "Float", "precision": 2, "width": 130},
+		{"fieldname": "accrued", "label": _("Accrued / المستحق"), "fieldtype": "Float", "precision": 2, "width": 110},
+		{"fieldname": "leave_allocated", "label": _("Allocated / المُخصص"), "fieldtype": "Float", "precision": 2, "width": 120},
 		{"fieldname": "leave_taken", "label": _("Taken / المأخوذ"), "fieldtype": "Float", "precision": 1, "width": 110},
 		{"fieldname": "adjustment", "label": _("Adjustment / التعديل"), "fieldtype": "Float", "precision": 1, "width": 110},
 		{"fieldname": "leave_balance", "label": _("Balance / الرصيد"), "fieldtype": "Float", "precision": 1, "width": 110},
@@ -68,8 +70,10 @@ def get_data(filters):
 
 	for emp in employees:
 		leave_balance = get_annual_leave_balance(emp.employee, as_of_date)
-		entitlement = leave_balance["entitled"]
-		allocated = float(entitlement)
+		entitlement = float(leave_balance.get("annual_entitlement", leave_balance["entitled"]))
+		opening_balance = float(leave_balance.get("opening_balance") or 0)
+		accrued = float(leave_balance.get("accrued") or 0)
+		allocated = float(leave_balance["entitled"])
 		taken = float(leave_balance["taken"])
 		adjustment = float(leave_balance.get("adjustment") or 0)
 		balance = float(leave_balance["balance"])
@@ -81,6 +85,8 @@ def get_data(filters):
 			"date_of_joining": emp.date_of_joining,
 			"years_of_service": leave_balance["years_of_service"],
 			"entitlement": entitlement,
+			"opening_balance": opening_balance,
+			"accrued": accrued,
 			"leave_allocated": allocated,
 			"leave_taken": taken,
 			"adjustment": adjustment,

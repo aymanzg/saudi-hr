@@ -76,7 +76,7 @@ class SaudiAnnualLeave(Document):
 			)
 
 		balance = get_annual_leave_balance(self.employee, self.leave_start_date, exclude_name=self.name)
-		self.annual_entitlement_days = balance.get("entitled", balance.get("balance", 0))
+		self.annual_entitlement_days = balance.get("annual_entitlement", balance.get("entitled", 0))
 		self.leave_balance_before = balance["balance"]
 		self.leave_balance_after = flt(balance["balance"]) - flt(self.total_leave_days)
 		self.leave_policy = balance.get("policy")

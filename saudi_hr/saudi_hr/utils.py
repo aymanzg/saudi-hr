@@ -5,7 +5,7 @@ import re
 
 import frappe
 from frappe import _
-from frappe.utils import add_years, cint, cstr, date_diff, flt, getdate, today
+from frappe.utils import add_days, add_months, add_years, cint, cstr, date_diff, flt, get_last_day, getdate, today
 
 
 LEAVE_SCOPE_EMPLOYEE = "Employee / موظف"
@@ -14,6 +14,8 @@ LEAVE_SOURCE_SETTINGS = "Saudi HR Settings / إعدادات الموارد ال�
 STATUTORY_ANNUAL_THRESHOLD_YEARS = 5
 STATUTORY_ANNUAL_BEFORE_DAYS = 21
 STATUTORY_ANNUAL_AFTER_DAYS = 30
+MONTHLY_ACCRUAL_BEFORE_THRESHOLD = STATUTORY_ANNUAL_BEFORE_DAYS / 12
+MONTHLY_ACCRUAL_AFTER_THRESHOLD = STATUTORY_ANNUAL_AFTER_DAYS / 12
 STATUTORY_SICK_FULL_PAY_DAYS = 30
 STATUTORY_SICK_PAID_TIER_DAYS = 90
 STATUTORY_SICK_PARTIAL_PAY_PERCENTAGE = 75
@@ -499,14 +501,94 @@ def get_annual_leave_entitlement_details(employee: str, date: str | None = None)
 
 
 def get_leave_balance_adjustment(employee: str, leave_year: int) -> float:
-	"""Sum of submitted Leave Balance Adjustment days for the employee and leave year."""
+	"""Sum of submitted Leave Balance Adjustment days for the employee and leave year.
+
+	Opening balances are excluded: they anchor the accrual instead of being a
+	plain adjustment (see get_annual_leave_balance).
+	"""
 	rows = frappe.get_all(
 		"Leave Balance Adjustment",
 		filters={"employee": employee, "leave_year": leave_year, "docstatus": 1},
-		fields=["adjustment_days"],
+		fields=["adjustment_days", "is_opening_balance"],
 		ignore_permissions=True,
 	)
-	return round(sum(flt(r.adjustment_days or 0) for r in rows), 2)
+	return round(
+		sum(flt(r.adjustment_days or 0) for r in rows if not cint(r.get("is_opening_balance"))),
+		2,
+	)
+
+
+def get_leave_balance_opening(employee: str, leave_year: int) -> dict | None:
+	"""Return the employee's opening balance for a leave year, if one is recorded.
+
+	When several are present the latest as-of date wins (the doctype also blocks
+	duplicates on submit, this keeps reads safe).
+	"""
+	rows = frappe.get_all(
+		"Leave Balance Adjustment",
+		filters={
+			"employee": employee,
+			"leave_year": leave_year,
+			"docstatus": 1,
+			"is_opening_balance": 1,
+		},
+		fields=["adjustment_days", "balance_as_of_date"],
+		ignore_permissions=True,
+	)
+	rows = [r for r in rows if r.get("balance_as_of_date")]
+	if not rows:
+		return None
+	latest = max(rows, key=lambda r: getdate(r["balance_as_of_date"]))
+	return {
+		"days": round(flt(latest.adjustment_days or 0), 2),
+		"as_of": getdate(latest.balance_as_of_date),
+	}
+
+
+def monthly_accrual_rate(details: dict, month_end_date) -> float:
+	"""Accrual for one month: 1.75 days before the service threshold, 2.5 after.
+
+	The rate is chosen per month so crossing the 5-year threshold mid-year is
+	accounted for rather than applying one rate to the whole year.
+	"""
+	threshold_years = flt(details.get("annual_leave_years_threshold") or STATUTORY_ANNUAL_THRESHOLD_YEARS)
+	statutory_threshold_years = STATUTORY_ANNUAL_THRESHOLD_YEARS
+	joining_date = details.get("joining_date")
+	if not joining_date:
+		return MONTHLY_ACCRUAL_BEFORE_THRESHOLD
+	effective_threshold_years = min(int(threshold_years), statutory_threshold_years)
+	threshold_date = add_years(getdate(joining_date), effective_threshold_years)
+	if getdate(month_end_date) >= getdate(threshold_date):
+		return MONTHLY_ACCRUAL_AFTER_THRESHOLD
+	return MONTHLY_ACCRUAL_BEFORE_THRESHOLD
+
+
+def get_accrued_annual_leave(details: dict, period_start, period_end) -> float:
+	"""Completed service months between two dates, credited at the monthly rate.
+
+	Each whole month between period_start and period_end earns 1.75 or 2.5 days
+	depending on the employee's service at that month's end. The total is capped
+	at the annual entitlement so accrual can never exceed 21/30 days.
+	"""
+	start = getdate(period_start)
+	end = getdate(period_end)
+	if end <= start:
+		return 0.0
+
+	accrued = 0.0
+	cursor = start
+	while True:
+		month_end = get_last_day(cursor)
+		if month_end > end:
+			break
+		accrued += monthly_accrual_rate(details, month_end)
+		next_month = getdate(add_months(cursor, 1))
+		if next_month <= cursor:
+			break
+		cursor = next_month
+
+	cap = flt(details.get("entitled") or STATUTORY_ANNUAL_AFTER_DAYS)
+	return round(min(accrued, cap), 2)
 
 
 def get_annual_leave_balance(employee: str, reference_date: str | None = None, exclude_name: str | None = None) -> dict:
@@ -514,11 +596,29 @@ def get_annual_leave_balance(employee: str, reference_date: str | None = None, e
 	details = get_annual_leave_entitlement_details(employee, reference)
 	taken = get_annual_leave_days_taken(employee, reference.year, exclude_name=exclude_name)
 	adjustment = get_leave_balance_adjustment(employee, reference.year)
+	opening = get_leave_balance_opening(employee, reference.year)
+
+	if opening:
+		# Opening balance anchors the total; only months after the as-of date accrue.
+		accrual_start = add_days(opening["as_of"], 1)
+		accrued = get_accrued_annual_leave(details, accrual_start, reference)
+		entitled = round(flt(opening["days"]) + accrued, 2)
+		balance = entitled - flt(taken) + flt(adjustment)
+	else:
+		accrued = get_accrued_annual_leave(details, f"{reference.year}-01-01", reference)
+		entitled = accrued
+		balance = flt(accrued) - flt(taken) + flt(adjustment)
+
 	return {
 		**details,
+		"entitled": entitled,
+		"annual_entitlement": flt(details["entitled"]),
+		"accrued": accrued,
+		"opening_balance": flt(opening["days"]) if opening else 0.0,
+		"opening_as_of": opening["as_of"] if opening else None,
 		"taken": taken,
 		"adjustment": adjustment,
-		"balance": flt(details["entitled"]) - flt(taken) + flt(adjustment),
+		"balance": balance,
 		"year": reference.year,
 	}
 

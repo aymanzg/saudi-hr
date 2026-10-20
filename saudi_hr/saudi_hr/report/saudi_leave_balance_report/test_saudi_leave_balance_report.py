@@ -27,7 +27,10 @@ class TestSaudiLeaveBalanceReport(FrappeTestCase):
 			)
 		]
 		get_balance.return_value = {
-			"entitled": 26,
+			"entitled": 22,
+			"annual_entitlement": 26,
+			"opening_balance": 10,
+			"accrued": 12,
 			"taken": 4,
 			"balance": 22,
 			"years_of_service": 2.42,
@@ -41,6 +44,8 @@ class TestSaudiLeaveBalanceReport(FrappeTestCase):
 
 		self.assertEqual(len(data), 1)
 		self.assertEqual(data[0]["entitlement"], 26)
+		self.assertEqual(data[0]["opening_balance"], 10)
+		self.assertEqual(data[0]["accrued"], 12)
 		self.assertEqual(data[0]["leave_policy"], "Saudi Leave Policy QA")
 		self.assertEqual(data[0]["policy_name"], "سياسة إجازات الموظف")
 		self.assertEqual(data[0]["policy_source"], "Employee / موظف")

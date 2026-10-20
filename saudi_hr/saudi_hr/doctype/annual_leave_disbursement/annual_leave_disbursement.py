@@ -4,6 +4,7 @@ from frappe import _
 from frappe.utils import date_diff, now_datetime
 
 from saudi_hr.saudi_hr.utils import (
+	get_annual_leave_balance,
 	get_annual_leave_days_taken,
 	get_annual_leave_entitlement_details,
 	get_employee_salary_components,
@@ -66,6 +67,7 @@ class AnnualLeaveDisbursement(Document):
 
         reference_date = self.leave_from_date or f"{self.leave_year}-12-31"
         details = get_annual_leave_entitlement_details(self.employee, reference_date)
+        balance = get_annual_leave_balance(self.employee, reference_date)
         self.leave_days_entitled = details["entitled"]
         self.leave_policy = details["policy"]
         self.leave_policy_assignment = details["assignment"]
@@ -75,7 +77,7 @@ class AnnualLeaveDisbursement(Document):
         # Days already taken this year from Saudi Annual Leave requests
         taken = get_annual_leave_days_taken(self.employee, self.leave_year)
         self.leave_days_taken = taken
-        self.leave_days_balance = self.leave_days_entitled - taken
+        self.leave_days_balance = balance["balance"]
 
         if not self.leave_days_to_pay:
             # Default to leave period duration
@@ -112,20 +114,21 @@ class AnnualLeaveDisbursement(Document):
 
 @frappe.whitelist()
 def get_leave_balance(employee, leave_year):
-    """Return leave entitlement, taken and balance for UI"""
+    """Return accrued leave entitlement, taken and balance for UI"""
     reference_date = f"{leave_year}-12-31"
-    details = get_annual_leave_entitlement_details(employee, reference_date)
-    entitled = details["entitled"]
-    taken = get_annual_leave_days_taken(employee, leave_year)
+    balance = get_annual_leave_balance(employee, reference_date)
 
     return {
-        "entitled": entitled,
-        "taken": taken,
-        "balance": entitled - taken,
-        "years_service": details["years_of_service"],
-        "policy": details["policy"],
-        "policy_name": details["policy_name"],
-        "policy_assignment": details["assignment"],
-        "entitlement_source": details["source_type"],
+        "entitled": balance["balance"],
+        "annual_entitlement": balance.get("annual_entitlement"),
+        "opening_balance": balance.get("opening_balance"),
+        "accrued": balance.get("accrued"),
+        "taken": balance["taken"],
+        "balance": balance["balance"],
+        "years_service": balance["years_of_service"],
+        "policy": balance["policy"],
+        "policy_name": balance["policy_name"],
+        "policy_assignment": balance["assignment"],
+        "entitlement_source": balance["source_type"],
     }
 
