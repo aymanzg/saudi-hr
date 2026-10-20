@@ -8,7 +8,9 @@ class LeaveBalanceAdjustment(Document):
 	def validate(self):
 		if not self.employee:
 			frappe.throw(_("Employee is required / يلزم تحديد الموظف"))
-		if self.adjustment_days is None or flt(self.adjustment_days) == 0:
+		if self.adjustment_days is None:
+			frappe.throw(_("Adjustment days are required / يلزم إدخال أيام التعديل"))
+		if not self.is_opening_balance and flt(self.adjustment_days) == 0:
 			frappe.throw(_("Adjustment days cannot be zero / لا يمكن أن تكون أيام التعديل صفرًا"))
 		status = frappe.db.get_value("Employee", self.employee, "status")
 		if status != "Active":
