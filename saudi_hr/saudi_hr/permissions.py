@@ -1,7 +1,7 @@
 import frappe
 
 
-ELEVATED_ROLES = {"HR Manager", "HR User", "System Manager", "Leave Approver"}
+ELEVATED_ROLES = {"HR Manager", "HR User", "System Manager", "Leave Approver", "General Manager"}
 DEPARTMENT_APPROVER_ROLE = "Department Approver"
 SUPERVISOR_ROLE = "Supervisor"
 # A user with one of these roles sees, in addition to their own records, the
@@ -292,9 +292,12 @@ def has_attendance_location_permission(doc, user=None, permission_type=None):
 	return _branch_permission(doc, user)
 
 
-def get_policy_acknowledgement_query(user=None):
-	return _employee_query("Policy Acknowledgement", user)
+def get_mobile_leave_request_query(user=None):
+	return _employee_or_approver_query("Mobile Leave Request", DIRECT_MANAGER_FIELDS, user)
 
+
+def get_hr_service_request_query(user=None):
+	return _employee_or_approver_query("HR Service Request", DIRECT_MANAGER_FIELDS, user)
 
 def has_policy_acknowledgement_permission(doc, user=None, permission_type=None):
 	return _employee_permission(doc, user)

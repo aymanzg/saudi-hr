@@ -189,6 +189,8 @@ permission_query_conditions = {
 	"Salary Adjustment": "saudi_hr.saudi_hr.permissions.get_salary_adjustment_query",
 	"Maternity Paternity Leave": "saudi_hr.saudi_hr.permissions.get_maternity_paternity_leave_query",
 	"Special Leave": "saudi_hr.saudi_hr.permissions.get_special_leave_query",
+	"Mobile Leave Request": "saudi_hr.saudi_hr.permissions.get_mobile_leave_request_query",
+	"HR Service Request": "saudi_hr.saudi_hr.permissions.get_hr_service_request_query",
 	"Attendance Location": "saudi_hr.saudi_hr.permissions.get_attendance_location_query",
 	"Policy Acknowledgement": "saudi_hr.saudi_hr.permissions.get_policy_acknowledgement_query",
 	"Employee Grievance": "saudi_hr.saudi_hr.permissions.get_employee_grievance_query",

@@ -119,8 +119,8 @@ WORKFLOW_DOCUMENT_TYPES = (
 ROLE_LABELS = {
 	"Supervisor": "المشرف",
 	"Department Approver": "مشرف القسم",
-	"General Manager": "المدير العام",
-	"HR Manager": "مدير الموارد البشرية",
+	"General Manager": "المدير العام / General Manager",
+	"HR Manager": "مدير الموارد البشرية / HR Manager",
 	"HR User": "اخصائي العمليات",
 	"Employee": "موظف",
 	"Employee Self Service": "خدمة ذاتية للموظف",
