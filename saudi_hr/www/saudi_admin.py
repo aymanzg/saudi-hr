@@ -62,6 +62,7 @@ def get_context(context):
 	# those rail items and panels, and the API refuses the rest independently
 	context.admin_panels = visible_panels()
 	context.default_panel = context.admin_panels[0] if context.admin_panels else "dashboard"
+	context.can_access_self_service = True
 
 	# First paint carries real numbers, so the dashboard is never a blank grid.
 	# A failure here must not blank the page, since the JS retries on load.

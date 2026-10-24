@@ -24,3 +24,11 @@ def get_context(context):
 		context.portal_data = get_self_service_portal()
 	except Exception:
 		context.portal_data = {}
+
+try:
+	from saudi_hr.saudi_hr.utils import has_admin_portal_role
+	context.can_access_admin = bool(has_admin_portal_role(frappe.session.user))
+except Exception:
+	context.can_access_admin = False
+
+return context

@@ -5,7 +5,37 @@ import re
 
 import frappe
 from frappe import _
-from frappe.utils import add_days, add_months, add_years, cint, cstr, date_diff, flt, get_last_day, getdate, today
+from frappe.utils import add_days, add_months, add_years, cint, cstr, date_diff, flt, get_last_day, getdate, nowdate, today
+
+
+def has_admin_portal_role(user=None):
+	"""Return True if the user can access the Saudi HR admin portal."""
+	user = user or getattr(frappe.session, "user", None)
+	if not user or user == "Guest":
+		return False
+	if user == "Administrator":
+		return True
+	try:
+		from saudi_hr.saudi_hr.admin_api import ADMIN_PORTAL_ROLES
+
+		return bool(ADMIN_PORTAL_ROLES.intersection(frappe.get_roles(user)))
+	except Exception:
+		roles = set(frappe.get_roles(user))
+		return bool(
+			roles.intersection(
+				{
+					"System Manager",
+					"HR Manager",
+					"HR User",
+					"Department Approver",
+					"Leave Approver",
+					"Accounts Manager",
+					"Supervisor",
+					"General Manager",
+					"Attendance Officer",
+				}
+			)
+		)
 
 
 LEAVE_SCOPE_EMPLOYEE = "Employee / موظف"
