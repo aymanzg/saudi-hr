@@ -284,6 +284,14 @@ def has_saudi_punch_correction_permission(doc, user=None, permission_type=None):
 	return _employee_or_approver_permission(doc, DIRECT_MANAGER_FIELDS, user)
 
 
+def get_saudi_hourly_leave_request_query(user=None):
+	return _employee_or_approver_query("Saudi Hourly Leave Request", DIRECT_MANAGER_FIELDS, user)
+
+
+def has_saudi_hourly_leave_request_permission(doc, user=None, permission_type=None):
+	return _employee_or_approver_permission(doc, DIRECT_MANAGER_FIELDS, user)
+
+
 def get_attendance_location_query(user=None):
 	return _branch_query("Attendance Location", user)
 

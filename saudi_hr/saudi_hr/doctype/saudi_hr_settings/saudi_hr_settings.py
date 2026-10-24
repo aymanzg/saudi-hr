@@ -10,6 +10,8 @@ from frappe.model.document import Document
 from frappe.utils.file_manager import save_file
 from openpyxl import Workbook, load_workbook
 
+from frappe.utils import flt
+
 from saudi_hr.saudi_hr.utils import assert_doctype_permissions, validate_leave_policy_values
 
 
@@ -19,6 +21,7 @@ MAX_IMPORT_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
 class SaudiHRSettings(Document):
 	def validate(self):
+		self.monthly_hour_leave_hours = flt(self.get("monthly_hour_leave_hours") or 0)
 		validate_leave_policy_values(
 			self.annual_leave_years_threshold,
 			self.annual_leave_before_threshold,
@@ -26,6 +29,7 @@ class SaudiHRSettings(Document):
 			self.sick_leave_full_pay_days,
 			self.sick_leave_partial_pay_days,
 			self.sick_leave_partial_pay_percentage,
+			self.monthly_hour_leave_hours,
 		)
 
 

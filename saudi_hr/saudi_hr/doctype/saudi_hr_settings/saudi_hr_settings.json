@@ -238,6 +238,13 @@
    "label": "Partial Pay % / نسبة الأجر الجزئي"
   },
   {
+   "default": "0",
+   "description": "Monthly allowance for hourly leave / الرصيد الشهري لإجازة الساعات",
+   "fieldname": "monthly_hour_leave_hours",
+   "fieldtype": "Float",
+   "label": "Monthly Hourly Leave (Hours) / إجازة الساعات الشهرية (ساعات)"
+  },
+  {
    "fieldname": "contract_section",
    "fieldtype": "Section Break",
    "label": "Contract & Notice Period / العقود وفترة الإشعار"

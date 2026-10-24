@@ -76,7 +76,7 @@ HR_INITIATED_CHAIN = ("Termination Notice",)
 # Doctypes where GM approval is the terminal action: the document is applied
 # the moment the GM approves, so the chain ends on Completed. There is no
 # intermediate "GM Approved" holding state and no "Mark Completed" step.
-AUTO_COMPLETE_ON_GM_APPROVAL = ("Saudi Punch Correction",)
+AUTO_COMPLETE_ON_GM_APPROVAL = ("Saudi Punch Correction", "Saudi Hourly Leave Request")
 
 # The one workflow vocabulary the rest of the app speaks.  Arabic on the desk
 # comes from the label layer, never from these names.
@@ -110,6 +110,7 @@ WORKFLOW_DOCUMENT_TYPES = (
 	"Salary Adjustment",
 	"Saudi Annual Leave",
 	"Saudi Emergency Leave",
+	"Saudi Hourly Leave Request",
 	"Saudi Punch Correction",
 	"Saudi Sick Leave",
 	"Termination Notice",

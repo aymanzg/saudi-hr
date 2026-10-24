@@ -277,6 +277,7 @@ def validate_leave_policy_values(
 	sick_full_days,
 	sick_partial_days,
 	sick_partial_percentage,
+	monthly_hour_leave_hours=0,
 ):
 	"""Keep configurable benefits at or above the Saudi statutory minimums."""
 	threshold = flt(annual_threshold)
@@ -285,7 +286,13 @@ def validate_leave_policy_values(
 	full_days = flt(sick_full_days)
 	partial_days = flt(sick_partial_days)
 	partial_percentage = flt(sick_partial_percentage)
+	hour_hours = flt(monthly_hour_leave_hours)
 
+	if hour_hours < 0:
+		frappe.throw(
+			_("Monthly hourly leave hours cannot be negative.<br>لا يمكن أن يكون رصيد الساعات الشهري سالبًا."),
+			title=_("Invalid Hourly Leave / رصيد ساعات غير صالح"),
+		)
 	if threshold < 1 or threshold > STATUTORY_ANNUAL_THRESHOLD_YEARS:
 		frappe.throw(
 			_(
@@ -365,9 +372,10 @@ def _normalize_leave_policy_values(values):
 		"annual_leave_years_threshold": threshold,
 		"annual_leave_before_threshold": before_days,
 		"annual_leave_after_threshold": after_days,
-		"sick_leave_full_pay_days": full_days,
+			"sick_leave_full_pay_days": full_days,
 		"sick_leave_partial_pay_days": partial_days,
 		"sick_leave_partial_pay_percentage": partial_percentage,
+		"monthly_hour_leave_hours": max(0, flt(values.get("monthly_hour_leave_hours") or 0)),
 	}
 
 
@@ -420,18 +428,19 @@ def _find_leave_policy_assignment(context, reference_date):
 			policy = frappe.db.get_value(
 				"Saudi Leave Policy",
 				assignment.policy,
-				[
-					"name",
-					"policy_name",
-					"company",
-					"enabled",
-					"annual_leave_years_threshold",
-					"annual_leave_before_threshold",
-					"annual_leave_after_threshold",
-					"sick_leave_full_pay_days",
-					"sick_leave_partial_pay_days",
-					"sick_leave_partial_pay_percentage",
-				],
+			[
+				"name",
+				"policy_name",
+				"company",
+				"enabled",
+				"annual_leave_years_threshold",
+				"annual_leave_before_threshold",
+				"annual_leave_after_threshold",
+				"sick_leave_full_pay_days",
+				"sick_leave_partial_pay_days",
+				"sick_leave_partial_pay_percentage",
+				"monthly_hour_leave_hours",
+			],
 				as_dict=True,
 			)
 			if policy and policy.enabled and policy.company == context.company:
@@ -1128,3 +1137,58 @@ def get_sick_leave_pay(employee: str, sick_days_this_year: int) -> dict:
 		return {"rate": partial_pct, "label": f"Partial Pay {partial_pct*100:.0f}% / أجر جزئي"}
 	else:
 		return {"rate": 0.0, "label": "No Pay / بدون أجر"}
+
+
+def get_hourly_leave_balance(employee: str, reference_date: str | None = None, exclude_name: str | None = None) -> dict:
+	"""Monthly hourly leave balance from policy allowance."""
+	from frappe.utils import get_last_day, getdate
+
+	from saudi_hr.saudi_hr.workflow_catalogue import state_bucket
+
+	reference = getdate(reference_date) if reference_date else getdate()
+	details = get_annual_leave_entitlement_details(employee, reference)
+	allowance = flt(details.get("monthly_hour_leave_hours") or 0)
+	month_start = reference.replace(day=1)
+	month_end = get_last_day(reference)
+
+	filters = {
+		"employee": employee,
+		"leave_date": ["between", [month_start, month_end]],
+		"docstatus": ["!=", 2],
+	}
+	rows = frappe.get_all(
+		"Saudi Hourly Leave Request",
+		filters=filters,
+		fields=["name", "total_hours", "docstatus", "workflow_state"],
+		ignore_permissions=True,
+	)
+
+	approved = 0.0
+	pending = 0.0
+	for row in rows:
+		if row.name == exclude_name:
+			continue
+		hours = flt(row.total_hours or 0)
+		if cint(row.docstatus) == 1:
+			approved += hours
+			continue
+		bucket = state_bucket(row.get("workflow_state"))
+		if bucket == "pending":
+			pending += hours
+		elif bucket == "approved":
+			approved += hours
+
+	balance = allowance - approved
+	available = allowance - approved - pending
+	return {
+		"allowance": round(allowance, 2),
+		"approved": round(approved, 2),
+		"pending": round(pending, 2),
+		"balance": round(balance, 2),
+		"available": round(available, 2),
+		"month": reference.month,
+		"year": reference.year,
+		"reference_date": str(reference),
+		"policy_name": details.get("policy_name"),
+		"assignment": details.get("assignment"),
+	}

@@ -195,6 +195,15 @@ LEAVE_REGISTRY = (
 		"workflow_state",
 	),
 	(
+		"Saudi Hourly Leave Request",
+		"Hourly Leave / إجازة بالساعات",
+		"leave_date",
+		"leave_date",
+		"total_hours",
+		None,
+		"workflow_state",
+	),
+	(
 		"Special Leave",
 		"Special Leave / إجازة خاصة",
 		"leave_start_date",
@@ -217,7 +226,8 @@ LEAVE_REGISTRY = (
 # Two entries in the registry are not leave: a visa/service request and a punch
 # correction share the row shape (a per-employee request with a workflow) but
 # carry no leave days, so the day-by-day leave map skips them by name.
-NON_LEAVE_DOCTYPES = ("HR Service Request", "Saudi Punch Correction")
+# Hourly leave is day-based in time but not day-count leave, so skip it too.
+NON_LEAVE_DOCTYPES = ("HR Service Request", "Saudi Punch Correction", "Saudi Hourly Leave Request")
 
 # Employee fields the admin form may write.  Anything not listed is dropped
 # even if the client sends it, so the form cannot reach the salary, bank or
@@ -1084,6 +1094,7 @@ def get_employee_detail(name):
 					"name": record.get("name"),
 					"kind": record.get(entry[5]) if entry[5] else None,
 					"days": flt(record.get(entry[4])) if entry[4] else None,
+					"unit": "hours" if doctype == "Saudi Hourly Leave Request" else "days",
 					"state": _row_state(record),
 					"created_at": str(record.get("creation")) if record.get("creation") else None,
 					"desk_url": desk_route(doctype, record.get("name")),

@@ -21,6 +21,7 @@ class SaudiLeavePolicy(Document):
 		self.sick_leave_full_pay_days = cint(self.sick_leave_full_pay_days)
 		self.sick_leave_partial_pay_days = cint(self.sick_leave_partial_pay_days)
 		self.sick_leave_partial_pay_percentage = flt(self.sick_leave_partial_pay_percentage)
+		self.monthly_hour_leave_hours = flt(self.get("monthly_hour_leave_hours") or 0)
 
 		validate_leave_policy_values(
 			self.annual_leave_years_threshold,
@@ -29,6 +30,7 @@ class SaudiLeavePolicy(Document):
 			self.sick_leave_full_pay_days,
 			self.sick_leave_partial_pay_days,
 			self.sick_leave_partial_pay_percentage,
+			self.monthly_hour_leave_hours,
 		)
 
 		duplicate = frappe.db.exists(

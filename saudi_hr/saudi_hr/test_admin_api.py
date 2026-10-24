@@ -76,6 +76,7 @@ WORKFLOW_DOCTYPES = (
 	"Saudi Emergency Leave",
 	"HR Service Request",
 	"Saudi Punch Correction",
+	"Saudi Hourly Leave Request",
 )
 PLAIN_DOCTYPES = ("Special Leave", "Maternity Paternity Leave")
 

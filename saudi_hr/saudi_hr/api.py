@@ -1073,6 +1073,20 @@ def _build_mobile_leave_doc(employee, profile, request_type, attachments, payloa
 			}
 		)
 
+	if request_type == "hour_leave":
+		if not payload.get("from_time") or not payload.get("to_time"):
+			frappe.throw(_("Please select from and to time."))
+		return frappe.get_doc(
+			{
+				"doctype": "Saudi Hourly Leave Request",
+				**base_fields,
+				"leave_date": payload["start_date"],
+				"from_time": payload.get("from_time"),
+				"to_time": payload.get("to_time"),
+				"reason": payload.get("reason") or "",
+			}
+		)
+
 	if request_type in ("leave_without_pay", "exit_permission", "late_early"):
 		return frappe.get_doc(
 			{
@@ -1711,6 +1725,8 @@ def submit_mobile_leave_request(
 	corrected_time=None,
 	corrected_out_time=None,
 	attachments_json=None,
+	from_time=None,
+	to_time=None,
 ):
 	employee, profile = _require_employee_context()
 	attachments = _load_json_param(attachments_json, default=[])
@@ -1733,6 +1749,8 @@ def submit_mobile_leave_request(
 			"half_day": half_day,
 			"corrected_time": corrected_time,
 			"corrected_out_time": corrected_out_time,
+			"from_time": from_time,
+			"to_time": to_time,
 		},
 	)
 
@@ -1747,8 +1765,8 @@ def submit_mobile_leave_request(
 		"name": doc.name,
 		"workflow_state": doc.get("workflow_state"),
 		"attached_files": attached_files,
-		"message": _("تم حفظ طلب الإجازة بنجاح وهو الآن بانتظار المراجعة."),
-	}
+			"message": _("تم حفظ الطلب بنجاح وهو الآن بانتظار المراجعة."),
+		}
 
 
 HR_SERVICE_REQUEST_TYPES = {
@@ -2054,6 +2072,29 @@ def get_my_requests(limit=30, status=None):
 			"from_date": str(row.attendance_date) if row.attendance_date else None,
 			"to_date": str(row.attendance_date) if row.attendance_date else None,
 			"amount": row.corrected_in_time,
+		})
+
+	for row in frappe.get_all(
+		"Saudi Hourly Leave Request",
+		filters={"employee": employee},
+		fields=["name", "leave_date", "from_time", "to_time", "total_hours", "reason", "workflow_state", "docstatus", "creation"],
+		order_by="creation desc",
+		limit=limit,
+	):
+		rows.append({
+			"name": row.name,
+			"doctype": "Saudi Hourly Leave Request",
+			"doctype_label": "Hourly Leave / إجازة بالساعات",
+			"request_type": "hour_leave",
+			"request_type_label": "Hourly Leave / إجازة بالساعات",
+			"workflow_state": row.workflow_state,
+			"can_submit": _can_submit_draft("Saudi Hourly Leave Request", row.workflow_state),
+			"status_code": _workflow_state_to_status_code(row.workflow_state) if row.workflow_state else _leave_status_code(None, row.docstatus),
+			"creation": str(row.creation),
+			"description": row.reason,
+			"from_date": str(row.leave_date) if row.leave_date else None,
+			"to_date": str(row.leave_date) if row.leave_date else None,
+			"amount": row.total_hours,
 		})
 
 	rows.sort(key=lambda item: item["creation"], reverse=True)

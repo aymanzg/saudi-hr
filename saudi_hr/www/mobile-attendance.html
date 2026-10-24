@@ -103,13 +103,14 @@
 							<div class="saudi-donut-chart__sub" data-i18n-key="days_remaining">يوم متبقي</div>
 						</div>
 					</div>
-					<div class="saudi-leave-list">
-						<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#10b981;"></span><span data-i18n-key="annual_leave">إجازة سنوية</span></div><span id="leave-ann-num">{{ lb.annual }}</span></div>
-						<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#3b82f6;"></span><span data-i18n-key="sick_leave">إجازة مرضية</span></div><span id="leave-sick-num">{{ lb.sick }}</span></div>
-						<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#a855f7;"></span><span data-i18n-key="marriage_leave">إجازة زواج</span></div><span id="leave-marr-num">{{ lb.marriage }}</span></div>
-						<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#9ca3af;"></span><span data-i18n-key="bereavement_leave">إجازة وفاة</span></div><span id="leave-bere-num">{{ lb.bereavement }}</span></div>
-						<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#cbd5e1;"></span><span data-i18n-key="other_leave">إجازات أخرى</span></div><span id="leave-oth-num">{{ lb.other }}</span></div>
-					</div>
+				<div class="saudi-leave-list">
+					<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#10b981;"></span><span data-i18n-key="annual_leave">إجازة سنوية</span></div><span id="leave-ann-num">{{ lb.annual }}</span></div>
+					<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#3b82f6;"></span><span data-i18n-key="sick_leave">إجازة مرضية</span></div><span id="leave-sick-num">{{ lb.sick }}</span></div>
+					<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#a855f7;"></span><span data-i18n-key="marriage_leave">إجازة زواج</span></div><span id="leave-marr-num">{{ lb.marriage }}</span></div>
+					<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#9ca3af;"></span><span data-i18n-key="bereavement_leave">إجازة وفاة</span></div><span id="leave-bere-num">{{ lb.bereavement }}</span></div>
+					<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#cbd5e1;"></span><span data-i18n-key="other_leave">إجازات أخرى</span></div><span id="leave-oth-num">{{ lb.other }}</span></div>
+					<div class="saudi-leave-item"><div class="saudi-leave-item__label"><span class="saudi-leave-item__dot" style="background:#f59e0b;"></span><span data-i18n-key="leave_hour_leave">إجازة بالساعات</span></div><span id="leave-hour-num">{{ (lb.hourly or {}).get('available', (lb.hourly_remaining if lb.hourly_remaining is not none else 0)) }}</span></div>
+				</div>
 				</div>
 			</div>
 		</section>
@@ -312,6 +313,48 @@
 		</div>
 	</section>
 
+	
+	<!-- ============ PANEL: HOUR LEAVE ============ -->
+	<section class="saudi-panel" id="panel-hour-leave">
+		<div class="saudi-section-header">
+			<div class="saudi-section-header__title" data-i18n-key="leave_hour_leave">إجازة بالساعات</div>
+			<div class="saudi-section-header__back" onclick="navigate('requests')">‹ <span data-i18n-key="back">رجوع</span></div>
+		</div>
+		<div class="saudi-form">
+			<div class="saudi-field">
+				<label data-i18n-key="hour_leave_date">تاريخ الإجازة</label>
+				<input type="date" id="hour-leave-date" onchange="refreshHourLeaveContext()">
+			</div>
+			<div class="saudi-field">
+				<label data-i18n-key="hour_leave_from">من الساعة</label>
+				<input type="time" id="hour-leave-from" onchange="calcHourLeaveHours()">
+			</div>
+			<div class="saudi-field">
+				<label data-i18n-key="hour_leave_to">إلى الساعة</label>
+				<input type="time" id="hour-leave-to" onchange="calcHourLeaveHours()">
+			</div>
+			<div class="saudi-field">
+				<label data-i18n-key="hour_leave_total">إجمالي الساعات</label>
+				<div class="saudi-card-lite"><strong id="hour-leave-total">0</strong> <span data-i18n-key="hour_unit">ساعة</span></div>
+			</div>
+			<div class="saudi-field">
+				<label data-i18n-key="hour_leave_balance">رصيد إجازة الساعات</label>
+				<div class="saudi-card-lite" style="display:flex;flex-direction:column;gap:4px;">
+					<div style="display:flex;align-items:center;justify-content:space-between;"><span data-i18n-key="hour_leave_allowance">الرصيد الشهري</span><strong id="hour-leave-allowance">--</strong></div>
+					<div style="display:flex;align-items:center;justify-content:space-between;"><span data-i18n-key="hour_leave_used">المستخدم</span><strong id="hour-leave-used">--</strong></div>
+					<div style="display:flex;align-items:center;justify-content:space-between;"><span data-i18n-key="hour_leave_available">المتاح</span><strong id="hour-leave-available">--</strong></div>
+				</div>
+			</div>
+			<div class="saudi-hint" id="hour-leave-warning" style="display:none;"></div>
+			<div class="saudi-field">
+				<label data-i18n-key="reason_label">مبرر الطلب</label>
+				<textarea id="hour-leave-reason" data-i18n-key="leave_reason_placeholder" placeholder="أضف وصفًا مختصرًا للطلب"></textarea>
+			</div>
+			<button class="saudi-submit-btn" onclick="submitHourLeave()" id="hour-leave-submit-btn" data-i18n-key="submit_request">تقديم الطلب</button>
+		</div>
+	</section>
+
+
 	<!-- ============ PANEL: ATTENDANCE ============ -->
 	<section class="saudi-panel" id="panel-attendance">
 		<div class="saudi-section-header">
@@ -403,6 +446,11 @@
 						<div class="saudi-request-choice__title"><span data-i18n-key="leave_punch_correction">تصحيح البصمة</span></div>
 						<div class="saudi-request-choice__hint" data-i18n-key="new_req_punch_hint">تصحيح وقت الدخول أو الخروج</div>
 					</div>
+					<div class="saudi-request-choice__card" onclick="pickNewRequest('hour-leave')">
+						<div class="saudi-request-choice__icon" style="background:#fef3c7; color:#d97706;">⏱</div>
+						<div class="saudi-request-choice__title"><span data-i18n-key="leave_hour_leave">إجازة بالساعات</span></div>
+						<div class="saudi-request-choice__hint" data-i18n-key="new_req_hour_hint">طلب إجازة لعدد ساعات خلال اليوم</div>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -482,6 +530,17 @@ SAUDI_PANEL_LOADERS["attendance"] = loadAttendanceLog;
 SAUDI_PANEL_LOADERS["punch-correction"] = function() {
 	selectPunchTarget("IN");
 	refreshPunchContext();
+};
+SAUDI_PANEL_LOADERS["hour-leave"] = function() {
+	var d = document.getElementById("hour-leave-date");
+	if (d && !d.value) {
+		var today = new Date();
+		var mm = String(today.getMonth()+1).padStart(2,'0');
+		var dd = String(today.getDate()).padStart(2,'0');
+		d.value = today.getFullYear() + '-' + mm + '-' + dd;
+	}
+	refreshHourLeaveContext();
+	calcHourLeaveHours();
 };
 SAUDI_LANG_RENDERERS.push(function() {
 	if (window.myPortalData) {
@@ -1425,3 +1484,98 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 {% endblock %}
+
+function refreshHourLeaveContext() {
+	var date = document.getElementById("hour-leave-date").value;
+	var aEl = document.getElementById("hour-leave-allowance");
+	var uEl = document.getElementById("hour-leave-used");
+	var avEl = document.getElementById("hour-leave-available");
+	var warn = document.getElementById("hour-leave-warning");
+	if (aEl) aEl.textContent = "…";
+	if (uEl) uEl.textContent = "…";
+	if (avEl) avEl.textContent = "…";
+	if (warn) { warn.style.display = "none"; warn.textContent = ""; }
+	if (!date) {
+		if (aEl) aEl.textContent = "—";
+		if (uEl) uEl.textContent = "—";
+		if (avEl) avEl.textContent = "—";
+		return;
+	}
+	frappe.call({
+		method: "saudi_hr.saudi_hr.doctype.saudi_hourly_leave_request.saudi_hourly_leave_request.get_hourly_leave_context",
+		args: { leave_date: date },
+		callback: function(r) {
+			var c = r.message || {};
+			if (aEl) aEl.textContent = c.allowance != null ? c.allowance : "0";
+			if (uEl) uEl.textContent = (c.approved != null ? c.approved : 0) + (c.pending != null ? c.pending : 0);
+			if (avEl) avEl.textContent = c.available != null ? c.available : "0";
+		}
+	});
+}
+
+function calcHourLeaveHours() {
+	var fromT = document.getElementById("hour-leave-from").value;
+	var toT = document.getElementById("hour-leave-to").value;
+	var totalEl = document.getElementById("hour-leave-total");
+	var warn = document.getElementById("hour-leave-warning");
+	if (!fromT || !toT || !totalEl) return;
+	if (toT <= fromT) {
+		totalEl.textContent = "0";
+		if (warn) { warn.style.display = "block"; warn.textContent = t("hour_leave_window_error") || "Invalid time range"; }
+		return;
+	}
+	var start = fromT.split(":");
+	var end = toT.split(":");
+	var minutes = (parseInt(end[0])*60 + parseInt(end[1])) - (parseInt(start[0])*60 + parseInt(start[1]));
+	if (minutes % 60 !== 0 || minutes < 60) {
+		totalEl.textContent = "0";
+		if (warn) { warn.style.display = "block"; warn.textContent = t("hour_leave_whole_hours") || "Whole hours only (min 1 hour)"; }
+		return;
+	}
+	totalEl.textContent = minutes / 60;
+	if (warn) { warn.style.display = "none"; warn.textContent = ""; }
+}
+
+function submitHourLeave() {
+	var btn = document.getElementById("hour-leave-submit-btn");
+	var date = document.getElementById("hour-leave-date").value;
+	var fromT = document.getElementById("hour-leave-from").value;
+	var toT = document.getElementById("hour-leave-to").value;
+	if (!date) { showToast(t("start_date_required"), "error"); return; }
+	if (!fromT || !toT) { showToast(t("hour_leave_window_error"), "error"); return; }
+	var totalEl = document.getElementById("hour-leave-total");
+	var totalHours = parseFloat(totalEl ? totalEl.textContent : 0);
+	if (!totalHours || totalHours <= 0) { showToast(t("hour_leave_whole_hours"), "error"); return; }
+	var avEl = document.getElementById("hour-leave-available");
+	var available = parseFloat(avEl ? avEl.textContent : 0);
+	if (!isNaN(available) && totalHours > available) { showToast(t("hour_leave_insufficient"), "error"); return; }
+	btn.disabled = true;
+	btn.textContent = t("submitting");
+	var args = {
+		request_type: "hour_leave",
+		start_date: date,
+		end_date: date,
+		reason: document.getElementById("hour-leave-reason").value.trim(),
+		from_time: fromT,
+		to_time: toT
+	};
+	frappe.call({
+		method: "saudi_hr.saudi_hr.api.submit_mobile_leave_request",
+		args: args,
+		callback: function(r) {
+			btn.disabled = false;
+			btn.textContent = t("submit_request");
+			showToast(t("submitted_ok"), "success");
+			document.getElementById("hour-leave-from").value = "";
+			document.getElementById("hour-leave-to").value = "";
+			document.getElementById("hour-leave-reason").value = "";
+			if (totalEl) totalEl.textContent = "0";
+			refreshHourLeaveContext();
+			loadMyRequests();
+		},
+		always: function(r) {
+			finishSubmit(btn, r);
+		}
+	});
+}
+

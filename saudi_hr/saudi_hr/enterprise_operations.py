@@ -72,6 +72,7 @@ MOBILE_LEAVE_REQUEST_LABELS = {
 	"leave_without_pay": "إجازة بدون راتب",
 	"exit_permission": "إذن خروج",
 	"late_early": "تأخر / انصراف مبكر",
+	"hour_leave": "إجازة بالساعات",
 }
 
 HR_SERVICE_REQUEST_LABELS = {
@@ -994,6 +995,39 @@ def get_self_service_portal():
 			"route": "#requests",
 			"created_at": cstr(row.creation),
 		})
+
+	for row in frappe.get_all(
+		"Saudi Hourly Leave Request",
+		filters={"employee": emp},
+		fields=["name", "leave_date", "from_time", "to_time", "total_hours", "workflow_state", "docstatus", "creation"],
+		order_by="creation desc",
+		limit=5,
+	) if _doctype_exists("Saudi Hourly Leave Request") else []:
+		st_bucket = state_bucket(row.workflow_state)
+		st_code = "approved" if st_bucket == "approved" else ("rejected" if st_bucket == "rejected" else "pending")
+		recent_requests.append({
+			"id": row.name,
+			"title": "إجازة بالساعات",
+			"dates": cstr(row.leave_date or ""),
+			"status": "معتمد" if st_code == "approved" else ("مرفوض" if st_code == "rejected" else "قيد المراجعة"),
+			"status_code": st_code,
+			"icon": "🕐",
+			"route": "#requests",
+			"created_at": cstr(row.creation),
+		})
+
+	try:
+		from saudi_hr.saudi_hr.utils import get_hourly_leave_balance
+		hb = get_hourly_leave_balance(emp)
+		leave_balance["hourly"] = {
+			"allowance": hb.get("allowance"),
+			"approved": hb.get("approved"),
+			"pending": hb.get("pending"),
+			"available": hb.get("available"),
+		}
+		leave_balance["hourly_remaining"] = hb.get("available")
+	except Exception:
+		pass
 
 	recent_requests.sort(key=lambda item: item.get("created_at") or "", reverse=True)
 

@@ -1157,7 +1157,7 @@ function renderApprovalList() {
 			+ "<div class='saudi-list-item__tags'>"
 			+ "<span class='saudi-chip saudi-chip--muted'>" + esc(row.name) + "</span>"
 			// a service request has no day count; only show the chip where one exists
-			+ (row.days === null || row.days === undefined ? "" : "<span class='saudi-chip saudi-chip--muted'>" + fmtDays(row.days) + "</span>")
+			+ (row.days === null || row.days === undefined ? "" : "<span class='saudi-chip saudi-chip--muted'>" + fmtDays(row.days, row.unit) + "</span>")
 			+ "</div>"
 			+ "<div style='margin-top:8px;display:flex;justify-content:flex-end;'>" + desk + "</div>"
 			+ "</button>";
@@ -1179,7 +1179,10 @@ function fmtUnit(count, one, many) {
 	return Number(count || 0) + " " + t(Number(count || 0) === 1 ? one : many);
 }
 
-function fmtDays(days) {
+function fmtDays(days, unit) {
+	if (unit === "hours") {
+		return fmtUnit(days, "admin_unit_hour", "admin_unit_hours");
+	}
 	return fmtUnit(days, "admin_unit_day", "admin_unit_days");
 }
 
@@ -1507,7 +1510,7 @@ function renderEmployeeDetail(payload) {
 				+ "<td>" + esc(localizeLabel(row.label)) + (row.kind ? " · " + esc(requestKind(row.kind)) : "") + "</td>"
 				+ "<td style='font-weight:700;' dir='ltr'>" + esc(row.name) + "</td>"
 				+ "<td>" + stateChip(row.state) + "</td>"
-				+ "<td>" + (row.days === null || row.days === undefined ? "—" : fmtDays(row.days)) + "</td>"
+				+ "<td>" + (row.days === null || row.days === undefined ? "—" : fmtDays(row.days, row.unit)) + "</td>"
 				+ "</tr>";
 		}).join("")
 		: "<tr><td colspan='4'>" + esc(t("admin_no_requests")) + "</td></tr>";
