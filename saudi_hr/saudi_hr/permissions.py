@@ -317,3 +317,8 @@ def get_employee_grievance_query(user=None):
 
 def has_employee_grievance_permission(doc, user=None, permission_type=None):
 	return _employee_permission(doc, user)
+
+
+def get_policy_acknowledgement_query(user):
+	"""Permission query for Policy Acknowledgement."""
+	return ""
