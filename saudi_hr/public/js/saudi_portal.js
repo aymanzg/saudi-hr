@@ -1142,6 +1142,10 @@ function serverErrorMessage(err, fallback) {
 	if (err.exc) return String(err.exc).replace(/<[^>]+>/g, '').trim();
 	return fallback;
 }
+function openMonthlyEmployeeAttendanceReport() {
+	window.open("/app/query-report/Team%20Attendance%20Review", "_blank");
+}
+
 function logoutUser() {
 	if (!confirm(t("logout_confirm"))) return;
 	try { localStorage.removeItem(SAUDI_PANEL_STORE_KEY); } catch(e) {}

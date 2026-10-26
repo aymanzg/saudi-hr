@@ -311,21 +311,15 @@
 				<div class="saudi-section-header">
 					<div class="saudi-section-header__title" data-i18n-key="admin_nav_report">التقارير</div>
 				</div>
-				<div class="saudi-table-wrap">
-					<table class="saudi-table">
-						<thead>
-							<tr>
-								<th data-i18n-key="admin_leave_type">نوع الطلب</th>
-								<th style="text-align:center;" data-i18n-key="admin_state_pending">بانتظار الموافقة</th>
-								<th style="text-align:center;" data-i18n-key="admin_state_approved">معتمدة</th>
-								<th style="text-align:center;" data-i18n-key="admin_state_rejected">مرفوضة</th>
-								<th style="text-align:center;" data-i18n-key="admin_state_cancelled">ملغاة</th>
-								<th style="text-align:center;" data-i18n-key="admin_col_total">الإجمالي</th>
-							</tr>
-						</thead>
-						<tbody id="report-rows"></tbody>
-					</table>
-					<p class="saudi-table__note" id="report-note" hidden></p>
+				<div class="saudi-card">
+					<div class="saudi-card__header">
+						<div class="saudi-card__title">تقارير الحضور</div>
+					</div>
+					<div class="saudi-card__body">
+						<button type="button" class="saudi-btn saudi-btn--primary" onclick="openMonthlyEmployeeAttendanceReport()">
+							تقرير الحضور الشهري للموظف
+						</button>
+					</div>
 				</div>
 			</section>
 			{% endif %}
