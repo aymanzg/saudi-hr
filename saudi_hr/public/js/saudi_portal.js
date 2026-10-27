@@ -1146,6 +1146,32 @@ function openMonthlyEmployeeAttendanceReport() {
 	window.open("/app/query-report/Team%20Attendance%20Review", "_blank");
 }
 
+function openEmployeeMonthlyAttendanceSummaryModal() {
+	if (typeof frappe === "undefined") {
+		window.open("/app/query-report/Employee%20Monthly%20Attendance%20Summary", "_blank");
+		return;
+	}
+	var d = new frappe.ui.Dialog({
+		title: __("Employee Monthly Attendance Summary / تقرير الحضور الشهري للموظف"),
+		fields: [
+			{ fieldname: "employee", label: __("Employee / الموظف"), fieldtype: "Link", options: "Employee", reqd: 1 },
+			{ fieldname: "from_date", label: __("From Date / من تاريخ"), fieldtype: "Date", reqd: 1, default: frappe.datetime.month_start() },
+			{ fieldname: "to_date", label: __("To Date / إلى تاريخ"), fieldtype: "Date", reqd: 1, default: frappe.datetime.month_end() }
+		],
+		primary_action_label: __("Open Report / فتح التقرير"),
+		primary_action: function(values) {
+			if (!values.employee || !values.from_date || !values.to_date) {
+				frappe.msgprint(__("Please fill all required fields / يرجى تعبئة الحقول المطلوبة"));
+				return;
+			}
+			var url = "/app/query-report/Employee%20Monthly%20Attendance%20Summary?employee=" + encodeURIComponent(values.employee) + "&from_date=" + encodeURIComponent(values.from_date) + "&to_date=" + encodeURIComponent(values.to_date);
+			window.open(url, "_blank");
+			d.hide();
+		}
+	});
+	d.show();
+}
+
 function logoutUser() {
 	if (!confirm(t("logout_confirm"))) return;
 	try { localStorage.removeItem(SAUDI_PANEL_STORE_KEY); } catch(e) {}

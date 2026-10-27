@@ -315,9 +315,12 @@
 					<div class="saudi-card__header">
 						<div class="saudi-card__title">تقارير الحضور</div>
 					</div>
-					<div class="saudi-card__body">
-						<button type="button" class="saudi-btn saudi-btn--primary" onclick="openMonthlyEmployeeAttendanceReport()">
-							تقرير الحضور الشهري للموظف
+					<div class="saudi-card__body" style="display:flex;flex-direction:column;gap:10px;">
+						<button type="button" class="saudi-btn saudi-btn--primary" onclick="openEmployeeMonthlyAttendanceSummaryModal()">
+							تقرير الحضور الشهري للموظف (ملخص + تفاصيل)
+						</button>
+						<button type="button" class="saudi-btn" onclick="openMonthlyEmployeeAttendanceReport()">
+							مراجعة حضور الفريق (يومي)
 						</button>
 					</div>
 				</div>

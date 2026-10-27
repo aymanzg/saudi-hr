@@ -1,0 +1,77 @@
+{
+ "add_total_row": 0,
+ "creation": "2026-10-27 00:00:00.000000",
+ "disabled": 0,
+ "doctype": "Report",
+ "filters": [
+  {
+   "default": "",
+   "fieldname": "employee",
+   "fieldtype": "Link",
+   "label": "Employee / \u0627\u0644\u0645\u0648\u0638\u0641",
+   "options": "Employee",
+   "reqd": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date / \u0645\u0646 \u062a\u0627\u0631\u064a\u062e",
+   "reqd": 1
+  },
+  {
+   "default": "Today",
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date / \u0625\u0644\u0649 \u062a\u0627\u0631\u064a\u062e",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company / \u0627\u0644\u0634\u0631\u0643\u0629",
+   "options": "Company"
+  },
+  {
+   "fieldname": "department",
+   "fieldtype": "Link",
+   "label": "Department / \u0627\u0644\u0642\u0633\u0645",
+   "options": "Department"
+  }
+ ],
+ "is_standard": "Yes",
+ "json": "{}",
+ "letter_head": "",
+ "modified": "2026-10-27 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Saudi HR",
+ "name": "Employee Monthly Attendance Summary",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Saudi Daily Attendance",
+ "report_name": "Employee Monthly Attendance Summary",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "HR Manager"
+  },
+  {
+   "role": "HR User"
+  },
+  {
+   "role": "Department Approver"
+  },
+  {
+   "role": "Leave Approver"
+  },
+  {
+   "role": "General Manager"
+  },
+  {
+   "role": "Supervisor"
+  }
+ ]
+}
