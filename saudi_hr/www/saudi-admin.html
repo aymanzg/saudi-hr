@@ -315,13 +315,64 @@
 					<div class="saudi-card__header">
 						<div class="saudi-card__title">تقارير الحضور</div>
 					</div>
-					<div class="saudi-card__body" style="display:flex;flex-direction:column;gap:10px;">
-						<button type="button" class="saudi-btn saudi-btn--primary" onclick="window.open('/app/query-report/Employee%20Monthly%20Attendance%20Summary','_blank')">
+					<div class="saudi-card__body" style="display:flex;flex-wrap:wrap;gap:10px;">
+						<button type="button" class="saudi-btn saudi-btn--primary" onclick="showInlineAttendanceReport()">
 							تقرير الحضور الشهري للموظف (ملخص + تفاصيل)
 						</button>
 						<button type="button" class="saudi-btn" onclick="openMonthlyEmployeeAttendanceReport()">
 							مراجعة حضور الفريق (يومي)
 						</button>
+					</div>
+				</div>
+				<div class="saudi-card" id="inline-attendance-report-card" style="display:none;">
+					<div class="saudi-card__header">
+						<div class="saudi-card__title">تقرير الحضور الشهري للموظف (ملخص + تفاصيل)</div>
+						<button type="button" class="saudi-btn" onclick="hideInlineAttendanceReport()">إغلاق</button>
+					</div>
+					<div class="saudi-card__body">
+						<form id="inline-att-report-form" class="saudi-toolbar" style="flex-wrap:wrap;align-items:flex-end;" onsubmit="return false;">
+							<div class="saudi-field">
+								<label>الموظف</label>
+								<select id="inline-att-employee" class="saudi-select" style="min-width:220px;"></select>
+							</div>
+							<div class="saudi-field">
+								<label>من تاريخ</label>
+								<input type="date" id="inline-att-from" class="saudi-input">
+							</div>
+							<div class="saudi-field">
+								<label>إلى تاريخ</label>
+								<input type="date" id="inline-att-to" class="saudi-input">
+							</div>
+							<div style="display:flex;gap:8px;align-self:flex-end;margin-bottom:16px;">
+								<button type="button" class="saudi-btn saudi-btn--primary" onclick="runInlineAttendanceReport()">عرض التقرير</button>
+								<button type="button" class="saudi-btn" onclick="exportInlineAttendanceReportPdf()">طباعة / PDF</button>
+							</div>
+						</form>
+						<div id="inline-att-summary" class="saudi-stats" style="flex-wrap:wrap;"></div>
+						<div class="saudi-table-wrap" style="margin-top:12px;">
+							<table class="saudi-table">
+								<thead>
+									<tr>
+										<th>التاريخ</th>
+										<th>اليوم</th>
+										<th>الحالة</th>
+										<th>نوع اليوم</th>
+										<th>الوردية</th>
+										<th>الموقع</th>
+										<th>دخول</th>
+										<th>خروج</th>
+										<th>ساعات العمل</th>
+										<th>دقائق التأخر</th>
+										<th>الخروج المبكر</th>
+										<th>إضافي</th>
+										<th>نوع الإجازة</th>
+										<th>ملاحظات</th>
+									</tr>
+								</thead>
+								<tbody id="inline-att-rows"></tbody>
+							</table>
+							<p id="inline-att-note" class="saudi-table__note" hidden></p>
+						</div>
 					</div>
 				</div>
 			</section>

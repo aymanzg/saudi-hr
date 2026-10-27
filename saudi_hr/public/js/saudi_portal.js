@@ -1198,3 +1198,98 @@ function logoutUser() {
 		window.location.href = "/api/method/web_logout";
 	}
 }
+
+function showInlineAttendanceReport() {
+	var card = document.getElementById("inline-attendance-report-card");
+	if (card) card.style.display = "block";
+	var fromEl = document.getElementById("inline-att-from");
+	var toEl = document.getElementById("inline-att-to");
+	if (fromEl && !fromEl.value) {
+		var d = new Date();
+		var first = new Date(d.getFullYear(), d.getMonth(), 1);
+		var last = new Date(d.getFullYear(), d.getMonth()+1, 0);
+		fromEl.value = first.toISOString().slice(0,10);
+		toEl.value = last.toISOString().slice(0,10);
+	}
+	var empSel = document.getElementById("inline-att-employee");
+	if (empSel && empSel.options.length === 0) {
+		frappe.call({
+			method: "frappe.client.get_list",
+			args: { doctype: "Employee", fields: ["name", "employee_name"], filters: {"status": "Active"}, limit_page_length: 1000, order_by: "employee_name asc" },
+			callback: function(r) {
+				var rows = r.message || [];
+				rows.forEach(function(e) {
+					var opt = document.createElement("option");
+					opt.value = e.name;
+					opt.textContent = e.employee_name ? (e.employee_name + " - " + e.name) : e.name;
+					empSel.appendChild(opt);
+				});
+			}
+		});
+	}
+	try { document.getElementById("panel-report").scrollIntoView({behavior:"smooth", block:"start"}); } catch(e){}
+}
+
+function hideInlineAttendanceReport() {
+	var card = document.getElementById("inline-attendance-report-card");
+	if (card) card.style.display = "none";
+}
+
+function runInlineAttendanceReport() {
+	var emp = document.getElementById("inline-att-employee").value;
+	var fromDate = document.getElementById("inline-att-from").value;
+	var toDate = document.getElementById("inline-att-to").value;
+	var tbody = document.getElementById("inline-att-rows");
+	var sumDiv = document.getElementById("inline-att-summary");
+	var note = document.getElementById("inline-att-note");
+	if (!emp) { showToast(t("select_employee") || "Select Employee", "error"); return; }
+	if (!fromDate || !toDate) { showToast("Select dates", "error"); return; }
+	tbody.innerHTML = '<tr><td colspan="14">...</td></tr>';
+	if (sumDiv) sumDiv.innerHTML = '';
+	if (note) { note.hidden = true; note.textContent = ''; }
+	frappe.call({
+		method: "frappe.desk.query_report.run",
+		args: { report_name: "Employee Monthly Attendance Summary", filters: {employee: emp, from_date: fromDate, to_date: toDate} },
+		callback: function(r) {
+			var res = r.message || {};
+			var result = res.result || [];
+			var summary = res.report_summary || [];
+			if (sumDiv) {
+				sumDiv.innerHTML = '';
+				summary.forEach(function(s) {
+					var div = document.createElement("div");
+					div.className = "saudi-stat";
+					div.innerHTML = '<div class="saudi-stat__label">' + (s.label || '') + '</div><div class="saudi-stat__value">' + (s.value !== undefined && s.value !== null ? s.value : '-') + '</div>';
+					sumDiv.appendChild(div);
+				});
+			}
+			tbody.innerHTML = '';
+			if (!result.length) {
+				if (note) { note.hidden = false; note.textContent = t("no_data") || "No data"; }
+				return;
+			}
+			result.forEach(function(row) {
+				var tr = document.createElement("tr");
+				tr.innerHTML = '<td>' + (row.attendance_date||'') + '</td><td>' + (row.day||'') + '</td><td>' + (row.status||'') + '</td><td>' + (row.day_type||'') + '</td><td>' + (row.shift_type||'') + '</td><td>' + (row.attendance_location||'') + '</td><td>' + (row.in_time||'') + '</td><td>' + (row.out_time||'') + '</td><td>' + (row.worked_hours||0) + '</td><td>' + (row.late_minutes||0) + '</td><td>' + (row.early_exit_minutes||0) + '</td><td>' + (row.overtime_hours||0) + '</td><td>' + (row.leave_type||'') + '</td><td>' + (row.remarks||'') + '</td>';
+				tbody.appendChild(tr);
+			});
+		}
+	});
+}
+
+function exportInlineAttendanceReportPdf() {
+	var emp = document.getElementById("inline-att-employee").value;
+	var fromDate = document.getElementById("inline-att-from").value;
+	var toDate = document.getElementById("inline-att-to").value;
+	if (!emp || !fromDate || !toDate) {
+		showToast(t("select_employee") || "Select Employee", "error");
+		return;
+	}
+	var url = "/api/method/frappe.desk.query_report.export_query?";
+	url += "report_name=" + encodeURIComponent("Employee Monthly Attendance Summary");
+	url += "&file_format_type=PDF";
+	url += "&filters=" + encodeURIComponent(JSON.stringify({employee: emp, from_date: fromDate, to_date: toDate}));
+	url += "&visible_idx=" + encodeURIComponent("[]");
+	window.open(url, "_blank");
+}
+
