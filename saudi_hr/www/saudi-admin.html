@@ -3336,15 +3336,15 @@ function runInlineAttendanceReport() {
 	});
 }
 function exportInlineAttendanceReportPdf() {
-	if (typeof frappe === 'undefined') return;
 	var emp = document.getElementById("inline-att-employee").value;
 	var fromDate = document.getElementById("inline-att-from").value;
 	var toDate = document.getElementById("inline-att-to").value;
 	if (!emp || !fromDate || !toDate) {
-		frappe.msgprint(__("Please select Employee and dates"));
+		if (typeof frappe !== 'undefined' && frappe.msgprint) frappe.msgprint(__("Please select Employee and dates"));
+		else alert("Select Employee and dates");
 		return;
 	}
-	var url = "/api/method/frappe.desk.query_report.export_query?report_name=" + encodeURIComponent("Employee Monthly Attendance Summary") + "&file_format_type=PDF&filters=" + encodeURIComponent(JSON.stringify({employee: emp, from_date: fromDate, to_date: toDate})) + "&visible_idx=" + encodeURIComponent("[]");
+	var url = "/app/query-report/Employee%20Monthly%20Attendance%20Summary?employee=" + encodeURIComponent(emp) + "&from_date=" + encodeURIComponent(fromDate) + "&to_date=" + encodeURIComponent(toDate);
 	window.open(url, "_blank");
 }
 </script>
