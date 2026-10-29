@@ -280,9 +280,12 @@
 
 				<div class="saudi-section-header" style="margin-top:22px;">
 					<div class="saudi-section-header__title" data-i18n-key="admin_attendance_daily_board">حضور اليوم</div>
-					<div class="saudi-field" style="display:flex;gap:8px;align-items:center;margin:0;">
-						<label for="attendance-roster-day" data-i18n-key="admin_attendance_day">التاريخ</label>
-						<input type="date" id="attendance-roster-day" class="saudi-input" dir="ltr">
+					<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+						<button type="button" class="saudi-btn" onclick="openMissingCheckoutViolationsModal()">تنبيهات عدم تسجيل الخروج</button>
+						<div class="saudi-field" style="display:flex;gap:8px;align-items:center;margin:0;">
+							<label for="attendance-roster-day" data-i18n-key="admin_attendance_day">التاريخ</label>
+							<input type="date" id="attendance-roster-day" class="saudi-input" dir="ltr">
+						</div>
 					</div>
 				</div>
 				<div class="saudi-stats" id="attendance-roster-totals"></div>

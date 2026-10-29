@@ -1293,3 +1293,67 @@ function exportInlineAttendanceReportPdf() {
 	window.open(url, "_blank");
 }
 
+
+function openMissingCheckoutViolationsModal() {
+	if (typeof frappe === "undefined" || !frappe.ui || typeof frappe.ui.Dialog !== "function") {
+		alert("فقط في بيئة Frappe");
+		return;
+	}
+	var d = new frappe.ui.Dialog({
+		title: __("Missing Check-Out Violations / تنبيهات عدم تسجيل الخروج"),
+		size: "large",
+		fields: [
+			{ fieldname: "from_date", label: __("From Date / من تاريخ"), fieldtype: "Date", default: frappe.datetime.get_today() },
+			{ fieldname: "to_date", label: __("To Date / إلى تاريخ"), fieldtype: "Date", default: frappe.datetime.get_today() },
+			{ fieldname: "company", label: __("Company / الشركة"), fieldtype: "Link", options: "Company" },
+			{ fieldname: "department", label: __("Department / القسم"), fieldtype: "Link", options: "Department" },
+			{ fieldname: "results", label: "", fieldtype: "HTML" }
+		],
+		primary_action_label: __("Search / بحث"),
+		primary_action: function(values) {
+			loadMissingCheckoutViolations(d, values);
+		}
+	});
+	d.show();
+	d.fields_dict.results.$wrapper.html('<div class="text-muted">Use Search to load violations</div>');
+}
+
+function loadMissingCheckoutViolations(d, values) {
+	values = values || d.get_values();
+	var wrapper = d.fields_dict.results.$wrapper;
+	wrapper.html('<div>Loading...</div>');
+	frappe.call({
+		method: "saudi_hr.saudi_hr.admin_api.get_missing_checkout_violations",
+		args: values,
+		callback: function(r) {
+			var rows = r.message || [];
+			if (!rows.length) {
+				wrapper.html('<div class="text-muted">No missing check-out found</div>');
+				return;
+			}
+			var html = '<table class="table table-bordered"><thead><tr><th>Employee</th><th>Date</th><th>In Time</th><th>Shift</th><th>Dept</th><th>Action</th></tr></thead><tbody>';
+			rows.forEach(function(row, idx) {
+				html += '<tr><td>' + (row.employee_name || row.employee) + ' (' + row.employee + ')</td><td>' + (row.attendance_date || '') + '</td><td>' + (row.in_time || '') + '</td><td>' + (row.shift_type || '') + '</td><td>' + (row.department || '') + '</td><td><button class="btn btn-xs btn-primary" data-idx="' + idx + '">رفع إجراء تأديبي</button></td></tr>';
+			});
+			html += '</tbody></table>';
+			wrapper.html(html);
+			wrapper.find("button").on("click", function() {
+				var i = $(this).data("idx");
+				var rec = rows[i];
+				openDisciplinaryFromMissingCheckout(rec);
+			});
+		}
+	});
+}
+
+function openDisciplinaryFromMissingCheckout(rec) {
+	var url = "/app/disciplinary-procedure/new";
+	var qs = [];
+	qs.push("employee=" + encodeURIComponent(rec.employee));
+	qs.push("incident_date=" + encodeURIComponent(rec.attendance_date));
+	qs.push("violation_type=" + encodeURIComponent("Unauthorised Absence / غياب بدون إذن"));
+	qs.push("reported_by=" + encodeURIComponent(frappe.session.user));
+	var desc = "عدم تسجيل الخروج (Forgot to check-out) / Missing check-out punch on " + (rec.attendance_date || "") + ". First IN: " + (rec.in_time || "") + (rec.shift_type ? ". Shift: " + rec.shift_type : "") + ".";
+	qs.push("incident_description=" + encodeURIComponent(desc));
+	window.open(url + "?" + qs.join("&"), "_blank");
+}

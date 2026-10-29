@@ -3817,3 +3817,77 @@ def settle_final_settlement(name=None, exit_clearance=None):
 		"desk_url": desk_route("Final Settlement SLA", sla.name),
 	}
 
+
+
+@frappe.whitelist()
+def get_missing_checkout_violations(date=None, from_date=None, to_date=None, company=None, department=None, branch=None):
+	"""Return employees with missing check-out (open shift) for given date/range."""
+	assert_portal_access()
+	user = frappe.session.user
+	roles = set(frappe.get_roles(user))
+	allowed = {"System Manager", "HR Manager", "HR User"}
+	if not (allowed.intersection(roles) or user == "Administrator"):
+		frappe.throw(_("Only HR/HR Manager/HR User can access missing check-out violations."), frappe.PermissionError)
+
+	from frappe.utils import getdate, nowdate, add_days
+
+	if from_date and to_date:
+		start = getdate(from_date)
+		end = getdate(to_date)
+	else:
+		d = getdate(date) if date else getdate(nowdate())
+		start = d
+		end = d
+
+	if start > end:
+		start, end = end, start
+
+	filters = {"status": "Active"}
+	if company:
+		filters["company"] = company
+	if department:
+		filters["department"] = department
+	if branch:
+		filters["branch"] = branch
+
+	employees = frappe.get_all(
+		"Employee",
+		filters=filters,
+		fields=["name", "employee_name", "company", "department", "branch", "designation"],
+		order_by="employee_name asc",
+	)
+
+	result = []
+	for emp in employees:
+		try:
+			views = _attendance_days({"from_date": str(start), "to_date": str(end)}, emp.name)
+		except Exception:
+			continue
+		for view in views:
+			key = view.get("status_key") or ""
+			if key in ("weekly_off", "holiday", "on_leave"):
+				continue
+			if view.get("future"):
+				continue
+			in_time = view.get("in_time")
+			out_time = view.get("out_time")
+			if in_time and not out_time:
+				result.append(
+					{
+						"employee": emp.name,
+						"employee_name": emp.employee_name,
+						"company": emp.company,
+						"department": emp.department,
+						"branch": emp.branch,
+						"designation": emp.designation,
+						"attendance_date": view.get("date"),
+						"in_time": in_time,
+						"out_time": out_time,
+						"shift_type": view.get("shift_type") or "",
+						"attendance_location": view.get("attendance_location") or "",
+						"status_key": key,
+						"status": view.get("status") or "",
+					}
+				)
+
+	return result
