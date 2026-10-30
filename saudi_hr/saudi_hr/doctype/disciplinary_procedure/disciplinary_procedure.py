@@ -1,3 +1,4 @@
+from frappe.utils import now_datetime
 import frappe
 from frappe.model.document import Document
 from frappe import _
@@ -138,3 +139,38 @@ def get_prior_warnings(employee):
         limit=10,
     )
     return {"count": len(records), "records": records}
+
+
+	def after_insert(self):
+		try:
+			self.create_violation_notification()
+		except Exception:
+			pass
+
+	def on_update(self):
+		try:
+			if self.has_value_changed("status"):
+				self.create_violation_notification()
+		except Exception:
+			pass
+
+	def create_violation_notification(self):
+		if not self.employee:
+			return
+		user_id = frappe.db.get_value("Employee", self.employee, "user_id")
+		if not user_id:
+			return
+		subject = _("Disciplinary Procedure / إجراء تأديبي: {0}").format(self.name)
+		message = _("You have a disciplinary procedure: {0}<br>Violation Type: {1}<br>Status: {2}").format(
+			self.name, self.violation_type or "", self.status or ""
+		)
+		if not frappe.db.exists("Notification Log", {"document_type": self.doctype, "document_name": self.name, "for_user": user_id}):
+			frappe.get_doc({
+				"doctype": "Notification Log",
+				"subject": subject,
+				"email_content": message,
+				"for_user": user_id,
+				"document_type": self.doctype,
+				"document_name": self.name,
+				"type": "Alert"
+			}).insert(ignore_permissions=True)

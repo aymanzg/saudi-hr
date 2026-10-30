@@ -2315,3 +2315,36 @@ def add_payroll_adjustment_item(payroll_name, employee, item_type, description, 
 	doc.save()
 
 	return {"status": "ok"}
+
+
+@frappe.whitelist()
+def acknowledge_disciplinary_procedure(disciplinary_name, consent="أقر بالاطلاع والفهم"):
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Login required"))
+	consent = cstr(consent).strip()
+	if consent != "أقر بالاطلاع والفهم":
+		frappe.throw(_("Type the acknowledgement phrase exactly: أقر بالاطلاع والفهم"))
+	doc = frappe.get_doc("Disciplinary Procedure", disciplinary_name)
+	emp = frappe.db.get_value("Employee", {"user_id": frappe.session.user}, "name")
+	if not emp or doc.employee != emp:
+		frappe.throw(_("Not authorized"), frappe.PermissionError)
+	if doc.get("acknowledged_by_employee"):
+		return {"ok": True, "already": True}
+	doc.db_set("acknowledged_by_employee", 1)
+	doc.db_set("acknowledged_on", now_datetime())
+	return {"ok": True}
+
+
+@frappe.whitelist()
+def object_to_disciplinary_procedure(disciplinary_name, objection):
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Login required"))
+	doc = frappe.get_doc("Disciplinary Procedure", disciplinary_name)
+	emp = frappe.db.get_value("Employee", {"user_id": frappe.session.user}, "name")
+	if not emp or doc.employee != emp:
+		frappe.throw(_("Not authorized"), frappe.PermissionError)
+	if not cstr(objection).strip():
+		frappe.throw(_("Objection details required"))
+	doc.db_set("employee_objection", cstr(objection))
+	doc.db_set("objection_date", now_datetime())
+	return {"ok": True}
