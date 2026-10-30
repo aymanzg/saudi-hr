@@ -213,6 +213,7 @@ class SaudiMonthlyPayroll(Document):
 				flt(getattr(r, "absence_deduction", 0.0))
 				+ flt(getattr(r, "late_deduction", 0.0))
 				+ flt(getattr(r, "penalty_deduction", 0.0))
+				+ flt(getattr(r, "violation_deduction", 0.0))
 				+ flt(getattr(r, "advance_deduction", 0.0))
 				+ flt(getattr(r, "other_deductions", 0.0))
 				for r in self.employees
@@ -476,6 +477,10 @@ def apply_attendance_deductions(doc_name: str):
 		row.absence_deduction = result["absence_deduction"]
 		row.late_deduction = result["late_deduction"]
 		row.penalty_deduction = result["penalty_deduction"]
+		try:
+			row.violation_deduction = flt(result.get("penalty_deduction", 0))
+		except Exception:
+			row.violation_deduction = row.penalty_deduction
 		row.attendance_flags = result["flags"]
 		changed += 1
 
@@ -645,7 +650,10 @@ def _build_attendance_deductions(doc, period):
 		absence_deduction = round(payable_absence * daily_wage, 2)
 
 		penalty_days = _approved_penalty_days(row.employee, period["from"], period["to"])
-		penalty_raw = round(penalty_days * daily_wage, 2)
+		violation_days, violation_refs = _get_violation_deductions(row.employee, period["from"], period["to"])
+		# Separate violation deduction; merge into penalty calculation but tracked separately
+		penalty_days_total = flt(penalty_days) + flt(violation_days)
+		penalty_raw = round(penalty_days_total * daily_wage, 2)
 		penalty_cap = round(PENALTY_MONTHLY_CAP_DAYS * daily_wage, 2)
 		penalty_deduction = round(min(penalty_raw, penalty_cap), 2) if daily_wage else 0.0
 
@@ -669,11 +677,11 @@ def _build_attendance_deductions(doc, period):
 				"approved_absence_days": round(flt(approved_absence), 2),
 				"absence_deduction": absence_deduction,
 				"late_deduction": late_deduction,
-				"penalty_days": round(penalty_days, 2),
+				"penalty_days": round(penalty_days_total, 2),
 				"penalty_deduction": penalty_deduction,
 				"flags": "\n".join(
 					_attendance_flags(
-						counts, payable_absence, penalty_days, penalty_raw, penalty_cap, daily_wage, late_deduction
+						counts, payable_absence, penalty_days_total, penalty_raw, penalty_cap, daily_wage, late_deduction
 					)
 				),
 			}
@@ -3541,3 +3549,31 @@ def auto_create_employment_contracts(
 				if pf and pt and ef and et:
 					if getdate(pf) <= getdate(et) and getdate(ef) <= getdate(pt):
 						frappe.throw(_("Payroll period overlaps with submitted payroll: {0}").format(ex.name))
+
+
+def _get_violation_deductions(employee, period_from, period_to):
+	"""Get violation deductions from Disciplinary Procedure linked to catalog."""
+	if not frappe.db.exists("DocType", "Disciplinary Procedure"):
+		return 0.0, []
+	meta = frappe.get_meta("Disciplinary Procedure")
+	fields = ["name", "penalty_type", "penalty_days", "incident_date", "violation_catalog"]
+	if meta.has_field("violation_catalog"):
+		pass
+	filters = [
+		["employee", "=", employee],
+		["status", "in", list(DISCIPLINARY_APPROVED_STATUSES)],
+		["incident_date", ">=", period_from],
+		["incident_date", "<=", period_to],
+		["docstatus", "<", 2],
+	]
+	if meta.has_field("hr_manager_approval"):
+		filters.append(["hr_manager_approval", "=", 1])
+	procedures = frappe.get_all("Disciplinary Procedure", filters=filters, fields=fields)
+	days = 0.0
+	refs = []
+	for p in procedures:
+		d = _procedure_penalty_days(p)
+		if d > 0:
+			days += d
+			refs.append(p.name)
+	return days, refs

@@ -130,6 +130,12 @@
    "reqd": 1
   },
   {
+   "fieldname": "violation_catalog",
+   "fieldtype": "Link",
+   "label": "Violation Catalog / لائحة المخالفات",
+   "options": "Disciplinary Violation Catalog"
+  },
+  {
    "default": "Draft / مسودة",
    "fieldname": "status",
    "fieldtype": "Select",

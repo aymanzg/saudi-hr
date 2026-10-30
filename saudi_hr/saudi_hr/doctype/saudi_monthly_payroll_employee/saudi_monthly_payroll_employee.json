@@ -16,11 +16,11 @@
   "department",
   "cost_center",
   "nationality",
-   "working_days",
-   "absence_days",
-   "late_hours",
-   "attendance_flags",
-   "salary_section",
+  "working_days",
+  "absence_days",
+  "late_hours",
+  "attendance_flags",
+  "salary_section",
   "basic_salary",
   "housing_allowance",
   "transport_allowance",
@@ -37,7 +37,7 @@
   "other_deductions",
   "total_deductions",
   "overtime_addition",
-    "loan_installments",
+  "loan_installments",
   "net_salary"
  ],
  "fields": [
@@ -214,13 +214,13 @@
    "options": "currency",
    "read_only": 1
   },
-    {
-     "fieldname": "loan_deduction",
-     "fieldtype": "Currency",
-     "label": "Loan Deduction / خصم القرض",
-     "options": "currency",
-     "read_only": 1
-    },
+  {
+   "fieldname": "loan_deduction",
+   "fieldtype": "Currency",
+   "label": "Loan Deduction / خصم القرض",
+   "options": "currency",
+   "read_only": 1
+  },
   {
    "fieldname": "absence_deduction",
    "fieldtype": "Currency",
@@ -243,25 +243,31 @@
    "read_only": 1
   },
   {
+   "fieldname": "violation_deduction",
+   "fieldtype": "Currency",
+   "label": "Violation Deduction / خصم مخالفة",
+   "default": "0"
+  },
+  {
    "fieldname": "advance_deduction",
    "fieldtype": "Currency",
    "label": "Advance Deduction / خصم السلف والاستقطاعات",
    "options": "currency",
    "read_only": 1
   },
-    {
-     "fieldname": "other_deductions",
-     "fieldtype": "Currency",
-     "label": "Other Deductions / خصومات أخرى",
-     "options": "currency"
-    },
-    {
-     "fieldname": "total_deductions",
-     "fieldtype": "Currency",
-     "label": "Total Deductions / إجمالي الخصومات",
-     "options": "currency",
-     "read_only": 1
-    },
+  {
+   "fieldname": "other_deductions",
+   "fieldtype": "Currency",
+   "label": "Other Deductions / خصومات أخرى",
+   "options": "currency"
+  },
+  {
+   "fieldname": "total_deductions",
+   "fieldtype": "Currency",
+   "label": "Total Deductions / إجمالي الخصومات",
+   "options": "currency",
+   "read_only": 1
+  },
   {
    "fieldname": "overtime_addition",
    "fieldtype": "Currency",
@@ -269,12 +275,12 @@
    "options": "currency",
    "read_only": 1
   },
-    {
-     "fieldname": "loan_installments",
-     "fieldtype": "Small Text",
-     "label": "Loan Installments / أقساط القرض",
-     "read_only": 1
-    },
+  {
+   "fieldname": "loan_installments",
+   "fieldtype": "Small Text",
+   "label": "Loan Installments / أقساط القرض",
+   "read_only": 1
+  },
   {
    "fieldname": "net_salary",
    "fieldtype": "Currency",
