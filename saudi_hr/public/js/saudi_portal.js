@@ -791,8 +791,16 @@ var LABELS = {
 		admin_unit_days: "days",
 		admin_unit_hour: "hour",
 		admin_unit_hours: "hours",
+		company_policy: "Company Policy",
+		company_policy_sub: "View company rules & policies",
+		view_policy: "View / Download",
+		no_policies: "No policy available",
 		admin_unit_hour: "hour",
 		admin_unit_hours: "hours",
+		company_policy: "Company Policy",
+		company_policy_sub: "View company rules & policies",
+		view_policy: "View / Download",
+		no_policies: "No policy available",
 		admin_unit_minute: "minute",
 		admin_unit_minutes: "minutes",
 		admin_col_total: "Total",
@@ -1356,4 +1364,45 @@ function openDisciplinaryFromMissingCheckout(rec) {
 	var desc = "عدم تسجيل الخروج (Forgot to check-out) / Missing check-out punch on " + (rec.attendance_date || "") + ". First IN: " + (rec.in_time || "") + (rec.shift_type ? ". Shift: " + rec.shift_type : "") + ".";
 	qs.push("incident_description=" + encodeURIComponent(desc));
 	window.open(url + "?" + qs.join("&"), "_blank");
+}
+
+SAUDI_PANEL_LOADERS["policies"] = function() {
+	var list = document.getElementById("policies-list");
+	if (!list) return;
+	list.innerHTML = '<div class="saudi-list__item"><div class="saudi-list__body"><div class="saudi-list__title">...</div></div></div>';
+	frappe.call({
+		method: "saudi_hr.saudi_hr.enterprise_operations.get_company_policies",
+		callback: function(r) {
+			var policies = r.message || [];
+			if (!policies.length) {
+				list.innerHTML = '<div class="saudi-list__item"><div class="saudi-list__body"><div class="saudi-list__title">' + (t("no_policies") || "No policy available") + '</div></div></div>';
+				return;
+			}
+			list.innerHTML = '';
+			policies.forEach(function(p) {
+				var html = '<div class="saudi-list__item" style="cursor:pointer;" onclick="openCompanyPolicy(' + "'" + encodeURIComponent(JSON.stringify(p)) + "'" + ')">';
+				html += '<div class="saudi-list__body">';
+				html += '<div class="saudi-list__title">' + (p.policy_title || p.name) + '</div>';
+				html += '<div class="saudi-list__sub">' + (p.policy_category || '') + (p.effective_date ? ' • ' + p.effective_date : '') + '</div>';
+				if (p.summary) html += '<div class="saudi-list__sub">' + p.summary.replace(/<[^>]+>/g,'').substring(0, 120) + '...</div>';
+				html += '</div>';
+				html += '<div class="saudi-list__meta"><span>' + (t("view_policy") || "View / Download") + '</span></div>';
+				html += '</div>';
+				list.insertAdjacentHTML('beforeend', html);
+			});
+		}
+	});
+};
+
+function openCompanyPolicy(pStr) {
+	try {
+		var p = JSON.parse(decodeURIComponent(pStr));
+		if (p.attachment_url || p.attachment) {
+			window.open(p.attachment_url || p.attachment, '_blank');
+		} else {
+			window.open('/app/hr-policy-document/' + encodeURIComponent(p.name), '_blank');
+		}
+	} catch(e) {
+		showToast("Error", "error");
+	}
 }

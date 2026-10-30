@@ -1220,3 +1220,44 @@ def get_legal_release_diff(company=None):
 		company = frappe.get_all("Company", pluck="name", order_by="creation asc", limit_page_length=1)
 		company = company[0] if company else None
 	return _legal_release_diff(company)
+
+
+@frappe.whitelist()
+def get_company_policies():
+	"""Get active company policy document (PDF) for current employee to browse on mobile."""
+	if frappe.session.user == "Guest":
+		return []
+	employee = frappe.db.get_value(
+		"Employee",
+		{"user_id": frappe.session.user},
+		["name", "company", "department"],
+		as_dict=True,
+	)
+	if not employee or not employee.company:
+		return []
+	filters = {
+		"status": "Active / سارية",
+		"company": employee.company,
+	}
+	# Also try English status
+	if not frappe.db.exists("HR Policy Document", filters):
+		filters["status"] = "Active"
+		if not frappe.db.exists("HR Policy Document", filters):
+			filters.pop("status", None)
+
+	policies = frappe.get_all(
+		"HR Policy Document",
+		filters=filters,
+		fields=["name", "policy_title", "policy_category", "effective_date", "attachment", "summary", "company", "target_scope", "target_department"],
+		order_by="effective_date desc, modified desc",
+		limit_page_length=20,
+	)
+	result = []
+	for p in policies:
+		if p.get("target_scope") == "Department Employees / موظفو القسم" and p.get("target_department"):
+			if p.get("target_department") != employee.department:
+				continue
+		if p.get("attachment"):
+			p["attachment_url"] = p["attachment"]
+		result.append(p)
+	return result
