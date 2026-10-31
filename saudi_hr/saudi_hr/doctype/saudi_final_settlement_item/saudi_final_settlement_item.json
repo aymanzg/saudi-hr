@@ -1,0 +1,35 @@
+{
+ "actions": [],
+ "creation": "2026-10-30 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "item",
+  "description",
+  "amount",
+  "reference_doctype",
+  "reference_name",
+  "from_date",
+  "to_date"
+ ],
+ "fields": [
+  {"fieldname": "item", "fieldtype": "Data", "label": "Item / البند", "in_list_view": 1},
+  {"fieldname": "description", "fieldtype": "Small Text", "label": "Description / الوصف"},
+  {"fieldname": "amount", "fieldtype": "Currency", "label": "Amount / المبلغ", "in_list_view": 1},
+  {"fieldname": "reference_doctype", "fieldtype": "Link", "label": "Reference DocType", "options": "DocType"},
+  {"fieldname": "reference_name", "fieldtype": "Dynamic Link", "label": "Reference", "options": "reference_doctype"},
+  {"fieldname": "from_date", "fieldtype": "Date", "label": "From Date / من"},
+  {"fieldname": "to_date", "fieldtype": "Date", "label": "To Date / إلى"}
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-10-30 00:00:00.000000",
+ "module": "Saudi HR",
+ "name": "Saudi Final Settlement Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

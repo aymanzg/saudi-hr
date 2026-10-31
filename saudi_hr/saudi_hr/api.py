@@ -2366,3 +2366,83 @@ def get_my_disciplinary_procedures(limit=30):
 		limit=limit,
 	)
 	return {"data": rows}
+
+
+@frappe.whitelist()
+def calculate_comprehensive_final_settlement(employee, relieving_date=None, exit_clearance=None):
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Login required"))
+	emp = frappe.get_doc("Employee", employee)
+	if not relieving_date:
+		relieving_date = emp.relieving_date or today()
+	last_payroll = frappe.db.get_all(
+		"Saudi Monthly Payroll",
+		filters={"docstatus": 1},
+		fields=["name", "period_from", "period_to", "month", "year"],
+		order_by="period_to desc",
+		limit=1,
+	)
+	period_from = last_payroll[0].get("period_from") if last_payroll else add_days(getdate(relieving_date), -30)
+	period_to = last_payroll[0].get("period_to") if last_payroll else getdate(relieving_date)
+	earnings = []
+	deductions = []
+	# Leave balance
+	try:
+		from saudi_hr.saudi_hr.utils import get_leave_balance
+		lb = get_leave_balance(employee, today())
+		if lb.get("annual_leave_balance"):
+			earnings.append({"item": "رصيد إجازة سنوية متبقي / Unused Annual Leave", "amount": flt(lb.get("annual_leave_balance_value") or 0)})
+	except Exception:
+		pass
+	# Loans
+	try:
+		loans = frappe.get_all("Loan", filters={"applicant": employee, "docstatus": 1, "status": ["in", ["Disbursed", "Partly Disbursed"]]}, fields=["name", "total_payment_required", "total_amount_paid"])
+		for ln in loans:
+			remaining = flt(ln.get("total_payment_required")) - flt(ln.get("total_amount_paid"))
+			if remaining > 0:
+				deductions.append({"item": "قرض / Loan {0}".format(ln.name), "amount": remaining, "reference_doctype": "Loan", "reference_name": ln.name})
+	except Exception:
+		pass
+	# Violations
+	try:
+		from saudi_hr.saudi_hr.doctype.saudi_monthly_payroll.saudi_monthly_payroll import _get_violation_deductions, _procedure_penalty_days
+		days, refs = _get_violation_deductions(employee, period_from, period_to)
+		if days and refs:
+			daily = flt(frappe.db.get_value("Employee", employee, "basic") or 0) / 30
+			amt = flt(days) * daily
+			for r in refs:
+				deductions.append({"item": "مخالفة تأديبية / Disciplinary {0}".format(r), "amount": amt, "reference_doctype": "Disciplinary Procedure", "reference_name": r})
+	except Exception:
+		pass
+	# Advances
+	try:
+		advances = frappe.get_all("Salary Advance", filters={"employee": employee, "docstatus": 1, "repay_unclaimed_amount_from_salary": 1}, fields=["name", "advance_amount", "paid_amount"])
+		for a in advances:
+			rem = flt(a.get("advance_amount")) - flt(a.get("paid_amount"))
+			if rem > 0:
+				deductions.append({"item": "سلفة / Salary Advance {0}".format(a.name), "amount": rem, "reference_doctype": "Salary Advance", "reference_name": a.name})
+	except Exception:
+		pass
+	# EOSB
+	try:
+		eosb = frappe.get_all("End of Service Benefit", filters={"employee": employee}, fields=["name", "total_amount"], order_by="creation desc", limit=1)
+		if eosb:
+			earnings.append({"item": "مكافأة نهاية الخدمة / End of Service Benefit", "amount": flt(eosb[0].get("total_amount")), "reference_doctype": "End of Service Benefit", "reference_name": eosb[0].name})
+	except Exception:
+		pass
+	total_e = sum(flt(x.get("amount")) for x in earnings)
+	total_d = sum(flt(x.get("amount")) for x in deductions)
+	return {
+		"employee": employee,
+		"employee_name": emp.employee_name,
+		"relieving_date": relieving_date,
+		"last_payroll_period_from": period_from,
+		"last_payroll_period_to": period_to,
+		"calculated_from": period_from,
+		"calculated_to": relieving_date,
+		"earnings": earnings,
+		"deductions": deductions,
+		"total_earnings": total_e,
+		"total_deductions": total_d,
+		"net_payable": total_e - total_d,
+	}
