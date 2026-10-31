@@ -1,0 +1,29 @@
+<style>
+.print-format { font-family: Arial, sans-serif; }
+.header { text-align: center; margin-bottom: 20px; }
+.table { width: 100%; border-collapse: collapse; }
+.table td, .table th { border: 1px solid #333; padding: 6px; }
+</style>
+<div class="header">
+	<h2>إجراء تأديبي / Disciplinary Procedure</h2>
+	<p>{{ doc.name }}</p>
+</div>
+<table class="table">
+	<tr><td>Employee / الموظف</td><td>{{ doc.employee }} - {{ doc.employee_name }}</td></tr>
+	<tr><td>Department / القسم</td><td>{{ doc.department }}</td></tr>
+	<tr><td>Incident Date / تاريخ الحادثة</td><td>{{ doc.incident_date }}</td></tr>
+	<tr><td>Violation Type / نوع المخالفة</td><td>{{ doc.violation_type }}</td></tr>
+	<tr><td>Violation Catalog / لائحة المخالفات</td><td>{{ doc.violation_catalog }}</td></tr>
+	<tr><td>Penalty Type / نوع الجزاء</td><td>{{ doc.penalty_type }}</td></tr>
+	<tr><td>Penalty Days / أيام الجزاء</td><td>{{ doc.penalty_days }}</td></tr>
+	<tr><td>Deduction Amount / مبلغ الخصم</td><td>{{ frappe.utils.fmt_money(doc.penalty_amount) if doc.penalty_amount else '' }}</td></tr>
+	<tr><td>Status / الحالة</td><td>{{ doc.status }}</td></tr>
+	<tr><td>Description / الوصف</td><td>{{ doc.description or '' }}</td></tr>
+</table>
+{% if doc.acknowledged_by_employee %}
+<p>تم الإقرار من قبل الموظف بتاريخ {{ doc.acknowledged_on }}</p>
+{% endif %}
+{% if doc.employee_objection %}
+<h4>اعتراض الموظف / Employee Objection</h4>
+<p>{{ doc.employee_objection }}</p>
+{% endif %}

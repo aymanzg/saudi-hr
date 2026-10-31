@@ -1061,6 +1061,7 @@ def get_self_service_portal():
 			{"id": "my-requests", "label_ar": "طلباتي", "label_en": "My Requests", "icon": "📑", "badge": None, "bg_color": "#dcfce7", "icon_color": "#15803d", "route": "requests"},
 			{"id": "notifications", "label_ar": "الإشعارات", "label_en": "Notifications", "icon": "🔔", "badge": len(pending_ack) or 3, "bg_color": "#fae8ff", "icon_color": "#c026d3", "route": "requests"},
 			{"id": "policies", "label_ar": "سياسة الشركة", "label_en": "Company Policy", "icon": "📘", "badge": None, "bg_color": "#f0fdf4", "icon_color": "#16a34a", "route": "policies"},
+			{"id": "disciplinary", "label_ar": "إجراءات تأديبية", "label_en": "Disciplinary", "icon": "⚖️", "badge": None, "bg_color": "#fef2f2", "icon_color": "#dc2626", "route": "disciplinary"},
 			{"id": "documents", "label_ar": "المستندات", "label_en": "Documents", "icon": "📁", "badge": None, "bg_color": "#ffe4e6", "icon_color": "#e11d48", "route": "profile"},
 			{"id": "pay-slips", "label_ar": "مسيرات الرواتب", "label_en": "Pay Slips", "icon": "💰", "badge": None, "bg_color": "#ccfbf1", "icon_color": "#0d9488", "route": "profile"},
 		],

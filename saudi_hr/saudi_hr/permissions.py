@@ -322,3 +322,20 @@ def has_employee_grievance_permission(doc, user=None, permission_type=None):
 def get_policy_acknowledgement_query(user):
 	"""Permission query for Policy Acknowledgement."""
 	return ""
+
+
+def has_permission(doc, ptype="read", user=None):
+	if not user:
+		user = frappe.session.user
+	if doc.doctype == "Disciplinary Procedure":
+		if ptype in ("print", "read"):
+			if "System Manager" in frappe.get_roles(user):
+				return True
+			# Allow HR roles
+			if any(r in frappe.get_roles(user) for r in ["HR Manager", "HR User", "Human Resource Manager"]):
+				return True
+			# Allow employee to read/print their own
+			emp = frappe.db.get_value("Employee", {"user_id": user}, "name")
+			if emp and doc.employee == emp and ptype in ("read", "print"):
+				return True
+	return None

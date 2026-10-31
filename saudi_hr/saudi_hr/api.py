@@ -2348,3 +2348,21 @@ def object_to_disciplinary_procedure(disciplinary_name, objection):
 	doc.db_set("employee_objection", cstr(objection))
 	doc.db_set("objection_date", now_datetime())
 	return {"ok": True}
+
+
+@frappe.whitelist()
+def get_my_disciplinary_procedures(limit=30):
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Login required"))
+	emp = frappe.db.get_value("Employee", {"user_id": frappe.session.user}, "name")
+	if not emp:
+		return {"data": []}
+	filters = {"employee": emp, "docstatus": ["<", 2]}
+	rows = frappe.get_all(
+		"Disciplinary Procedure",
+		filters=filters,
+		fields=["name", "employee", "employee_name", "violation_type", "violation_catalog", "penalty_type", "penalty_days", "status", "incident_date", "acknowledged_by_employee", "acknowledged_on", "employee_objection", "objection_date"],
+		order_by="creation desc",
+		limit=limit,
+	)
+	return {"data": rows}

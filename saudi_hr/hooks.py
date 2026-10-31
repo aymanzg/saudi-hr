@@ -213,6 +213,7 @@ has_permission = {
 	"Attendance Location": "saudi_hr.saudi_hr.permissions.has_attendance_location_permission",
 	"Policy Acknowledgement": "saudi_hr.saudi_hr.permissions.has_policy_acknowledgement_permission",
 	"Employee Grievance": "saudi_hr.saudi_hr.permissions.has_employee_grievance_permission",
+	"Disciplinary Procedure": "saudi_hr.saudi_hr.permissions.has_permission",
 }
 
 after_install = "saudi_hr.install.after_install"

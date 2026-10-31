@@ -1406,3 +1406,58 @@ function openCompanyPolicy(pStr) {
 		showToast("Error", "error");
 	}
 }
+
+
+SAUDI_PANEL_LOADERS["disciplinary"] = function() {
+	var list = document.getElementById("disciplinaryList");
+	if (!list) return;
+	list.innerHTML = '<div class="saudi-list__item"><div class="saudi-list__body"><div class="saudi-list__title">' + (t("loading") || "Loading...") + '</div></div></div>';
+	frappe.call({
+		method: "saudi_hr.saudi_hr.api.get_my_disciplinary_procedures",
+		args: { limit: 30 },
+		callback: function(r) {
+			var data = (r.message && r.message.data) || [];
+			if (!data.length) {
+				list.innerHTML = '<div class="saudi-list__item"><div class="saudi-list__body"><div class="saudi-list__title">' + (t("no_requests") || "No items") + '</div></div></div>';
+				return;
+			}
+			var html = "";
+			data.forEach(function(d) {
+				var status = d.status || "";
+				var ack = d.acknowledged_by_employee ? "✓" : "✗";
+				html += '<div class="saudi-list__item" style="flex-direction:column;align-items:flex-start;gap:6px;">' +
+					'<div style="display:flex;justify-content:space-between;width:100%;"><div class="saudi-list__title">' + (d.name || "") + ' - ' + (d.violation_type || "") + '</div><span>' + status + '</span></div>' +
+					'<div class="saudi-list__meta">التاريخ: ' + (d.incident_date || "") + ' | الإقرار: ' + ack + '</div>';
+				if (!d.acknowledged_by_employee) {
+					html += '<div style="display:flex;gap:8px;width:100%;"><input id="ack-phrase-' + d.name + '" placeholder="أقر بالاطلاع والفهم" style="flex:1;padding:8px;border:1px solid #e5e7eb;border-radius:8px;"><button class="saudi-btn saudi-btn--primary" style="padding:6px 10px;" onclick="ackDisciplinary(\'' + d.name + '\')">إقرار</button></div>' +
+						'<textarea id="obj-' + d.name + '" placeholder="اعتراض..." style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:8px;"></textarea><button class="saudi-btn" style="padding:6px 10px;" onclick="objDisciplinary(\'' + d.name + '\')">تقديم اعتراض</button>';
+				}
+				if (d.employee_objection) {
+					html += '<div class="saudi-list__meta">اعتراض: ' + d.employee_objection + '</div>';
+				}
+				html += '</div>';
+			});
+			list.innerHTML = html;
+		}
+	});
+};
+
+window.ackDisciplinary = function(name) {
+	var inp = document.getElementById("ack-phrase-" + name);
+	var consent = inp ? inp.value : "";
+	frappe.call({
+		method: "saudi_hr.saudi_hr.api.acknowledge_disciplinary_procedure",
+		args: { disciplinary_name: name, consent: consent },
+		callback: function() { frappe.msgprint("تم الإقرار"); if (typeof navigate === "function") navigate("disciplinary"); }
+	});
+};
+
+window.objDisciplinary = function(name) {
+	var ta = document.getElementById("obj-" + name);
+	var objection = ta ? ta.value : "";
+	frappe.call({
+		method: "saudi_hr.saudi_hr.api.object_to_disciplinary_procedure",
+		args: { disciplinary_name: name, objection: objection },
+		callback: function() { frappe.msgprint("تم تقديم الاعتراض"); if (typeof navigate === "function") navigate("disciplinary"); }
+	});
+};

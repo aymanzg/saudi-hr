@@ -1,0 +1,23 @@
+{
+ "align_labels_right": 0,
+ "creation": "2026-10-30 00:00:00.000000",
+ "custom_format": 1,
+ "default_print_language": "ar",
+ "disabled": 0,
+ "doc_type": "Disciplinary Procedure",
+ "docstatus": 0,
+ "doctype": "Print Format",
+ "font": "Default",
+ "idx": 0,
+ "line_breaks": 0,
+ "modified": "2026-10-30 00:00:00.000000",
+ "module": "Saudi HR",
+ "name": "Disciplinary Procedure Violation",
+ "owner": "Administrator",
+ "print_format_builder": 0,
+ "print_format_type": "Jinja",
+ "raw_printing": 0,
+ "show_section_headings": 0,
+ "standard": "No",
+ "html": "{% include \"templates/includes/print/disciplinary_procedure_violation.html\" %}"
+}
