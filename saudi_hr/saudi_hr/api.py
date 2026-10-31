@@ -2446,3 +2446,18 @@ def calculate_comprehensive_final_settlement(employee, relieving_date=None, exit
 		"total_deductions": total_d,
 		"net_payable": total_e - total_d,
 	}
+
+
+@frappe.whitelist()
+def bulk_send_hr_letters(letter_title, attachment=None, email_body=None, department=None, designation=None, company=None):
+	from saudi_hr.saudi_hr.doctype.employee_document_custody_log.employee_document_custody_log import bulk_send_documents_to_employees
+	return bulk_send_documents_to_employees(
+		letter_name=letter_title,
+		letter_title=letter_title,
+		attachment=attachment,
+		email_body=email_body,
+		department=department,
+		designation=designation,
+		company=company,
+		include_all=True,
+	)
