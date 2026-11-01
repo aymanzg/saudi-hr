@@ -2084,9 +2084,9 @@ def get_my_requests(limit=30, status=None):
 		rows.append({
 			"name": row.name,
 			"doctype": "Saudi Hourly Leave Request",
-			"doctype_label": "Hourly Leave / إجازة بالساعات",
+			"doctype_label": "Permission / استئذان",
 			"request_type": "hour_leave",
-			"request_type_label": "Hourly Leave / إجازة بالساعات",
+			"request_type_label": "Permission / استئذان",
 			"workflow_state": row.workflow_state,
 			"can_submit": _can_submit_draft("Saudi Hourly Leave Request", row.workflow_state),
 			"status_code": _workflow_state_to_status_code(row.workflow_state) if row.workflow_state else _leave_status_code(None, row.docstatus),

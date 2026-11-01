@@ -72,7 +72,7 @@ MOBILE_LEAVE_REQUEST_LABELS = {
 	"leave_without_pay": "إجازة بدون راتب",
 	"exit_permission": "إذن خروج",
 	"late_early": "تأخر / انصراف مبكر",
-	"hour_leave": "إجازة بالساعات",
+	"hour_leave": "استئذان",
 }
 
 HR_SERVICE_REQUEST_LABELS = {
@@ -1007,7 +1007,7 @@ def get_self_service_portal():
 		st_code = "approved" if st_bucket == "approved" else ("rejected" if st_bucket == "rejected" else "pending")
 		recent_requests.append({
 			"id": row.name,
-			"title": "إجازة بالساعات",
+			"title": "استئذان",
 			"dates": cstr(row.leave_date or ""),
 			"status": "معتمد" if st_code == "approved" else ("مرفوض" if st_code == "rejected" else "قيد المراجعة"),
 			"status_code": st_code,
