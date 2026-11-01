@@ -1091,6 +1091,8 @@ function navigate(panel) {
 
 	if (SAUDI_PANEL_LOADERS[panel]) {
 		SAUDI_PANEL_LOADERS[panel]();
+	} else if (panel === "policies") {
+		if (typeof loadPoliciesPanel === "function") loadPoliciesPanel();
 	}
 }
 
@@ -1461,3 +1463,28 @@ window.objDisciplinary = function(name) {
 		callback: function() { frappe.msgprint("تم تقديم الاعتراض"); if (typeof navigate === "function") navigate("disciplinary"); }
 	});
 };
+
+
+function loadPoliciesPanel() {
+	var list = document.getElementById("policies-list");
+	if (!list) return;
+	list.innerHTML = '<div class="saudi-list__item"><div class="saudi-list__body"><div class="saudi-list__title">Loading...</div></div></div>';
+	frappe.call({
+		method: "saudi_hr.saudi_hr.enterprise_operations.get_company_policies",
+		callback: function(r) {
+			var policies = r.message || [];
+			if (!policies.length) {
+				list.innerHTML = '<div class="saudi-list__item"><div class="saudi-list__body"><div class="saudi-list__title">لا توجد سياسة</div></div></div>';
+				return;
+			}
+			var html = "";
+			policies.forEach(function(p) {
+				var url = p.attachment_url || p.attachment;
+				html += '<div class="saudi-list__item" style="cursor:pointer;" onclick="window.open(\'' + url + '\', \'_blank\')">' +
+					'<div class="saudi-list__body"><div class="saudi-list__title">' + (p.policy_title || p.name) + '</div>' +
+					'<div class="saudi-list__meta">' + (p.company || '') + ' ' + (p.effective_date || '') + '</div></div></div>';
+			});
+			list.innerHTML = html;
+		}
+	});
+}
