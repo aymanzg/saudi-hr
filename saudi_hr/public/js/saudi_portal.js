@@ -84,6 +84,34 @@ var LABELS = {
 		policy_less: "أقل",
 		policies_load_error: "تعذر تحميل السياسات",
 		policies_retry: "إعادة المحاولة",
+		payslips_title: "كشوف الراتب",
+		payslips_empty: "لا توجد كشوف راتب معتمدة حتى الآن",
+		payslips_load_error: "تعذر تحميل كشوف الراتب",
+		payslips_net: "صافي الراتب",
+		payslips_earnings: "الاستحقاقات",
+		payslips_deductions: "الخصومات",
+		payslips_total_earnings: "إجمالي الاستحقاقات",
+		payslips_total_deductions: "إجمالي الخصومات",
+		payslips_period: "الفترة",
+		payslips_working_days: "أيام العمل",
+		payslips_absence_days: "أيام الغياب",
+		payslips_currency: "ر.س",
+		payslip_basic_salary: "الراتب الأساسي",
+		payslip_housing_allowance: "بدل السكن",
+		payslip_transport_allowance: "بدل المواصلات",
+		payslip_other_allowances: "بدلات أخرى",
+		payslip_overtime_addition: "العمل الإضافي",
+		payslip_adjustment_addition: "إضافات أخرى",
+		payslip_gosi_employee_deduction: "التأمينات الاجتماعية",
+		payslip_sick_leave_deduction: "خصم الإجازة المرضية",
+		payslip_loan_deduction: "قسط القرض",
+		payslip_absence_deduction: "خصم الغياب",
+		payslip_late_deduction: "خصم التأخير",
+		payslip_penalty_deduction: "خصم الجزاءات",
+		payslip_violation_deduction: "خصم المخالفات",
+		payslip_advance_deduction: "خصم السلف",
+		payslip_other_deductions: "خصومات أخرى",
+		payslip_adjustment_deduction: "تعديلات أخرى",
 		policies_no_match: "لا توجد نتائج مطابقة",
 		normal_leave: "إجازة عادية",
 		mobile_leave: "طلب جوال",
@@ -870,6 +898,34 @@ var LABELS = {
 		policy_less: "Less",
 		policies_load_error: "Could not load policies",
 		policies_retry: "Retry",
+		payslips_title: "Pay Slips",
+		payslips_empty: "No approved pay slips yet",
+		payslips_load_error: "Could not load pay slips",
+		payslips_net: "Net Salary",
+		payslips_earnings: "Earnings",
+		payslips_deductions: "Deductions",
+		payslips_total_earnings: "Total Earnings",
+		payslips_total_deductions: "Total Deductions",
+		payslips_period: "Period",
+		payslips_working_days: "Working Days",
+		payslips_absence_days: "Absence Days",
+		payslips_currency: "SAR",
+		payslip_basic_salary: "Basic Salary",
+		payslip_housing_allowance: "Housing Allowance",
+		payslip_transport_allowance: "Transport Allowance",
+		payslip_other_allowances: "Other Allowances",
+		payslip_overtime_addition: "Overtime",
+		payslip_adjustment_addition: "Other Additions",
+		payslip_gosi_employee_deduction: "GOSI",
+		payslip_sick_leave_deduction: "Sick Leave Deduction",
+		payslip_loan_deduction: "Loan Installment",
+		payslip_absence_deduction: "Absence Deduction",
+		payslip_late_deduction: "Late Deduction",
+		payslip_penalty_deduction: "Penalty Deduction",
+		payslip_violation_deduction: "Violation Deduction",
+		payslip_advance_deduction: "Advance Deduction",
+		payslip_other_deductions: "Other Deductions",
+		payslip_adjustment_deduction: "Other Adjustments",
 		policies_no_match: "No policies match your search",
 		admin_unit_minute: "minute",
 		admin_unit_minutes: "minutes",
@@ -1612,6 +1668,66 @@ function openCompanyPolicy(idx) {
 	}
 }
 
+
+SAUDI_PANEL_LOADERS["payslips"] = function() {
+	var list = document.getElementById("payslips-list");
+	if (!list) return;
+	list.innerHTML = [1, 2].map(function() {
+		return '<div class="saudi-policy saudi-policy--skeleton"><div class="saudi-policy__main"><div class="saudi-skel saudi-skel--title"></div><div class="saudi-skel saudi-skel--short"></div></div></div>';
+	}).join("");
+	frappe.call({
+		method: "saudi_hr.saudi_hr.enterprise_operations.get_my_payslips",
+		callback: function(r) {
+			var slips = r.message || [];
+			list.innerHTML = slips.length
+				? slips.map(payslipHtml).join("")
+				: '<div class="saudi-empty"><span class="saudi-empty__icon">📭</span><p>' + t("payslips_empty") + '</p></div>';
+		},
+		error: function() {
+			list.innerHTML = '<div class="saudi-empty"><span class="saudi-empty__icon">⚠️</span><p>' + t("payslips_load_error") + '</p>' +
+				'<button type="button" class="saudi-policy__btn saudi-policy__btn--ghost" onclick="SAUDI_PANEL_LOADERS.payslips()">' + t("policies_retry") + '</button></div>';
+		}
+	});
+};
+
+function payslipMoney(value) {
+	return Number(value || 0).toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+// payroll months are stored as "October / أكتوبر"
+function payslipMonth(month) {
+	var parts = String(month || "").split(" / ");
+	return (CURRENT_LANG === "en" ? parts[0] : parts[1]) || parts[0];
+}
+
+function payslipLines(items) {
+	return items.map(function(item) {
+		return '<div class="saudi-payslip__line"><span>' + t("payslip_" + item.key) + '</span><b>' + payslipMoney(item.amount) + '</b></div>';
+	}).join("");
+}
+
+function payslipHtml(slip, index) {
+	var currency = t("payslips_currency");
+	var facts = [];
+	if (slip.period_from && slip.period_to) facts.push(t("payslips_period") + ': <bdi>' + escPolicy(slip.period_from) + '</bdi> – <bdi>' + escPolicy(slip.period_to) + '</bdi>');
+	if (slip.working_days) facts.push(t("payslips_working_days") + ': ' + slip.working_days);
+	if (slip.absence_days) facts.push(t("payslips_absence_days") + ': ' + slip.absence_days);
+	return '<details class="saudi-payslip"' + (index === 0 ? ' open' : '') + '>' +
+		'<summary class="saudi-payslip__summary">' +
+			'<span class="saudi-payslip__month">' + escPolicy(payslipMonth(slip.month)) + ' ' + escPolicy(slip.year) + '</span>' +
+			'<span class="saudi-payslip__net"><small>' + t("payslips_net") + '</small><b>' + payslipMoney(slip.net_salary) + ' ' + currency + '</b></span>' +
+		'</summary>' +
+		'<div class="saudi-payslip__body">' +
+			(facts.length ? '<div class="saudi-payslip__facts">' + facts.join(' · ') + '</div>' : '') +
+			'<div class="saudi-payslip__heading">' + t("payslips_earnings") + '</div>' + payslipLines(slip.earnings) +
+			'<div class="saudi-payslip__line saudi-payslip__line--total"><span>' + t("payslips_total_earnings") + '</span><b>' + payslipMoney(slip.total_earnings) + '</b></div>' +
+			(slip.deductions.length
+				? '<div class="saudi-payslip__heading">' + t("payslips_deductions") + '</div>' + payslipLines(slip.deductions) +
+					'<div class="saudi-payslip__line saudi-payslip__line--total saudi-payslip__line--minus"><span>' + t("payslips_total_deductions") + '</span><b>' + payslipMoney(slip.total_deductions) + '</b></div>'
+				: '') +
+			'<div class="saudi-payslip__line saudi-payslip__line--net"><span>' + t("payslips_net") + '</span><b>' + payslipMoney(slip.net_salary) + ' ' + currency + '</b></div>' +
+		'</div></details>';
+}
 
 SAUDI_PANEL_LOADERS["disciplinary"] = function() {
 	var list = document.getElementById("disciplinaryList");

@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/saudi_hr/css/saudi_portal.css?v=20261101d">
+<link rel="stylesheet" href="/assets/saudi_hr/css/saudi_portal.css?v=20261101e">
 {% endblock %}
 
 {% block page_content %}
@@ -560,11 +560,22 @@
 	</div>
 </section>
 
+<!-- Pay Slips Panel -->
+<section class="saudi-panel" id="panel-payslips">
+	<div class="saudi-panel__header">
+		<div class="saudi-section-header">
+			<div class="saudi-section-header__back" onclick="navigate('home')">‹ <span data-i18n-key="back">رجوع</span></div>
+			<div class="saudi-section-header__title">💰 <span data-i18n-key="payslips_title">كشوف الراتب</span></div>
+		</div>
+	</div>
+	<div class="saudi-panel__body" id="payslips-list"></div>
+</section>
+
 	<!-- Toast -->
 	<div class="saudi-toast" id="saudi-toast"></div>
 </div>
 
-<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261101d"></script>
+<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261101e"></script>
 <script>
 /* Page-specific behaviour, handed to the shared portal runtime. */
 SAUDI_PANEL_LOADERS["requests"] = loadMyRequests;
@@ -618,7 +629,7 @@ function renderQuickActions(portalData) {
 		{id: "notifications", label_ar: "الإشعارات", label_en: "Notifications", icon: "🔔", route: "requests", bg_color: "#fae8ff", icon_color: "#c026d3"},
 		{id: "policies", label_ar: "سياسة الشركة", label_en: "Company Policy", icon: "📘", route: "policies", bg_color: "#f0fdf4", icon_color: "#16a34a"},
 		{id: "documents", label_ar: "المستندات", label_en: "Documents", icon: "📁", route: "profile", bg_color: "#ffe4e6", icon_color: "#e11d48"},
-		{id: "payroll", label_ar: "مسيرات الرواتب", label_en: "Pay Slips", icon: "💰", route: "profile", bg_color: "#ccfbf1", icon_color: "#0d9488"}
+		{id: "payroll", label_ar: "مسيرات الرواتب", label_en: "Pay Slips", icon: "💰", route: "payslips", bg_color: "#ccfbf1", icon_color: "#0d9488"}
 	];
 	var ICON_MAP = {
 		clock: "🕐", palm: "🌴", calendar: "📋", list: "📑", user: "👤",
@@ -677,7 +688,9 @@ function loadLeaveOptions() {
 
 function localizeLabel(v) {
 	var s = String(v || "");
-	var slash = s.indexOf(" / ");
+	// the English half may hold its own slash ("Late / Early Departure / تأخر / انصراف مبكر")
+	var arabicHalf = s.search(/ \/ [\u0600-\u06FF]/);
+	var slash = arabicHalf !== -1 ? arabicHalf : s.indexOf(" / ");
 	if (slash !== -1) {
 		var en = s.slice(0, slash);
 		var ar = s.slice(slash + 3);
@@ -1024,10 +1037,13 @@ function loadMyRequests(filter) {
 			var html = "";
 			data.forEach(function(item) {
 				var badgeClass = item.status_code === "approved" ? "saudi-badge--approved" : (item.status_code === "rejected" ? "saudi-badge--rejected" : "saudi-badge--pending");
-				var category = item.doctype_label || "";
+				var title = localizeLabel(item.request_type_label || item.request_type);
+				var category = localizeLabel(item.doctype_label);
+				if (category === title) category = "";
+				var usesRequestDate = item.request_type === "punch_correction" || item.request_type === "hour_leave";
 				html += '<div class="saudi-request-card">' +
-					'<div class="saudi-request-card__top"><div><div class="saudi-request-card__type">' + (item.request_type_label || item.request_type) + '</div>' +
-					'<div class="saudi-request-card__date">' + (category ? category + " · " : "") + (item.request_type === "punch_correction" ? (item.from_date || "") : (item.creation || "").slice(0, 10)) + '</div></div>' +
+					'<div class="saudi-request-card__top"><div><div class="saudi-request-card__type">' + title + '</div>' +
+					'<div class="saudi-request-card__date">' + (category ? category + " · " : "") + (usesRequestDate ? (item.from_date || "") : (item.creation || "").slice(0, 10)) + '</div></div>' +
 					'<span class="saudi-badge ' + badgeClass + '">' + t(item.status_code === "approved" ? "approved" : (item.status_code === "rejected" ? "rejected" : "pending")) + '</span></div>' +
 					(item.description ? '<div class="saudi-request-card__desc">' + item.description + '</div>' : '') +
 					(item.can_submit ? '<div style="margin-top:10px;"><button type="button" class="saudi-btn saudi-btn--primary" data-doctype="' + item.doctype + '" data-name="' + item.name + '" onclick="sendForApproval(this.dataset.doctype, this.dataset.name, this)">' + t("send_for_approval") + '</button></div>' : '') +
@@ -1458,7 +1474,7 @@ function renderRecentRequests(data) {
 
 // list panels reload so their rows come back in the new language; form
 // panels are left alone so a half-filled request is not wiped
-var LANG_RELOAD_PANELS = ["requests", "attendance", "policies", "disciplinary"];
+var LANG_RELOAD_PANELS = ["requests", "attendance", "policies", "disciplinary", "payslips"];
 
 function onPortalLangChange() {
 	renderQuickActions(window.myPortalData);

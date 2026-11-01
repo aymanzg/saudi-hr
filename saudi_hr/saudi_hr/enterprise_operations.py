@@ -1103,7 +1103,7 @@ def get_self_service_portal():
 			{"id": "policies", "label_ar": "سياسة الشركة", "label_en": "Company Policy", "icon": "📘", "badge": None, "bg_color": "#f0fdf4", "icon_color": "#16a34a", "route": "policies"},
 			{"id": "disciplinary", "label_ar": "إجراءات تأديبية", "label_en": "Disciplinary", "icon": "⚖️", "badge": None, "bg_color": "#fef2f2", "icon_color": "#dc2626", "route": "disciplinary"},
 			{"id": "documents", "label_ar": "المستندات", "label_en": "Documents", "icon": "📁", "badge": None, "bg_color": "#ffe4e6", "icon_color": "#e11d48", "route": "profile"},
-			{"id": "pay-slips", "label_ar": "مسيرات الرواتب", "label_en": "Pay Slips", "icon": "💰", "badge": None, "bg_color": "#ccfbf1", "icon_color": "#0d9488", "route": "profile"},
+			{"id": "pay-slips", "label_ar": "مسيرات الرواتب", "label_en": "Pay Slips", "icon": "💰", "badge": None, "bg_color": "#ccfbf1", "icon_color": "#0d9488", "route": "payslips"},
 		],
 		"privacy_notice_ar": "تعرض هذه الصفحة سجل الموظف المرتبط بالمستخدم فقط. وضع المعاينة الإداري مميز بوضوح ولا يغيّر أي بيانات.",
 	}
@@ -1269,6 +1269,97 @@ POLICY_LIST_FIELDS = [
 	"summary", "company", "target_scope", "target_department", "acknowledgement_required",
 	"acknowledgement_due_days",
 ]
+
+
+PAYSLIP_EARNING_FIELDS = ("basic_salary", "housing_allowance", "transport_allowance", "other_allowances")
+PAYSLIP_DEDUCTION_FIELDS = (
+	"gosi_employee_deduction",
+	"sick_leave_deduction",
+	"loan_deduction",
+	"absence_deduction",
+	"late_deduction",
+	"penalty_deduction",
+	"violation_deduction",
+	"advance_deduction",
+	"other_deductions",
+)
+
+
+def _payslip_from_row(row):
+	"""One month's slip. Payroll adjustments only reach the row's totals, so they are
+	shown as the remainder, which keeps every slip adding up to its net."""
+	earnings = [{"key": field, "amount": flt(row[field])} for field in PAYSLIP_EARNING_FIELDS if flt(row[field])]
+	deductions = [{"key": field, "amount": flt(row[field])} for field in PAYSLIP_DEDUCTION_FIELDS if flt(row[field])]
+	if flt(row.overtime_addition):
+		earnings.append({"key": "overtime_addition", "amount": flt(row.overtime_addition)})
+
+	other_deductions = round(flt(row.total_deductions) - sum(item["amount"] for item in deductions), 2)
+	if other_deductions:
+		deductions.append({"key": "adjustment_deduction", "amount": other_deductions})
+
+	total_earnings = round(flt(row.net_salary) + flt(row.total_deductions), 2)
+	other_earnings = round(total_earnings - sum(item["amount"] for item in earnings), 2)
+	if other_earnings:
+		earnings.append({"key": "adjustment_addition", "amount": other_earnings})
+
+	return {
+		"payroll": row.payroll,
+		"month": row.month,
+		"year": row.year,
+		"period_from": str(row.period_from) if row.period_from else None,
+		"period_to": str(row.period_to) if row.period_to else None,
+		"posting_date": str(row.posting_date) if row.posting_date else None,
+		"salary_mode": row.salary_mode,
+		"working_days": flt(row.working_days),
+		"absence_days": flt(row.absence_days),
+		"earnings": earnings,
+		"deductions": deductions,
+		"total_earnings": total_earnings,
+		"total_deductions": flt(row.total_deductions),
+		"net_salary": flt(row.net_salary),
+	}
+
+
+@frappe.whitelist()
+def get_my_payslips(limit=24):
+	"""The signed-in employee's own slips, newest month first. Takes no employee argument
+	on purpose: employees have no read access to payroll, so this reads past permissions
+	and must only ever return the session user's rows."""
+	if frappe.session.user == "Guest":
+		frappe.throw(_("Please sign in."), frappe.PermissionError)
+	employee, _mode = _current_employee(allow_manager_preview=False)
+	if not employee:
+		return []
+
+	sums = ", ".join(
+		f"SUM(child.{field}) AS {field}"
+		for field in PAYSLIP_EARNING_FIELDS
+		+ PAYSLIP_DEDUCTION_FIELDS
+		+ ("overtime_addition", "total_deductions", "net_salary", "working_days", "absence_days")
+	)
+	rows = frappe.db.sql(
+		f"""
+		SELECT parent.name AS payroll, parent.month, parent.year, parent.period_from, parent.period_to,
+			parent.posting_date, MAX(child.salary_mode) AS salary_mode, {sums}
+		FROM `tabSaudi Monthly Payroll Employee` child
+		INNER JOIN `tabSaudi Monthly Payroll` parent ON parent.name = child.parent
+		WHERE child.employee = %s AND child.parenttype = 'Saudi Monthly Payroll' AND parent.docstatus = 1
+		GROUP BY parent.name
+		ORDER BY parent.posting_date DESC, parent.creation DESC
+		""",
+		employee.name,
+		as_dict=True,
+	)
+
+	# a month can hold more than one submitted payroll; the latest is the one shown
+	slips, seen = [], set()
+	for row in rows:
+		period = (row.year, row.month)
+		if period in seen:
+			continue
+		seen.add(period)
+		slips.append(_payslip_from_row(row))
+	return slips[: max(1, min(int(limit or 24), 60))]
 
 
 @frappe.whitelist()
