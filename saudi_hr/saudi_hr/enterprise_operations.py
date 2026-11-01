@@ -13,11 +13,12 @@ import json
 import re
 from datetime import date, datetime
 from decimal import Decimal
+from urllib.parse import quote
 
 import frappe
 from frappe import _
 from saudi_hr.saudi_hr.workflow_catalogue import state_bucket
-from frappe.utils import cint, cstr, flt, getdate, now_datetime, nowdate
+from frappe.utils import cint, cstr, flt, getdate, now_datetime, nowdate, strip_html
 
 from saudi_hr.saudi_hr.doctype.saudi_government_integration.saudi_government_integration import (
 	FILE_MODE,
@@ -98,6 +99,43 @@ HR_SERVICE_REQUEST_LABELS = {
 	"salary_transfer_letter": "خطاب تحويل راتب",
 	"clearance": "المخالصة المالية",
 	"end_of_service_cert": "شهادة نهاية خدمة",
+}
+
+# English titles for the mobile portal's recent requests, keyed by the Arabic title
+REQUEST_TITLE_EN = {
+	"إجازة سنوية": "Annual Leave",
+	"إجازة مرضية": "Sick Leave",
+	"إذن دوام / عمل إضافي": "Overtime Request",
+	"طلب إجازة": "Leave Request",
+	"طلب خدمة": "Service Request",
+	"تصحيح بصمة": "Punch Correction",
+	"استئذان": "Permission",
+	"إجازة طارئة": "Emergency Leave",
+	"إجازة بدون راتب": "Leave Without Pay",
+	"إذن خروج": "Exit Permission",
+	"تأخر / انصراف مبكر": "Late / Early Departure",
+	"إصدار رخصة عمل": "Work Permit Issuance",
+	"تجديد رخصة عمل": "Work Permit Renewal",
+	"إصدار إقامة": "Residency Issuance",
+	"تجديد إقامة": "Residency Renewal",
+	"نقل خدمات": "Service Transfer",
+	"خروج وعودة": "Exit & Re-entry",
+	"خروج نهائي": "Final Exit",
+	"تعديل مهنة": "Profession Modification",
+	"تحديث بيانات الموظف": "Employee Data Update",
+	"إصدار تأشيرة": "Visa Issuance",
+	"سلفة": "Salary Advance",
+	"شهادة تعريف بالراتب": "Salary Certificate",
+	"شهادة خبرة": "Experience Certificate",
+	"قرض موظف": "Employee Loan",
+	"خطاب تثبيت": "Job Confirmation Letter",
+	"نسخة عقد عمل": "Employment Contract Copy",
+	"كشف راتب": "Payslip",
+	"بيان الراتب والمزايا": "Salary & Benefits Statement",
+	"خطاب موجه لجهة": "Addressed Letter",
+	"خطاب تحويل راتب": "Salary Transfer Letter",
+	"المخالصة المالية": "Financial Clearance",
+	"شهادة نهاية خدمة": "End of Service Certificate",
 }
 
 
@@ -1030,6 +1068,8 @@ def get_self_service_portal():
 		pass
 
 	recent_requests.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+	for item in recent_requests:
+		item["title_en"] = REQUEST_TITLE_EN.get(item.get("title"), item.get("title"))
 
 	return {
 		"mode": mode,
@@ -1224,6 +1264,13 @@ def get_legal_release_diff(company=None):
 	return _legal_release_diff(company)
 
 
+POLICY_LIST_FIELDS = [
+	"name", "policy_title", "policy_category", "policy_version", "effective_date", "attachment",
+	"summary", "company", "target_scope", "target_department", "acknowledgement_required",
+	"acknowledgement_due_days",
+]
+
+
 @frappe.whitelist()
 def get_company_policies():
 	"""Get active company policy document (PDF) for current employee to browse on mobile."""
@@ -1244,7 +1291,7 @@ def get_company_policies():
 	policies = frappe.get_all(
 		"HR Policy Document",
 		filters=filters,
-		fields=["name", "policy_title", "policy_category", "effective_date", "attachment", "summary", "company", "target_scope", "target_department"],
+		fields=POLICY_LIST_FIELDS,
 		order_by="effective_date desc, modified desc",
 		limit_page_length=20,
 	)
@@ -1253,7 +1300,7 @@ def get_company_policies():
 		policies = frappe.get_all(
 			"HR Policy Document",
 			filters=filters,
-			fields=["name", "policy_title", "policy_category", "effective_date", "attachment", "summary", "company", "target_scope", "target_department"],
+			fields=POLICY_LIST_FIELDS,
 			order_by="effective_date desc, modified desc",
 			limit_page_length=20,
 		)
@@ -1263,7 +1310,7 @@ def get_company_policies():
 		policies = frappe.get_all(
 			"HR Policy Document",
 			filters=filters,
-			fields=["name", "policy_title", "policy_category", "effective_date", "attachment", "summary", "company", "target_scope", "target_department"],
+			fields=POLICY_LIST_FIELDS,
 			order_by="effective_date desc, modified desc",
 			limit_page_length=20,
 		)
@@ -1272,7 +1319,7 @@ def get_company_policies():
 		policies = frappe.get_all(
 			"HR Policy Document",
 			filters=filters,
-			fields=["name", "policy_title", "policy_category", "effective_date", "attachment", "summary", "company", "target_scope", "target_department"],
+			fields=POLICY_LIST_FIELDS,
 			order_by="effective_date desc, modified desc",
 			limit_page_length=20,
 		)
@@ -1280,7 +1327,7 @@ def get_company_policies():
 		policies = frappe.get_all(
 			"HR Policy Document",
 			filters={},
-			fields=["name", "policy_title", "policy_category", "effective_date", "attachment", "summary", "company", "target_scope", "target_department"],
+			fields=POLICY_LIST_FIELDS,
 			order_by="effective_date desc, modified desc",
 			limit_page_length=20,
 		)
@@ -1290,6 +1337,87 @@ def get_company_policies():
 			if p.get("target_department") != employee.department:
 				continue
 		if p.get("attachment"):
-			p["attachment_url"] = p["attachment"]
+			# Employees have no read access on HR Policy Document, so private
+			# attachments are served through download_company_policy instead.
+			p["attachment_url"] = (
+				"/api/method/saudi_hr.saudi_hr.enterprise_operations.download_company_policy?name="
+				+ quote(p["name"])
+			)
+			p["file_type"] = (p["attachment"].rsplit(".", 1)[-1] if "." in p["attachment"] else "").lower()
+		p["summary_text"] = re.sub(r"\s+", " ", strip_html(p.get("summary") or "")).strip()
 		result.append(p)
+	_attach_policy_acknowledgements(result, employee.name)
 	return result
+
+
+def _attach_policy_acknowledgements(policies, employee):
+	"""Add the employee's latest acknowledgement for each policy, if any."""
+	if not policies or not _doctype_exists("Policy Acknowledgement"):
+		return
+	rows = frappe.get_all(
+		"Policy Acknowledgement",
+		filters={"employee": employee, "policy_document": ["in", [p["name"] for p in policies]], "docstatus": ["<", 2]},
+		fields=["name", "policy_document", "policy_version", "acknowledgement_status", "acknowledged_on", "due_date"],
+		order_by="creation desc",
+		ignore_permissions=True,
+	)
+	# an acknowledgement only counts for the policy version it was given for
+	latest = {}
+	for row in rows:
+		latest.setdefault((row.policy_document, cstr(row.policy_version)), row)
+	for p in policies:
+		ack = latest.get((p["name"], cstr(p.get("policy_version"))))
+		p["acknowledgement"] = ack
+		p["acknowledged"] = bool(ack and ack.acknowledgement_status == "Acknowledged / تم الإقرار")
+		p["needs_acknowledgement"] = bool(p.get("acknowledgement_required")) and not p["acknowledged"]
+
+
+@frappe.whitelist(methods=["POST"])
+def acknowledge_company_policy(policy, consent_text):
+	"""Acknowledge a policy from the mobile list, creating the assignment if HR has not."""
+	_require_logged_in()
+	if not any(p.get("name") == policy for p in get_company_policies()):
+		raise frappe.PermissionError
+	employee = frappe.db.get_value("Employee", {"user_id": frappe.session.user}, ["name", "employee_name", "company", "department"], as_dict=True)
+	policy_doc = frappe.get_doc("HR Policy Document", policy)
+	ack_name = frappe.db.get_value(
+		"Policy Acknowledgement",
+		{
+			"employee": employee.name,
+			"policy_document": policy,
+			"policy_version": policy_doc.get("policy_version"),
+			"docstatus": ["<", 2],
+		},
+		"name",
+		order_by="creation desc",
+	)
+	if not ack_name:
+		ack = frappe.get_doc({
+			"doctype": "Policy Acknowledgement",
+			"policy_document": policy,
+			"policy_title": policy_doc.policy_title,
+			"policy_version": policy_doc.get("policy_version"),
+			"employee": employee.name,
+			"employee_name": employee.employee_name,
+			"company": employee.company,
+			"department": employee.department,
+			"assigned_on": nowdate(),
+			"acknowledgement_status": "Pending / بانتظار الإقرار",
+		})
+		ack.flags.ignore_permissions = True
+		ack.insert()
+		ack_name = ack.name
+	return acknowledge_policy(ack_name, consent_text)
+
+
+@frappe.whitelist()
+def download_company_policy(name):
+	"""Serve the attachment of a policy visible to the current employee."""
+	policy = next((p for p in get_company_policies() if p.get("name") == name), None)
+	if not policy or not policy.get("attachment"):
+		raise frappe.PermissionError
+	file_doc = frappe.get_doc("File", {"file_url": policy["attachment"]})
+	frappe.local.response.filename = file_doc.file_name
+	frappe.local.response.filecontent = file_doc.get_content()
+	frappe.local.response.type = "download"
+	frappe.local.response.display_content_as = "inline"

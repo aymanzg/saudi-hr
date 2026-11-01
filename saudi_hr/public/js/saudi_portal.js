@@ -45,6 +45,46 @@ var LABELS = {
 		attendance_checkin: "تسجيل الحضور والانصراف",
 		profile: "الملف الشخصي",
 		back: "رجوع",
+		select_employee: "اختر الموظف",
+		no_data: "لا توجد بيانات",
+		no_requests: "لا توجد طلبات",
+		disciplinary_procedures: "إجراءات تأديبية",
+		disc_date: "التاريخ",
+		disc_ack: "الإقرار",
+		disc_ack_btn: "إقرار",
+		disc_objection: "اعتراض",
+		disc_objection_ph: "اكتب اعتراضك...",
+		disc_submit_objection: "تقديم اعتراض",
+		disc_ack_done: "تم الإقرار",
+		disc_objection_done: "تم تقديم الاعتراض",
+		company_policy: "سياسة الشركة",
+		company_policy_sub: "اطلع على لوائح وسياسات الشركة",
+		company_policies: "سياسة الشركة",
+		view_policy: "عرض / تحميل",
+		no_policies: "لا توجد سياسات منشورة حالياً",
+		policies_hero_title: "لوائح وسياسات الشركة",
+		policies_hero_sub: "اطلع على السياسات المعتمدة وأقر بالاطلاع عليها",
+		policies_search: "ابحث في السياسات",
+		policies_total: "السياسات",
+		policies_pending: "بانتظار الإقرار",
+		policies_done: "تم الإقرار",
+		policy_effective: "سارية من",
+		policy_version: "الإصدار",
+		policy_open: "عرض السياسة",
+		policy_no_file: "لا يوجد ملف مرفق",
+		policy_acknowledged: "تم الإقرار",
+		policy_ack_pending: "بانتظار الإقرار",
+		policy_ack_due: "قبل",
+		policy_ack_btn: "إقرار بالاطلاع",
+		policy_ack_hint: "اكتب العبارة التالية كما هي للتأكيد",
+		policy_ack_confirm: "تأكيد",
+		policy_ack_cancel: "إلغاء",
+		policy_ack_success: "تم تسجيل إقرارك بنجاح",
+		policy_more: "المزيد",
+		policy_less: "أقل",
+		policies_load_error: "تعذر تحميل السياسات",
+		policies_retry: "إعادة المحاولة",
+		policies_no_match: "لا توجد نتائج مطابقة",
 		normal_leave: "إجازة عادية",
 		mobile_leave: "طلب جوال",
 		leave_type: "نوع الإجازة",
@@ -530,6 +570,18 @@ var LABELS = {
 		attendance_checkin: "Attendance Check-in",
 		profile: "Profile",
 		back: "Back",
+		select_employee: "Select Employee",
+		no_data: "No data",
+		no_requests: "No requests",
+		disciplinary_procedures: "Disciplinary Procedures",
+		disc_date: "Date",
+		disc_ack: "Acknowledged",
+		disc_ack_btn: "Acknowledge",
+		disc_objection: "Objection",
+		disc_objection_ph: "Write your objection...",
+		disc_submit_objection: "Submit Objection",
+		disc_ack_done: "Acknowledgement recorded",
+		disc_objection_done: "Objection submitted",
 		normal_leave: "Normal Leave",
 		mobile_leave: "Mobile Request",
 		leave_type: "Leave Type",
@@ -795,12 +847,30 @@ var LABELS = {
 		company_policy_sub: "View company rules & policies",
 		view_policy: "View / Download",
 		no_policies: "No policy available",
-		admin_unit_hour: "hour",
-		admin_unit_hours: "hours",
-		company_policy: "Company Policy",
-		company_policy_sub: "View company rules & policies",
-		view_policy: "View / Download",
-		no_policies: "No policy available",
+		company_policies: "Company Policies",
+		policies_hero_title: "Company rules & policies",
+		policies_hero_sub: "Read the approved policies and confirm you have reviewed them",
+		policies_search: "Search policies",
+		policies_total: "Policies",
+		policies_pending: "Awaiting acknowledgement",
+		policies_done: "Acknowledged",
+		policy_effective: "Effective",
+		policy_version: "Version",
+		policy_open: "Open policy",
+		policy_no_file: "No file attached",
+		policy_acknowledged: "Acknowledged",
+		policy_ack_pending: "Awaiting acknowledgement",
+		policy_ack_due: "Due",
+		policy_ack_btn: "Acknowledge",
+		policy_ack_hint: "Type the phrase below exactly to confirm",
+		policy_ack_confirm: "Confirm",
+		policy_ack_cancel: "Cancel",
+		policy_ack_success: "Acknowledgement recorded",
+		policy_more: "More",
+		policy_less: "Less",
+		policies_load_error: "Could not load policies",
+		policies_retry: "Retry",
+		policies_no_match: "No policies match your search",
 		admin_unit_minute: "minute",
 		admin_unit_minutes: "minutes",
 		admin_col_total: "Total",
@@ -1053,6 +1123,8 @@ function toggleLang() {
 	CURRENT_LANG = CURRENT_LANG === "ar" ? "en" : "ar";
 	try { localStorage.setItem("saudi_hr_lang", CURRENT_LANG); } catch(e) {}
 	applyLang();
+	// pages re-draw the content they built in JS, which applyLang cannot reach
+	if (typeof onPortalLangChange === "function") onPortalLangChange();
 }
 
 /* Restore the saved language, then sweep the document. */
@@ -1091,8 +1163,6 @@ function navigate(panel) {
 
 	if (SAUDI_PANEL_LOADERS[panel]) {
 		SAUDI_PANEL_LOADERS[panel]();
-	} else if (panel === "policies") {
-		if (typeof loadPoliciesPanel === "function") loadPoliciesPanel();
 	}
 }
 
@@ -1368,44 +1438,177 @@ function openDisciplinaryFromMissingCheckout(rec) {
 	window.open(url + "?" + qs.join("&"), "_blank");
 }
 
+/* ─── Company policies ──────────────────────────── */
+var POLICY_ACK_PHRASE = "أقر بالاطلاع والفهم";
+var companyPolicies = [];
+
+function escPolicy(v) {
+	return String(v == null ? "" : v).replace(/[&<>"']/g, function(c) {
+		return {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c];
+	});
+}
+
+// "Other / أخرى" → the half matching the current language
+function policyLabel(v) {
+	if (!v) return "";
+	var parts = String(v).split(" / ");
+	if (parts.length < 2) return v;
+	return CURRENT_LANG === "ar" ? parts[parts.length - 1] : parts[0];
+}
+
+function policyFileIcon(type) {
+	if (type === "pdf") return {label: "PDF", cls: "pdf"};
+	if (type === "doc" || type === "docx") return {label: "DOC", cls: "doc"};
+	if (type === "xls" || type === "xlsx" || type === "csv") return {label: "XLS", cls: "xls"};
+	if (["png", "jpg", "jpeg", "webp"].indexOf(type) !== -1) return {label: "IMG", cls: "img"};
+	return {label: "📄", cls: "other"};
+}
+
 SAUDI_PANEL_LOADERS["policies"] = function() {
 	var list = document.getElementById("policies-list");
 	if (!list) return;
-	list.innerHTML = '<div class="saudi-list__item"><div class="saudi-list__body"><div class="saudi-list__title">...</div></div></div>';
+	var search = document.getElementById("policies-search");
+	if (search) search.value = "";
+	document.getElementById("policies-stats").innerHTML = "";
+	list.innerHTML = [1, 2].map(function() {
+		return '<div class="saudi-policy saudi-policy--skeleton"><div class="saudi-policy__file"></div>' +
+			'<div class="saudi-policy__main"><div class="saudi-skel saudi-skel--title"></div><div class="saudi-skel"></div><div class="saudi-skel saudi-skel--short"></div></div></div>';
+	}).join("");
 	frappe.call({
 		method: "saudi_hr.saudi_hr.enterprise_operations.get_company_policies",
 		callback: function(r) {
-			var policies = r.message || [];
-			if (!policies.length) {
-				list.innerHTML = '<div class="saudi-list__item"><div class="saudi-list__body"><div class="saudi-list__title">' + (t("no_policies") || "No policy available") + '</div></div></div>';
-				return;
-			}
-			list.innerHTML = '';
-			policies.forEach(function(p) {
-				var html = '<div class="saudi-list__item" style="cursor:pointer;" onclick="openCompanyPolicy(' + "'" + encodeURIComponent(JSON.stringify(p)) + "'" + ')">';
-				html += '<div class="saudi-list__body">';
-				html += '<div class="saudi-list__title">' + (p.policy_title || p.name) + '</div>';
-				html += '<div class="saudi-list__sub">' + (p.policy_category || '') + (p.effective_date ? ' • ' + p.effective_date : '') + '</div>';
-				if (p.summary) html += '<div class="saudi-list__sub">' + p.summary.replace(/<[^>]+>/g,'').substring(0, 120) + '...</div>';
-				html += '</div>';
-				html += '<div class="saudi-list__meta"><span>' + (t("view_policy") || "View / Download") + '</span></div>';
-				html += '</div>';
-				list.insertAdjacentHTML('beforeend', html);
-			});
+			companyPolicies = r.message || [];
+			renderPolicyStats();
+			renderCompanyPolicies(companyPolicies);
+		},
+		error: function() {
+			list.innerHTML = '<div class="saudi-empty"><span class="saudi-empty__icon">⚠️</span><p>' + t("policies_load_error") + '</p>' +
+				'<button type="button" class="saudi-policy__btn saudi-policy__btn--ghost" onclick="SAUDI_PANEL_LOADERS.policies()">' + t("policies_retry") + '</button></div>';
 		}
 	});
 };
 
-function openCompanyPolicy(pStr) {
-	try {
-		var p = JSON.parse(decodeURIComponent(pStr));
-		if (p.attachment_url || p.attachment) {
-			window.open(p.attachment_url || p.attachment, '_blank');
-		} else {
-			window.open('/app/hr-policy-document/' + encodeURIComponent(p.name), '_blank');
+function renderPolicyStats() {
+	var box = document.getElementById("policies-stats");
+	if (!companyPolicies.length) { box.innerHTML = ""; return; }
+	var pending = companyPolicies.filter(function(p) { return p.needs_acknowledgement; }).length;
+	var done = companyPolicies.filter(function(p) { return p.acknowledged; }).length;
+	box.innerHTML =
+		'<div class="saudi-policies__stat"><b>' + companyPolicies.length + '</b><span>' + t("policies_total") + '</span></div>' +
+		'<div class="saudi-policies__stat saudi-policies__stat--warn"><b>' + pending + '</b><span>' + t("policies_pending") + '</span></div>' +
+		'<div class="saudi-policies__stat saudi-policies__stat--ok"><b>' + done + '</b><span>' + t("policies_done") + '</span></div>';
+}
+
+function renderCompanyPolicies(policies, isSearch) {
+	var list = document.getElementById("policies-list");
+	if (!policies.length) {
+		list.innerHTML = '<div class="saudi-empty"><span class="saudi-empty__icon">' + (isSearch ? "🔍" : "📭") + '</span><p>' +
+			t(isSearch ? "policies_no_match" : "no_policies") + '</p></div>';
+		return;
+	}
+	// policies awaiting acknowledgement first
+	var sorted = policies.slice().sort(function(a, b) { return (b.needs_acknowledgement ? 1 : 0) - (a.needs_acknowledgement ? 1 : 0); });
+	list.innerHTML = sorted.map(policyCardHtml).join("");
+}
+
+function policyCardHtml(p) {
+	var idx = companyPolicies.indexOf(p);
+	var icon = policyFileIcon(p.file_type);
+	var ack = p.acknowledgement || {};
+	var status = "";
+	if (p.acknowledged) {
+		status = '<span class="saudi-chip saudi-chip--approved">✓ ' + t("policy_acknowledged") + (ack.acknowledged_on ? ' · ' + escPolicy(String(ack.acknowledged_on).slice(0, 10)) : '') + '</span>';
+	} else if (p.needs_acknowledgement) {
+		status = '<span class="saudi-chip saudi-chip--pending">⏳ ' + t("policy_ack_pending") + (ack.due_date ? ' · ' + t("policy_ack_due") + ' ' + escPolicy(ack.due_date) : '') + '</span>';
+	}
+	var meta = [];
+	if (p.policy_category) meta.push('<span class="saudi-chip saudi-chip--muted">' + escPolicy(policyLabel(p.policy_category)) + '</span>');
+	if (p.policy_version) meta.push('<span class="saudi-policy__meta-item">' + t("policy_version") + ' ' + escPolicy(p.policy_version) + '</span>');
+	if (p.effective_date) meta.push('<span class="saudi-policy__meta-item">' + t("policy_effective") + ' ' + escPolicy(p.effective_date) + '</span>');
+	var summary = p.summary_text || "";
+	var summaryHtml = "";
+	if (summary) {
+		summaryHtml = '<p class="saudi-policy__summary" id="policy-summary-' + idx + '">' + escPolicy(summary) + '</p>';
+		if (summary.length > 110) summaryHtml += '<button type="button" class="saudi-policy__more" onclick="togglePolicySummary(' + idx + ', this)">' + t("policy_more") + '</button>';
+	}
+	var actions = p.attachment_url
+		? '<button type="button" class="saudi-policy__btn" onclick="openCompanyPolicy(' + idx + ')">' + t("policy_open") + '</button>'
+		: '<span class="saudi-policy__nofile">' + t("policy_no_file") + '</span>';
+	if (p.needs_acknowledgement) {
+		actions += '<button type="button" class="saudi-policy__btn saudi-policy__btn--ghost" onclick="togglePolicyAck(' + idx + ')">' + t("policy_ack_btn") + '</button>';
+	}
+	return '<article class="saudi-policy' + (p.needs_acknowledgement ? ' saudi-policy--pending' : '') + '">' +
+		'<div class="saudi-policy__file saudi-policy__file--' + icon.cls + '">' + icon.label + '</div>' +
+		'<div class="saudi-policy__main">' +
+			'<h3 class="saudi-policy__title">' + escPolicy(p.policy_title || p.name) + '</h3>' +
+			(status ? '<div class="saudi-policy__status">' + status + '</div>' : '') +
+			'<div class="saudi-policy__meta">' + meta.join("") + '</div>' +
+			summaryHtml +
+			'<div class="saudi-policy__actions">' + actions + '</div>' +
+			(p.needs_acknowledgement ?
+				'<div class="saudi-policy__ack" id="policy-ack-' + idx + '" hidden>' +
+					'<div class="saudi-policy__ack-hint">' + t("policy_ack_hint") + '</div>' +
+					'<div class="saudi-policy__ack-phrase">' + POLICY_ACK_PHRASE + '</div>' +
+					'<input type="text" class="saudi-policy__ack-input" id="policy-ack-input-' + idx + '" dir="rtl" autocomplete="off" placeholder="' + POLICY_ACK_PHRASE + '">' +
+					'<div class="saudi-policy__actions">' +
+						'<button type="button" class="saudi-policy__btn" id="policy-ack-submit-' + idx + '" onclick="submitPolicyAck(' + idx + ')">' + t("policy_ack_confirm") + '</button>' +
+						'<button type="button" class="saudi-policy__btn saudi-policy__btn--ghost" onclick="togglePolicyAck(' + idx + ')">' + t("policy_ack_cancel") + '</button>' +
+					'</div>' +
+				'</div>' : '') +
+		'</div>' +
+	'</article>';
+}
+
+function filterCompanyPolicies(q) {
+	q = (q || "").trim().toLowerCase();
+	if (!q) { renderCompanyPolicies(companyPolicies); return; }
+	renderCompanyPolicies(companyPolicies.filter(function(p) {
+		return [p.policy_title, p.policy_category, p.summary_text].join(" ").toLowerCase().indexOf(q) !== -1;
+	}), true);
+}
+
+function togglePolicySummary(idx, btn) {
+	var el = document.getElementById("policy-summary-" + idx);
+	var open = el.classList.toggle("saudi-policy__summary--open");
+	btn.textContent = t(open ? "policy_less" : "policy_more");
+}
+
+function togglePolicyAck(idx) {
+	var box = document.getElementById("policy-ack-" + idx);
+	box.hidden = !box.hidden;
+	if (!box.hidden) document.getElementById("policy-ack-input-" + idx).focus();
+}
+
+function submitPolicyAck(idx) {
+	var p = companyPolicies[idx];
+	var input = document.getElementById("policy-ack-input-" + idx);
+	var btn = document.getElementById("policy-ack-submit-" + idx);
+	if (input.value.trim() !== POLICY_ACK_PHRASE) {
+		input.classList.add("saudi-policy__ack-input--error");
+		showToast(t("policy_ack_hint") + ": " + POLICY_ACK_PHRASE, "error");
+		return;
+	}
+	btn.disabled = true;
+	frappe.call({
+		method: "saudi_hr.saudi_hr.enterprise_operations.acknowledge_company_policy",
+		args: {policy: p.name, consent_text: input.value.trim()},
+		callback: function(r) {
+			showToast(t("policy_ack_success"), "success");
+			SAUDI_PANEL_LOADERS.policies();
+		},
+		error: function(err) {
+			btn.disabled = false;
+			showToast(serverErrorMessage(err, t("policies_load_error")), "error");
 		}
-	} catch(e) {
-		showToast("Error", "error");
+	});
+}
+
+function openCompanyPolicy(idx) {
+	var p = companyPolicies[idx];
+	if (p && p.attachment_url) {
+		window.open(p.attachment_url, "_blank");
+	} else {
+		showToast(t("policy_no_file"), "error");
 	}
 }
 
@@ -1429,13 +1632,13 @@ SAUDI_PANEL_LOADERS["disciplinary"] = function() {
 				var ack = d.acknowledged_by_employee ? "✓" : "✗";
 				html += '<div class="saudi-list__item" style="flex-direction:column;align-items:flex-start;gap:6px;">' +
 					'<div style="display:flex;justify-content:space-between;width:100%;"><div class="saudi-list__title">' + (d.name || "") + ' - ' + (d.violation_type || "") + '</div><span>' + status + '</span></div>' +
-					'<div class="saudi-list__meta">التاريخ: ' + (d.incident_date || "") + ' | الإقرار: ' + ack + '</div>';
+					'<div class="saudi-list__meta">' + t("disc_date") + ': ' + (d.incident_date || "") + ' | ' + t("disc_ack") + ': ' + ack + '</div>';
 				if (!d.acknowledged_by_employee) {
-					html += '<div style="display:flex;gap:8px;width:100%;"><input id="ack-phrase-' + d.name + '" placeholder="أقر بالاطلاع والفهم" style="flex:1;padding:8px;border:1px solid #e5e7eb;border-radius:8px;"><button class="saudi-btn saudi-btn--primary" style="padding:6px 10px;" onclick="ackDisciplinary(\'' + d.name + '\')">إقرار</button></div>' +
-						'<textarea id="obj-' + d.name + '" placeholder="اعتراض..." style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:8px;"></textarea><button class="saudi-btn" style="padding:6px 10px;" onclick="objDisciplinary(\'' + d.name + '\')">تقديم اعتراض</button>';
+					html += '<div style="display:flex;gap:8px;width:100%;"><input id="ack-phrase-' + d.name + '" placeholder="' + POLICY_ACK_PHRASE + '" style="flex:1;padding:8px;border:1px solid #e5e7eb;border-radius:8px;"><button class="saudi-btn saudi-btn--primary" style="padding:6px 10px;" onclick="ackDisciplinary(\'' + d.name + '\')">' + t("disc_ack_btn") + '</button></div>' +
+						'<textarea id="obj-' + d.name + '" placeholder="' + t("disc_objection_ph") + '" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:8px;"></textarea><button class="saudi-btn" style="padding:6px 10px;" onclick="objDisciplinary(\'' + d.name + '\')">' + t("disc_submit_objection") + '</button>';
 				}
 				if (d.employee_objection) {
-					html += '<div class="saudi-list__meta">اعتراض: ' + d.employee_objection + '</div>';
+					html += '<div class="saudi-list__meta">' + t("disc_objection") + ': ' + d.employee_objection + '</div>';
 				}
 				html += '</div>';
 			});
@@ -1450,7 +1653,7 @@ window.ackDisciplinary = function(name) {
 	frappe.call({
 		method: "saudi_hr.saudi_hr.api.acknowledge_disciplinary_procedure",
 		args: { disciplinary_name: name, consent: consent },
-		callback: function() { frappe.msgprint("تم الإقرار"); if (typeof navigate === "function") navigate("disciplinary"); }
+		callback: function() { showToast(t("disc_ack_done"), "success"); if (typeof navigate === "function") navigate("disciplinary"); }
 	});
 };
 
@@ -1460,31 +1663,8 @@ window.objDisciplinary = function(name) {
 	frappe.call({
 		method: "saudi_hr.saudi_hr.api.object_to_disciplinary_procedure",
 		args: { disciplinary_name: name, objection: objection },
-		callback: function() { frappe.msgprint("تم تقديم الاعتراض"); if (typeof navigate === "function") navigate("disciplinary"); }
+		callback: function() { showToast(t("disc_objection_done"), "success"); if (typeof navigate === "function") navigate("disciplinary"); }
 	});
 };
 
 
-function loadPoliciesPanel() {
-	var list = document.getElementById("policies-list");
-	if (!list) return;
-	list.innerHTML = '<div class="saudi-list__item"><div class="saudi-list__body"><div class="saudi-list__title">Loading...</div></div></div>';
-	frappe.call({
-		method: "saudi_hr.saudi_hr.enterprise_operations.get_company_policies",
-		callback: function(r) {
-			var policies = r.message || [];
-			if (!policies.length) {
-				list.innerHTML = '<div class="saudi-list__item"><div class="saudi-list__body"><div class="saudi-list__title">لا توجد سياسة</div></div></div>';
-				return;
-			}
-			var html = "";
-			policies.forEach(function(p) {
-				var url = p.attachment_url || p.attachment;
-				html += '<div class="saudi-list__item" style="cursor:pointer;" onclick="window.open(\'' + url + '\', \'_blank\')">' +
-					'<div class="saudi-list__body"><div class="saudi-list__title">' + (p.policy_title || p.name) + '</div>' +
-					'<div class="saudi-list__meta">' + (p.company || '') + ' ' + (p.effective_date || '') + '</div></div></div>';
-			});
-			list.innerHTML = html;
-		}
-	});
-}

@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/assets/saudi_hr/css/saudi_portal.css?v=20261017">
+<link rel="stylesheet" href="/assets/saudi_hr/css/saudi_portal.css?v=20261101d">
 {% endblock %}
 
 {% block page_content %}
@@ -521,11 +521,50 @@
 		</button>
 	</nav>
 
+<!-- Disciplinary Procedures Panel -->
+<section class="saudi-panel" id="panel-disciplinary">
+	<div class="saudi-panel__header">
+		<div class="saudi-section-header">
+			<div class="saudi-section-header__back" onclick="navigate('home')">‹ <span data-i18n-key="back">رجوع</span></div>
+			<div class="saudi-section-header__title">⚖️ <span data-i18n-key="disciplinary_procedures">إجراءات تأديبية</span></div>
+		</div>
+	</div>
+	<div class="saudi-panel__body">
+		<div class="saudi-card">
+			<div id="disciplinaryList"></div>
+		</div>
+	</div>
+</section>
+
+
+<!-- Company Policies Panel -->
+<section class="saudi-panel" id="panel-policies">
+	<div class="saudi-panel__header">
+		<div class="saudi-section-header">
+			<div class="saudi-section-header__back" onclick="navigate('home')">‹ <span data-i18n-key="back">رجوع</span></div>
+			<div class="saudi-section-header__title">📘 <span data-i18n-key="company_policies">سياسة الشركة</span></div>
+		</div>
+	</div>
+	<div class="saudi-panel__body saudi-policies">
+		<div class="saudi-policies__hero">
+			<div class="saudi-policies__hero-icon">📘</div>
+			<div class="saudi-policies__hero-text">
+				<div class="saudi-policies__hero-title" data-i18n-key="policies_hero_title">لوائح وسياسات الشركة</div>
+				<div class="saudi-policies__hero-sub" data-i18n-key="policies_hero_sub">اطلع على السياسات المعتمدة وأقر بالاطلاع عليها</div>
+			</div>
+		</div>
+		<div class="saudi-policies__stats" id="policies-stats"></div>
+		<label class="sr-only" for="policies-search" data-i18n-key="policies_search">ابحث في السياسات</label>
+		<input type="search" class="saudi-policies__search" id="policies-search" placeholder="ابحث في السياسات" data-i18n-placeholder="policies_search" oninput="filterCompanyPolicies(this.value)">
+		<div id="policies-list"></div>
+	</div>
+</section>
+
 	<!-- Toast -->
 	<div class="saudi-toast" id="saudi-toast"></div>
 </div>
 
-<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261101a"></script>
+<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261101d"></script>
 <script>
 /* Page-specific behaviour, handed to the shared portal runtime. */
 SAUDI_PANEL_LOADERS["requests"] = loadMyRequests;
@@ -1411,10 +1450,23 @@ function renderRecentRequests(data) {
 	data.recent_requests.forEach(function(req) {
 		var bc = req.status_code === "approved" ? "saudi-badge--approved" : (req.status_code === "rejected" ? "saudi-badge--rejected" : "saudi-badge--pending");
 		rhtml += '<div class="saudi-request-row"><div class="saudi-request-row__right"><div class="saudi-request-row__icon">' + (ICON_MAP[req.icon] || req.icon || "📋") + '</div>' +
-			'<div class="saudi-request-row__info"><strong>' + req.title + '</strong><span>' + req.dates + '</span></div></div>' +
-			'<div style="display:flex;align-items:center;gap:8px;"><span class="saudi-badge ' + bc + '">' + req.status + '</span></div></div>';
+			'<div class="saudi-request-row__info"><strong>' + (CURRENT_LANG === "en" && req.title_en ? req.title_en : req.title) + '</strong><span>' + req.dates + '</span></div></div>' +
+			'<div style="display:flex;align-items:center;gap:8px;"><span class="saudi-badge ' + bc + '">' + t(req.status_code === "approved" || req.status_code === "rejected" ? req.status_code : "pending") + '</span></div></div>';
 	});
 	rc.innerHTML = rhtml;
+}
+
+// list panels reload so their rows come back in the new language; form
+// panels are left alone so a half-filled request is not wiped
+var LANG_RELOAD_PANELS = ["requests", "attendance", "policies", "disciplinary"];
+
+function onPortalLangChange() {
+	renderQuickActions(window.myPortalData);
+	renderRecentRequests(window.myPortalData);
+	renderAttendanceClock();
+	var active = document.querySelector(".saudi-panel--active");
+	var panel = active ? active.id.replace("panel-", "") : "";
+	if (LANG_RELOAD_PANELS.indexOf(panel) !== -1 && SAUDI_PANEL_LOADERS[panel]) SAUDI_PANEL_LOADERS[panel]();
 }
 
 /* Init */
@@ -1486,8 +1538,6 @@ document.addEventListener("DOMContentLoaded", function() {
 		});
 	}
 });
-</script>
-{% endblock %}
 
 function refreshHourLeaveContext() {
 	var date = document.getElementById("hour-leave-date").value;
@@ -1582,35 +1632,5 @@ function submitHourLeave() {
 		}
 	});
 }
-
-
-<!-- Disciplinary Procedures Panel -->
-<section class="saudi-panel" id="panel-disciplinary">
-	<div class="saudi-panel__header">
-		<div class="saudi-section-header">
-			<div class="saudi-section-header__back" onclick="navigate('home')">‹ <span data-i18n-key="back">رجوع</span></div>
-			<div class="saudi-section-header__title">⚖️ <span data-i18n-key="disciplinary_procedures">إجراءات تأديبية</span></div>
-		</div>
-	</div>
-	<div class="saudi-panel__body">
-		<div class="saudi-card">
-			<div id="disciplinaryList"></div>
-		</div>
-	</div>
-</section>
-
-
-<!-- Company Policies Panel -->
-<section class="saudi-panel" id="panel-policies">
-	<div class="saudi-panel__header">
-		<div class="saudi-section-header">
-			<div class="saudi-section-header__back" onclick="navigate('home')">‹ <span data-i18n-key="back">رجوع</span></div>
-			<div class="saudi-section-header__title">📘 <span data-i18n-key="company_policies">سياسة الشركة</span></div>
-		</div>
-	</div>
-	<div class="saudi-panel__body">
-		<div class="saudi-card">
-			<div id="policies-list"></div>
-		</div>
-	</div>
-</section>
+</script>
+{% endblock %}
