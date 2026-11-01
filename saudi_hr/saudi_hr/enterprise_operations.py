@@ -1237,16 +1237,10 @@ def get_company_policies():
 	)
 	if not employee or not employee.company:
 		return []
-	filters = {
-		"status": "Active / سارية",
-		"company": employee.company,
-	}
-	# Also try English status
-	if not frappe.db.exists("HR Policy Document", filters):
-		filters["status"] = "Active"
-		if not frappe.db.exists("HR Policy Document", filters):
-			filters.pop("status", None)
-
+	# Try to find policies for employee's company or global
+	policies = []
+	# Try with company + status
+	filters = {"status": "Active / سارية", "company": employee.company}
 	policies = frappe.get_all(
 		"HR Policy Document",
 		filters=filters,
@@ -1254,6 +1248,42 @@ def get_company_policies():
 		order_by="effective_date desc, modified desc",
 		limit_page_length=20,
 	)
+	if not policies:
+		filters = {"status": "Active", "company": employee.company}
+		policies = frappe.get_all(
+			"HR Policy Document",
+			filters=filters,
+			fields=["name", "policy_title", "policy_category", "effective_date", "attachment", "summary", "company", "target_scope", "target_department"],
+			order_by="effective_date desc, modified desc",
+			limit_page_length=20,
+		)
+	if not policies:
+		# try without company filter
+		filters = {"status": "Active / سارية"}
+		policies = frappe.get_all(
+			"HR Policy Document",
+			filters=filters,
+			fields=["name", "policy_title", "policy_category", "effective_date", "attachment", "summary", "company", "target_scope", "target_department"],
+			order_by="effective_date desc, modified desc",
+			limit_page_length=20,
+		)
+	if not policies:
+		filters = {"status": "Active"}
+		policies = frappe.get_all(
+			"HR Policy Document",
+			filters=filters,
+			fields=["name", "policy_title", "policy_category", "effective_date", "attachment", "summary", "company", "target_scope", "target_department"],
+			order_by="effective_date desc, modified desc",
+			limit_page_length=20,
+		)
+	if not policies:
+		policies = frappe.get_all(
+			"HR Policy Document",
+			filters={},
+			fields=["name", "policy_title", "policy_category", "effective_date", "attachment", "summary", "company", "target_scope", "target_department"],
+			order_by="effective_date desc, modified desc",
+			limit_page_length=20,
+		)
 	result = []
 	for p in policies:
 		if p.get("target_scope") == "Department Employees / موظفو القسم" and p.get("target_department"):
