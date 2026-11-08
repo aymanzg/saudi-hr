@@ -75,6 +75,40 @@ class TestLeaveBalanceAccrual(FrappeTestCase):
 		self.assertEqual(balance["entitled"], 20.0)
 		self.assertEqual(balance["balance"], 20.0)
 
+	def test_accrual_starts_at_the_first_whole_month_after_joining(self):
+		mid_month = self._employee("2026-06-15")
+		first_day = self._employee("2026-06-01")
+
+		self.assertEqual(utils.get_annual_leave_balance(mid_month, "2026-11-08")["accrued"], 7.0)
+		self.assertEqual(utils.get_annual_leave_balance(first_day, "2026-11-08")["accrued"], 8.75)
+
+	def test_unused_balance_is_carried_into_the_next_year(self):
+		employee = self._employee("2019-01-01")
+		frappe.get_doc(
+			{
+				"doctype": "Leave Balance Adjustment",
+				"employee": employee,
+				"leave_year": 2026,
+				"adjustment_days": 15,
+				"is_opening_balance": 1,
+				"balance_as_of_date": "2026-06-30",
+				"reason": "Opening balance from legacy system",
+			}
+		).insert(ignore_permissions=True).submit()
+
+		# 15 opening + six months at 2.5 left unused by the end of 2026
+		balance = utils.get_annual_leave_balance(employee, "2027-03-01")
+		self.assertEqual(balance["carried_forward"], 30.0)
+		self.assertEqual(balance["accrued"], 5.0)
+		self.assertEqual(balance["balance"], 35.0)
+
+	def test_nothing_is_carried_from_before_the_employee_joined(self):
+		employee = self._employee("2026-03-01")
+
+		balance = utils.get_annual_leave_balance(employee, "2026-09-01")
+		self.assertEqual(balance["carried_forward"], 0.0)
+		self.assertEqual(balance["balance"], 10.5)
+
 	def test_opening_balance_excluded_from_plain_adjustment_sum(self):
 		employee = self._employee("2019-01-01")
 		frappe.get_doc(

@@ -255,7 +255,8 @@ class TestComprehensiveTimePayrollCycle(FrappeTestCase):
 	def test_leave_entitlements_pay_and_overlap_cycle(self):
 		annual = frappe.get_doc({"doctype": "Saudi Annual Leave", "employee": self.employee, "company": self.company, "leave_start_date": "2026-08-02", "leave_end_date": "2026-08-06"}).insert(ignore_permissions=True)
 		self.assertEqual(annual.total_leave_days, 5)
-		self.assertGreaterEqual(annual.leave_balance_before, 21)
+		# joined 2023, under five years: January to July accrue 1.75 days each
+		self.assertEqual(annual.leave_balance_before, 12.25)
 		annual.flags.ignore_permissions = True
 		annual.flags.ignore_workflow = True
 		annual.submit()

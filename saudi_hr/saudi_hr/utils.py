@@ -630,6 +630,63 @@ def get_accrued_annual_leave(details: dict, period_start, period_end) -> float:
 	return round(min(accrued, cap), 2)
 
 
+def _accrual_start(details: dict, year: int):
+	"""The year accrues from 1 January, or from the first whole month of service
+	for an employee who joined during it: months before joining earn nothing,
+	and a joining month that started after its first day is not a full month."""
+	year_start = getdate(f"{year}-01-01")
+	joining_date = details.get("joining_date")
+	if not joining_date or getdate(joining_date) <= year_start:
+		return year_start
+	joining_date = getdate(joining_date)
+	if joining_date.day == 1:
+		return joining_date
+	return add_days(get_last_day(joining_date), 1)
+
+
+def get_carried_forward_annual_leave(employee: str, year: int, details: dict) -> float:
+	"""Unused annual leave brought into ``year``: the balance left on 31 December
+	of the year before, with no cap.
+
+	Years before the employee joined, and years before the system held any leave
+	records, carry nothing: leave taken then was never recorded here, so their
+	accrual would be credited in full. An opening balance moves that start, since
+	it states what was left at that point.
+	"""
+	previous = year - 1
+	joining_date = details.get("joining_date")
+	if joining_date and getdate(joining_date).year > previous:
+		return 0.0
+	if previous < _carry_forward_start_year(employee):
+		return 0.0
+	return flt(get_annual_leave_balance(employee, f"{previous}-12-31")["balance"])
+
+
+def _carry_forward_start_year(employee: str) -> int:
+	"""First year whose closing balance is known: the earliest opening balance for
+	this employee, or the year the site started holding records (its first
+	employee or first submitted annual leave, whichever came first)."""
+	years = [
+		cint(row.leave_year)
+		for row in frappe.get_all(
+			"Leave Balance Adjustment",
+			filters={"employee": employee, "docstatus": 1, "is_opening_balance": 1},
+			fields=["leave_year"],
+			ignore_permissions=True,
+		)
+		if row.leave_year
+	]
+	first_leave = frappe.db.sql(
+		"select min(leave_start_date) from `tabSaudi Annual Leave` where docstatus = 1"
+	)[0][0]
+	if first_leave:
+		years.append(getdate(first_leave).year)
+	first_employee = frappe.db.sql("select min(creation) from `tabEmployee`")[0][0]
+	if first_employee:
+		years.append(getdate(first_employee).year)
+	return min(years) if years else getdate().year
+
+
 def get_annual_leave_balance(employee: str, reference_date: str | None = None, exclude_name: str | None = None) -> dict:
 	reference = getdate(reference_date) if reference_date else getdate()
 	details = get_annual_leave_entitlement_details(employee, reference)
@@ -637,20 +694,23 @@ def get_annual_leave_balance(employee: str, reference_date: str | None = None, e
 	adjustment = get_leave_balance_adjustment(employee, reference.year)
 	opening = get_leave_balance_opening(employee, reference.year)
 
+	carried_forward = 0.0
 	if opening:
-		# Opening balance anchors the total; only months after the as-of date accrue.
+		# Opening balance anchors the total, carried days included; only months
+		# after the as-of date accrue.
 		accrual_start = add_days(opening["as_of"], 1)
 		accrued = get_accrued_annual_leave(details, accrual_start, reference)
 		entitled = round(flt(opening["days"]) + accrued, 2)
-		balance = entitled - flt(taken) + flt(adjustment)
 	else:
-		accrued = get_accrued_annual_leave(details, f"{reference.year}-01-01", reference)
-		entitled = accrued
-		balance = flt(accrued) - flt(taken) + flt(adjustment)
+		accrued = get_accrued_annual_leave(details, _accrual_start(details, reference.year), reference)
+		carried_forward = get_carried_forward_annual_leave(employee, reference.year, details)
+		entitled = round(carried_forward + accrued, 2)
+	balance = round(entitled - flt(taken) + flt(adjustment), 2)
 
 	return {
 		**details,
 		"entitled": entitled,
+		"carried_forward": carried_forward,
 		"annual_entitlement": flt(details["entitled"]),
 		"accrued": accrued,
 		"opening_balance": flt(opening["days"]) if opening else 0.0,
