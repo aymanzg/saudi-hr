@@ -138,6 +138,28 @@ class SaudiMonthlyPayroll(Document):
 		self._validate_non_negative_net_salary()
 		self._recalculate_totals()
 
+	def _validate_no_duplicate_employee_rows(self):
+		seen = set()
+		for row in (self.employees or []):
+			if not row.employee:
+				continue
+			if row.employee in seen:
+				frappe.throw(_("Duplicate employee {0} in payroll rows").format(row.employee))
+			seen.add(row.employee)
+
+	def _validate_no_duplicate_payroll(self):
+		filters = {"company": self.company, "docstatus": 1, "name": ["!=", self.name]}
+		if self.month and self.year:
+			existing = frappe.get_all("Saudi Monthly Payroll", filters=filters, fields=["name", "month", "year", "period_from", "period_to"])
+			for ex in existing:
+				if ex.get("month") == self.month and ex.get("year") == self.year:
+					frappe.throw(_("A submitted payroll already exists for {0} {1}: {2}").format(self.month, self.year, ex.name))
+				pf, pt = self.period_from, self.period_to
+				ef, et = ex.get("period_from"), ex.get("period_to")
+				if pf and pt and ef and et:
+					if getdate(pf) <= getdate(et) and getdate(ef) <= getdate(pt):
+						frappe.throw(_("Payroll period overlaps with submitted payroll: {0}").format(ex.name))
+
 	def _validate_non_negative_net_salary(self):
 		for row in self.employees:
 			if flt(row.net_salary) < 0:
@@ -3526,29 +3548,6 @@ def auto_create_employment_contracts(
 		"no_match_names": skipped_no_match[:20],
 		"error_details": errors[:10],
 	}
-
-
-	def _validate_no_duplicate_employee_rows(self):
-		seen = set()
-		for row in (self.employees or []):
-			if not row.employee:
-				continue
-			if row.employee in seen:
-				frappe.throw(_("Duplicate employee {0} in payroll rows").format(row.employee))
-			seen.add(row.employee)
-
-	def _validate_no_duplicate_payroll(self):
-		filters = {"company": self.company, "docstatus": 1, "name": ["!=", self.name]}
-		if self.month and self.year:
-			existing = frappe.get_all("Saudi Monthly Payroll", filters=filters, fields=["name", "month", "year", "period_from", "period_to"])
-			for ex in existing:
-				if ex.get("month") == self.month and ex.get("year") == self.year:
-					frappe.throw(_("A submitted payroll already exists for {0} {1}: {2}").format(self.month, self.year, ex.name))
-				pf, pt = self.period_from, self.period_to
-				ef, et = ex.get("period_from"), ex.get("period_to")
-				if pf and pt and ef and et:
-					if getdate(pf) <= getdate(et) and getdate(ef) <= getdate(pt):
-						frappe.throw(_("Payroll period overlaps with submitted payroll: {0}").format(ex.name))
 
 
 def _get_violation_deductions(employee, period_from, period_to):
