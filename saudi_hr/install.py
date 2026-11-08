@@ -24,6 +24,7 @@ def after_install():
 	ensure_department_approver_role()
 	ensure_attendance_officer_role()
 	sync_attendance_officer_permissions()
+	sync_general_manager_approval_permissions()
 	sync_department_approver_role_assignments()
 	remove_mismatched_company_user_permissions()
 	ensure_mobile_portal_role()
@@ -46,6 +47,7 @@ def after_migrate():
 	ensure_department_approver_role()
 	ensure_attendance_officer_role()
 	sync_attendance_officer_permissions()
+	sync_general_manager_approval_permissions()
 	sync_department_approver_role_assignments()
 	remove_mismatched_company_user_permissions()
 	ensure_mobile_portal_role()
@@ -207,6 +209,40 @@ def sync_attendance_officer_permissions():
 			"write": 1,
 		}
 	).insert(ignore_permissions=True)
+
+
+def sync_general_manager_approval_permissions():
+	"""Let the General Manager finish the chains that end on their approval.
+
+	That approval submits the document, so read and write are not enough. A doctype
+	whose permissions were customised on the site ignores its JSON, so its Custom
+	DocPerm rows are what has to carry the grant.
+	"""
+	from saudi_hr.saudi_hr.workflow_catalogue import AUTO_COMPLETE_ON_GM_APPROVAL, GM_ROLE
+
+	for doctype in AUTO_COMPLETE_ON_GM_APPROVAL:
+		if not frappe.db.exists("Custom DocPerm", {"parent": doctype}):
+			continue
+		name = frappe.db.get_value(
+			"Custom DocPerm", {"parent": doctype, "role": GM_ROLE, "permlevel": 0, "if_owner": 0}, "name"
+		)
+		doc = (
+			frappe.get_doc("Custom DocPerm", name)
+			if name
+			else frappe.get_doc(
+				{
+					"doctype": "Custom DocPerm",
+					"parent": doctype,
+					"parenttype": "DocType",
+					"parentfield": "permissions",
+					"role": GM_ROLE,
+					"permlevel": 0,
+				}
+			)
+		)
+		doc.update({"read": 1, "write": 1, "submit": 1})
+		doc.save(ignore_permissions=True)
+		frappe.clear_cache(doctype=doctype)
 
 
 def sync_department_approver_role_assignments():

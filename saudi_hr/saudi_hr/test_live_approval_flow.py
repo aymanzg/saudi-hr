@@ -97,16 +97,11 @@ class TestLiveApprovalFlow(FrappeTestCase):
 			self.assertTrue(frappe.has_permission("Saudi Annual Leave", "read", doc=leave))
 			apply_workflow(leave, "GM Approve")
 			leave.reload()
-			self.assertEqual(leave.workflow_state, "GM Approved")
-
-			frappe.set_user(self.hr_user_email)
-			apply_workflow(leave, "Mark Completed")
-			leave.reload()
 
 		self.assertEqual(leave.workflow_state, "Completed")
 		self.assertEqual(leave.docstatus, 1)
 		self.assertEqual(leave.status, "Approved / موافق عليها")
-		self.assertEqual(leave.approved_by, self.hr_user_email)
+		self.assertEqual(leave.approved_by, self.gm_email)
 
 	def test_leave_rejected_by_gm_resubmits_into_pending_gm_review(self):
 		with patch(

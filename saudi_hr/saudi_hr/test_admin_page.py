@@ -352,7 +352,8 @@ class TestAdminPageSafety(FrappeTestCase):
 	def test_employee_creation_reads_only_named_controls(self):
 		"""The form must not serialise the whole DOM into the payload."""
 		self.assertIn('form.querySelectorAll("[name]")', self.js)
-		self.assertNotIn("new FormData", self.js)
+		# an empty FormData carrying one chosen file is fine; building one from a form is not
+		self.assertNotRegex(self.js, r"new FormData\(\s*\w")
 
 	def test_add_button_is_hidden_without_create_permission(self):
 		self.assertIn('addBtn.hidden = !ADMIN_CFG.can_manage_employees', self.js)

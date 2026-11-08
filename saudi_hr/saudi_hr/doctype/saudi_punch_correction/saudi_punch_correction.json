@@ -214,6 +214,7 @@
   },
   {
    "role": "General Manager",
+   "submit": 1,
    "read": 1,
    "write": 1
   },

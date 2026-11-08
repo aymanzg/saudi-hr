@@ -21,6 +21,24 @@ def built_all(submittable=True) -> dict:
 
 
 class TestWorkflowCatalogue(FrappeTestCase):
+	def test_hr_issued_letters_skip_the_chain_and_other_requests_keep_it(self):
+		transitions = wf.build_workflow(wf.HR_ISSUED_DOCTYPE, is_submittable=True)["transitions"]
+		target = lambda action, condition: {
+			t["next_state"] for t in transitions if t["action"] == action and t["condition"] == condition
+		}
+		self.assertEqual(target("Submit Request", wf.IS_HR_ISSUED), {"Pending HR Review"})
+		self.assertEqual(target("Submit Request", wf.IS_NOT_HR_ISSUED), {"Pending Supervisor Review"})
+		self.assertEqual(target(wf.ISSUE_ACTION, wf.IS_HR_ISSUED), {wf.TERMINAL_STATE})
+		self.assertEqual(target("HR Approve", wf.IS_NOT_HR_ISSUED), {"Pending HR Manager Review"})
+		self.assertEqual(
+			{t["allowed"] for t in transitions if t["action"] == wf.ISSUE_ACTION}, set(wf.EXECUTOR_ROLES)
+		)
+
+	def test_the_hr_issued_types_are_the_printable_documents(self):
+		from saudi_hr.saudi_hr.hr_documents import HR_DOCUMENTS
+
+		self.assertEqual(set(wf.HR_ISSUED_REQUEST_TYPES), set(HR_DOCUMENTS))
+
 	def test_one_workflow_per_doctype_with_canonical_shapes(self):
 		workflows = built_all()
 		self.assertEqual(set(workflows), set(ALL_DOCTYPES))
@@ -46,28 +64,36 @@ class TestWorkflowCatalogue(FrappeTestCase):
 				continue
 			self.assertEqual(states, set(wf.ALL_STATES))
 			self.assertEqual(len(workflow["states"]), 12)
-			self.assertEqual(len(workflow["transitions"]), 20)
+			self.assertEqual(len(workflow["transitions"]), 24 if doctype == wf.HR_ISSUED_DOCTYPE else 20)
 
-	def test_gm_approval_completes_the_punch_correction(self):
-		workflow = wf.build_workflow("Saudi Punch Correction", is_submittable=True)
-		states = [row["state"] for row in workflow["states"]]
-		actions = [t["action"] for t in workflow["transitions"]]
+	def test_gm_approval_completes_the_leaves_and_punch_correction(self):
+		for doctype in (
+			"Mobile Leave Request",
+			"Saudi Annual Leave",
+			"Saudi Emergency Leave",
+			"Saudi Hourly Leave Request",
+			"Saudi Punch Correction",
+			"Saudi Sick Leave",
+		):
+			workflow = wf.build_workflow(doctype, is_submittable=True)
+			states = [row["state"] for row in workflow["states"]]
+			actions = [t["action"] for t in workflow["transitions"]]
 
-		self.assertNotIn("GM Approved", states)
-		self.assertNotIn("Mark Completed", actions)
+			self.assertNotIn("GM Approved", states, doctype)
+			self.assertNotIn("Mark Completed", actions, doctype)
 
-		gm_approvals = [t for t in workflow["transitions"] if t["action"] == "GM Approve"]
-		self.assertTrue(gm_approvals)
-		for transition in gm_approvals:
-			self.assertEqual(transition["state"], "Pending GM Review")
-			self.assertEqual(transition["next_state"], wf.TERMINAL_STATE)
-			self.assertEqual(transition["allowed"], wf.GM_ROLE)
+			gm_approvals = [t for t in workflow["transitions"] if t["action"] == "GM Approve"]
+			self.assertTrue(gm_approvals, doctype)
+			for transition in gm_approvals:
+				self.assertEqual(transition["state"], "Pending GM Review")
+				self.assertEqual(transition["next_state"], wf.TERMINAL_STATE)
+				self.assertEqual(transition["allowed"], wf.GM_ROLE)
 
-		terminal = next(row for row in workflow["states"] if row["state"] == wf.TERMINAL_STATE)
-		self.assertEqual(terminal["doc_status"], "1")
+			terminal = next(row for row in workflow["states"] if row["state"] == wf.TERMINAL_STATE)
+			self.assertEqual(terminal["doc_status"], "1")
 
 	def test_other_doctypes_keep_the_gm_approved_handoff(self):
-		workflow = wf.build_workflow("Saudi Annual Leave", is_submittable=True)
+		workflow = wf.build_workflow("Overtime Request", is_submittable=True)
 		states = [row["state"] for row in workflow["states"]]
 		actions = [t["action"] for t in workflow["transitions"]]
 
@@ -93,7 +119,7 @@ class TestWorkflowCatalogue(FrappeTestCase):
 			self.assertEqual(terminal[wf.CANCELLED_STATE], "0")
 
 	def test_submission_allows_self_approval_but_no_approval_step_does(self):
-		workflow = wf.build_workflow("Saudi Annual Leave", is_submittable=True)
+		workflow = wf.build_workflow("Overtime Request", is_submittable=True)
 		by_action = {}
 		for transition in workflow["transitions"]:
 			by_action.setdefault(transition["action"], []).append(transition)

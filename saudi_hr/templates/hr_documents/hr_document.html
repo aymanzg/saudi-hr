@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<style>
+	body { margin: 0; font-family: Tahoma, Arial, "DejaVu Sans", sans-serif; color: #1a1a1a; }
+	@page { size: A4; margin: 12mm 15mm; }
+	.page { position: relative; height: 272mm; overflow: hidden; direction: rtl; text-align: right; font-size: 15px; line-height: 2; }
+	.letterfoot { position: absolute; bottom: 0; left: 0; right: 0; direction: ltr; line-height: 1.4; }
+	.letterhead { direction: ltr; margin-bottom: 26px; }
+	.date { margin-bottom: 8px; }
+	.title { text-align: center; font-size: 22px; font-weight: bold; margin: 18px 0 22px; }
+	.recipient { font-size: 16px; font-weight: bold; margin-bottom: 10px; }
+	p { margin: 0 0 12px; }
+	.name { font-weight: bold; }
+	table.salary { width: 70%; border-collapse: collapse; margin: 6px 0 16px; }
+	table.salary td { border: 1px solid #999; padding: 4px 12px; }
+	table.salary td.amount { text-align: left; width: 35%; direction: ltr; }
+	table.salary tr.total td { font-weight: bold; background: #f2f2f2; }
+	.closing { text-align: center; font-weight: bold; margin: 20px 0; }
+	.signature { margin-top: 34px; line-height: 2.6; }
+	.signature-grid { width: 100%; margin-top: 44px; }
+	.signature-grid td { width: 50%; text-align: center; vertical-align: top; }
+	.line { display: inline-block; width: 190px; border-bottom: 1px solid #333; }
+	.ref { margin-top: 26px; font-size: 11px; color: #777; direction: ltr; text-align: left; }
+</style>
+</head>
+<body>
+<div class="page">
+{% if letter_head %}<div class="letterhead">{{ letter_head }}</div>{% endif %}
+
+{% if document_type == "salary_certificate" %}
+	<div class="date">التاريخ: {{ issue_date }}</div>
+	<div class="title">{{ document_title }}</div>
+	<div class="recipient">إلى من يهمه الأمر،</div>
+	<p>نفيد نحن {{ company_name | e }} بأن {{ w.title }}/ <span class="name">{{ employee.employee_name | e }}</span>، {{ w.holder }} الجنسية {{ employee.custom_nationality | e }}، {{ w.holds }} {{ id_label }} رقم {{ employee.custom_id_number | e }}، {{ w.works }} لدينا بمسمى {{ employee.designation | e }} منذ تاريخ {{ joining_date }}، ولا {{ w.stays }} على رأس العمل حتى تاريخه.</p>
+	<p>و{{ w.earns }} راتبًا شهريًا إجماليًا قدره ({{ salary.total }}) {{ salary.total_in_words }}، وذلك على النحو التالي:</p>
+	<table class="salary">
+		{% for line in salary.lines %}<tr><td>{{ line.label }}</td><td class="amount">{{ line.amount }}</td></tr>{% endfor %}
+		<tr class="total"><td>الإجمالي</td><td class="amount">{{ salary.total }}</td></tr>
+	</table>
+	<p>وقد {{ w.given }} {{ w.testified }} هذا التعريف بناءً على طلب{{ w.his }}، دون أدنى مسؤولية على الشركة.</p>
+	<div class="closing">وتفضلوا بقبول فائق الاحترام والتقدير</div>
+	<div class="signature"><strong>إدارة الموارد البشرية</strong></div>
+
+{% elif document_type == "employment_letter" %}
+	<div class="title">{{ document_title }}</div>
+	<div class="date">التاريخ: {{ issue_date }}</div>
+	<div class="recipient">إلى من يهمه الأمر،</div>
+	<p>نفيدكم بأن {{ w.employee }}/ <span class="name">{{ employee.employee_name | e }}</span>، {{ w.holder }} {{ id_label }} رقم {{ employee.custom_id_number | e }}، {{ w.works }} لدى {{ company_name | e }} بمسمى وظيفي {{ employee.designation | e }}، وذلك منذ تاريخ {{ joining_date }}، ولا {{ w.stays }} على رأس العمل حتى تاريخ إصدار هذا الخطاب.</p>
+	<p>وقد صدر هذا المشهد بناءً على طلب {{ w.employee }} لتقديمه إلى الجهة المعنية.</p>
+	<div class="closing">وتفضلوا بقبول فائق الاحترام</div>
+	<div class="signature">
+		اسم الشركة: {{ company_name | e }}<br>
+		الموارد البشرية: <span class="line"></span><br>
+		التوقيع والختم: <span class="line"></span>
+	</div>
+
+{% elif document_type == "addressed_letter" %}
+	<div class="title">{{ document_title }}</div>
+	<div class="date">التاريخ: {{ issue_date }}</div>
+	<div class="recipient">السادة/ {{ addressed_to | e }} المحترمين</div>
+	<p>السلام عليكم ورحمة الله وبركاته، وبعد:</p>
+	{% if letter_subject %}<p><strong>الموضوع: خطاب بشأن {{ letter_subject | e }}</strong></p>{% endif %}
+	<p>نفيدكم نحن {{ company_name | e }} بأن {{ w.employee }}/ <span class="name">{{ employee.employee_name | e }}</span>، {{ w.holder }} {{ id_label }} رقم {{ employee.custom_id_number | e }}، {{ w.works }} لدينا بمسمى وظيفي {{ employee.designation | e }}.</p>
+	<p>وقد صدر هذا الخطاب بناءً على طلب {{ w.employee }}، وذلك لتقديمه إلى جهتكم الموقرة{% if letter_purpose %} بشأن {{ letter_purpose | e }}{% endif %}.</p>
+	<p>شاكرين لكم حسن تعاونكم، وتفضلوا بقبول فائق الاحترام والتقدير.</p>
+	<div class="signature">
+		اسم الشركة: {{ company_name | e }}<br>
+		اسم المسؤول: <span class="line"></span><br>
+		المسمى الوظيفي: <span class="line"></span><br>
+		التوقيع: <span class="line"></span><br>
+		ختم الشركة: <span class="line"></span>
+	</div>
+
+{% elif document_type == "experience_certificate" %}
+	<div class="title">{{ document_title }}</div>
+	<div class="date">التاريخ: {{ issue_date_hijri }}</div>
+	<div class="recipient">إلى من يهمه الأمر:</div>
+	<p>تشهد {{ company_name | e }} بأن {{ w.title }}/ <span class="name">{{ employee.employee_name | e }}</span>، {{ w.holder }} الجنسية {{ employee.custom_nationality | e }}، {{ id_label }} رقم {{ employee.custom_id_number | e }}، {{ w.worked }} لدينا بوظيفة {{ employee.designation | e }}، وذلك من تاريخ {{ joining_date }} حتى تاريخ {{ end_date }}.</p>
+	<p>وخلال فترة عمل{{ w.his }} لدينا {{ w.known }} {{ w.named }} بأن{{ w.his }} {{ w.has }} بالكفاءة العملية والمهنية في مجال عمل{{ w.his }}، كما يشهد {{ w.testified }} بحسن السيرة والسلوك.</p>
+	<p>متمنين {{ w.testified }} كل التوفيق في مساعي{{ w.his }} المستقبلية.</p>
+	<table class="signature-grid"><tr>
+		<td><span class="line"></span><br><strong>مدير الشؤون الإدارية والموارد البشرية</strong></td>
+		<td>الختم الرسمي</td>
+	</tr></table>
+
+{% elif document_type == "employee_clearance" %}
+	<div class="date">التاريخ: {{ issue_date }}</div>
+	<div class="title">{{ document_title }}</div>
+	<p>تشهد {{ company_name | e }} بأن {{ w.title }}/ <span class="name">{{ employee.employee_name | e }}</span>، {{ w.holder }} الجنسية {{ employee.custom_nationality | e }}، و{{ w.holds }} {{ id_label }} رقم {{ employee.custom_id_number | e }}، {{ "والذي" if employee.gender != "Female" else "والتي" }} {{ w.held }} وظيفة {{ employee.designation | e }}، قد انتهت علاقت{{ w.his }} التعاقدية بالشركة اعتبارًا من تاريخ {{ end_date }}. وبموجب هذا الإقرار فقد {{ w.did }} {{ w.named }} بإخلاء طرف{{ w.his }} من جميع العهد والممتلكات والأصول التابعة للشركة والمسلمة إلي{{ w.his }}، كما {{ w.settled }} جميع الالتزامات المترتبة علي{{ w.his }} تجاه الشركة حتى تاريخ انتهاء عمل{{ w.his }}.</p>
+	<p>وقد أُصدر هذا الإقرار بناءً على طلب{{ w.his }}، لإثبات إخلاء طرف{{ w.his }}، دون أن يترتب على الشركة أي مسؤولية أو التزام تجاه{{ w.his }} أو تجاه الغير بعد تاريخ إصداره، وذلك وفقًا للأنظمة واللوائح المعمول بها.</p>
+	<div class="closing">والله ولي التوفيق</div>
+	<table class="signature-grid"><tr>
+		<td><span class="line"></span><br><strong>إدارة الموارد البشرية</strong></td>
+		<td>ختم الشركة</td>
+	</tr></table>
+{% endif %}
+
+<div class="ref">{{ request.name }}</div>
+{% if letter_foot %}<div class="letterfoot">{{ letter_foot }}</div>{% endif %}
+</div>
+</body>
+</html>

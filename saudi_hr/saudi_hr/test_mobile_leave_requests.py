@@ -216,7 +216,7 @@ class TestMobileLeaveRequests(FrappeTestCase):
 		frappe.set_user(self.employee_email)
 		try:
 			with patch.object(api_module.frappe.db, "commit"):
-				result = api_module.submit_hr_service_request("salary_certificate", description="please issue")
+				result = api_module.submit_hr_service_request("work_permit_renewal", description="please issue")
 		finally:
 			frappe.set_user("Administrator")
 

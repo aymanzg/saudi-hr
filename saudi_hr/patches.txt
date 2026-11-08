@@ -4,3 +4,4 @@ saudi_hr.patches.rename_employees_to_employee_number
 saudi_hr.patches.remove_mismatched_company_user_permissions
 saudi_hr.patches.zero_open_shift_early_exit
 saudi_hr.patches.apply_client_gosi_rules
+saudi_hr.patches.rename_mutual_agreement_termination_reason

@@ -83,7 +83,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Termination Reason / سبب الإنهاء",
-   "options": "Resignation by Employee / استقالة الموظف (م.75)\nTermination by Employer / إنهاء من صاحب العمل (م.76)\nEnd of Fixed Term / انتهاء عقد محدد المدة\nMutual Agreement / اتفاق مشترك\nDismissal Without Notice / فصل فوري (م.80)",
+   "options": "Resignation by Employee / استقالة الموظف (م.75)\nTermination by Employer / إنهاء من صاحب العمل (م.76)\nEnd of Fixed Term / انتهاء عقد محدد المدة\nMutual Agreement / انتهاء العقد باتفاق الطرفين\nDismissal Without Notice / فصل فوري (م.80)",
    "reqd": 1
   },
   {
@@ -189,7 +189,7 @@
    "link_fieldname": "employee"
   }
  ],
- "modified": "2026-03-17 00:00:00.000000",
+ "modified": "2026-11-01 22:00:00.000000",
  "modified_by": "Administrator",
  "module": "Saudi HR",
  "name": "Termination Notice",

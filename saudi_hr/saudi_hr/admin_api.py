@@ -58,6 +58,15 @@ from saudi_hr.saudi_hr.utils import (
 	get_employee_salary_components,
 	is_saudi_nationality,
 )
+from saudi_hr.saudi_hr.hr_documents import (
+	HR_DOCUMENTS,
+	can_issue_document,
+	is_document_officer,
+	is_document_ready,
+	issue_requested_document,
+	issue_unrequested_document,
+	save_signed_document,
+)
 from saudi_hr.saudi_hr.workflow_catalogue import role_label, state_bucket
 
 # Roles allowed to open the admin portal at all.  Approval rights are
@@ -79,6 +88,8 @@ POST_ONLY_METHODS = frozenset(
 		"register_absence_case",
 		"create_eosb_settlement",
 		"issue_hr_document",
+		"issue_requested_hr_document",
+		"save_signed_hr_document",
 		"create_termination_notice",
 		"create_exit_clearance",
 		"apply_offboarding_action",
@@ -3062,15 +3073,16 @@ def get_documents_and_letters(employee=None, document_type=None, status=None, li
 	limit = _clean_limit(limit)
 
 	filters = {}
+	or_filters = None
 	if employee:
-		filters["employee"] = employee
+		or_filters = [["employee", "like", f"%{employee}%"], ["employee_name", "like", f"%{employee}%"]]
 	if document_type:
 		filters["request_type"] = document_type
 
 	rows = []
 	if frappe.db.table_exists("HR Service Request") and frappe.has_permission("HR Service Request", "read", throw=False):
-		fields = _existing_fields("HR Service Request", ["name", "employee", "employee_name", "request_type", "creation", "workflow_state", "status", "docstatus", "description"])
-		sr_rows = frappe.get_list("HR Service Request", filters=filters, fields=fields, order_by="creation desc", limit_page_length=limit)
+		fields = _existing_fields("HR Service Request", ["name", "employee", "employee_name", "request_type", "creation", "workflow_state", "status", "docstatus", "description", "addressed_to", "signed_document"])
+		sr_rows = frappe.get_list("HR Service Request", filters=filters, or_filters=or_filters, fields=fields, order_by="creation desc", limit_page_length=limit)
 		for r in sr_rows:
 			state = _row_state(r)
 			if status and state != status:
@@ -3080,11 +3092,14 @@ def get_documents_and_letters(employee=None, document_type=None, status=None, li
 				"employee": r.get("employee"),
 				"employee_name": r.get("employee_name") or r.get("employee"),
 				"document_type": r.get("request_type") or "salary_certificate",
-				"addressed_to": r.get("description") or "—",
+				"addressed_to": r.get("addressed_to") or r.get("description") or "—",
 				"creation": str(r.get("creation"))[:10] if r.get("creation") else "",
 				"state": state,
 				"raw_state": r.get("workflow_state") or r.get("status"),
 				"desk_url": desk_route("HR Service Request", r.get("name")),
+				"can_issue": can_issue_document(r.get("request_type"), r.get("workflow_state")),
+				"can_print": is_document_officer() and is_document_ready(r.get("request_type"), r.get("workflow_state")),
+				"has_signed_copy": is_document_officer() and bool(r.get("signed_document")),
 			})
 
 	stats = {
@@ -3102,13 +3117,23 @@ def get_documents_and_letters(employee=None, document_type=None, status=None, li
 
 
 @frappe.whitelist(methods=["POST"])
-def issue_hr_document(employee, document_type, addressed_to=None, notes=None):
+def issue_hr_document(employee, document_type, addressed_to=None, notes=None, letter_subject=None, letter_purpose=None):
 	"""Issue or request a new HR document/letter."""
 	assert_portal_access()
 	assert_panel_access("documents")
 	if not frappe.db.table_exists("HR Service Request"):
 		frappe.throw(_("HR Service Request doctype is missing."), frappe.ValidationError)
 	assert_doctype_permissions("HR Service Request", "create")
+
+	if document_type in HR_DOCUMENTS:
+		issued = issue_unrequested_document(employee, document_type, addressed_to, letter_subject, letter_purpose)
+		return {
+			"name": issued.name,
+			"created": True,
+			"document_type": document_type,
+			"state": _row_state(issued.as_dict()),
+			"desk_url": desk_route("HR Service Request", issued.name),
+		}
 
 	AUTO_ISSUE_TYPES = {"salary_certificate", "job_confirmation", "contract_copy", "payslip", "salary_benefits_statement"}
 
@@ -3137,6 +3162,22 @@ def issue_hr_document(employee, document_type, addressed_to=None, notes=None):
 		"state": _row_state(doc.as_dict()),
 		"desk_url": desk_route("HR Service Request", doc.name),
 	}
+
+
+@frappe.whitelist(methods=["POST"])
+def issue_requested_hr_document(name):
+	"""Issue a letter an employee requested, ready for HR to print and sign."""
+	assert_panel_access("documents")
+	issue_requested_document(name)
+	return {"name": name}
+
+
+@frappe.whitelist(methods=["POST"])
+def save_signed_hr_document(name, file_url):
+	"""Keep the hand-signed scan of an issued letter on its request."""
+	assert_panel_access("documents")
+	save_signed_document(name, file_url)
+	return {"name": name}
 
 
 # ─── Offboarding / Exit Clearance orchestrator ──────────────────────────────
@@ -3175,7 +3216,7 @@ EOSB_REASON_BY_TERMINATION_REASON = {
 	"Resignation by Employee / استقالة الموظف (م.75)": "Resignation / استقالة",
 	"Termination by Employer / إنهاء من صاحب العمل (م.76)": "Termination by Employer / إنهاء من صاحب العمل",
 	"End of Fixed Term / انتهاء عقد محدد المدة": "End of Fixed Term / انتهاء عقد محدد",
-	"Mutual Agreement / اتفاق مشترك": "Resignation / استقالة",
+	"Mutual Agreement / انتهاء العقد باتفاق الطرفين": "Resignation / استقالة",
 	"Dismissal Without Notice / فصل فوري (م.80)": "Dismissal / فصل تأديبي (م.80)",
 }
 DEFAULT_EOSB_TERMINATION_REASON = "Termination by Employer / إنهاء من صاحب العمل"

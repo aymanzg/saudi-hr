@@ -99,6 +99,8 @@ HR_SERVICE_REQUEST_LABELS = {
 	"salary_transfer_letter": "خطاب تحويل راتب",
 	"clearance": "المخالصة المالية",
 	"end_of_service_cert": "شهادة نهاية خدمة",
+	"employment_letter": "خطاب مشهد وظيفي",
+	"employee_clearance": "إخلاء طرف",
 }
 
 # English titles for the mobile portal's recent requests, keyed by the Arabic title
@@ -131,6 +133,8 @@ REQUEST_TITLE_EN = {
 	"خطاب تثبيت": "Job Confirmation Letter",
 	"نسخة عقد عمل": "Employment Contract Copy",
 	"كشف راتب": "Payslip",
+	"خطاب مشهد وظيفي": "Employment Letter",
+	"إخلاء طرف": "Clearance Certificate",
 	"بيان الراتب والمزايا": "Salary & Benefits Statement",
 	"خطاب موجه لجهة": "Addressed Letter",
 	"خطاب تحويل راتب": "Salary Transfer Letter",

@@ -2302,7 +2302,6 @@ class TestAdminApiDocumentsAndLetters(_ApiTestBase):
 
 	def test_auto_issue_types_come_out_approved(self):
 		auto = (
-			"salary_certificate",
 			"job_confirmation",
 			"contract_copy",
 			"payslip",
@@ -2320,7 +2319,7 @@ class TestAdminApiDocumentsAndLetters(_ApiTestBase):
 			)
 
 	def test_letters_stay_pending_until_approved_by_hand(self):
-		for document_type in ("addressed_letter", "salary_transfer_letter"):
+		for document_type in ("salary_transfer_letter", "end_of_service_cert"):
 			res = self._issued(document_type, addressed_to="Saudi Post")
 			self.assertEqual(res["document_type"], document_type)
 			row = next(
@@ -2333,7 +2332,7 @@ class TestAdminApiDocumentsAndLetters(_ApiTestBase):
 			self.assertIn(row["state"], ("pending", "draft"))
 
 	def test_the_dashboard_counts_what_was_issued_this_month(self):
-		for document_type in ("salary_certificate", "addressed_letter"):
+		for document_type in ("job_confirmation", "salary_transfer_letter"):
 			self._issued(document_type)
 		data = get_documents_and_letters(employee=self.employee)
 		ours = [r for r in data["rows"] if r["employee"] == self.employee]
@@ -2343,10 +2342,10 @@ class TestAdminApiDocumentsAndLetters(_ApiTestBase):
 		self.assertEqual(len(ours), 2)
 
 	def test_filtering_by_type_and_status_narrows_the_rows(self):
-		self._issued("salary_certificate")
-		self._issued("addressed_letter")
-		by_type = get_documents_and_letters(employee=self.employee, document_type="addressed_letter")
-		self.assertTrue(all(r["document_type"] == "addressed_letter" for r in by_type["rows"]))
+		self._issued("job_confirmation")
+		self._issued("salary_transfer_letter")
+		by_type = get_documents_and_letters(employee=self.employee, document_type="salary_transfer_letter")
+		self.assertTrue(all(r["document_type"] == "salary_transfer_letter" for r in by_type["rows"]))
 		approved = get_documents_and_letters(employee=self.employee, status="approved")
 		self.assertTrue(all(r["state"] == "approved" for r in approved["rows"]))
 

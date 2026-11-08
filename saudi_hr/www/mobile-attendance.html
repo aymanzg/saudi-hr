@@ -234,6 +234,9 @@
 					<option value="advance_salary" data-i18n-key="srv_advance_salary">سلفة</option>
 					<option value="salary_certificate" data-i18n-key="srv_salary_certificate">شهادة تعريف بالراتب</option>
 					<option value="experience_certificate" data-i18n-key="srv_experience_certificate">شهادة خبرة</option>
+					<option value="employment_letter" data-i18n-key="srv_employment_letter">خطاب مشهد وظيفي</option>
+					<option value="addressed_letter" data-i18n-key="srv_addressed_letter">خطاب موجه لجهة</option>
+					<option value="employee_clearance" data-i18n-key="srv_employee_clearance">إخلاء طرف</option>
 					<option value="employee_loan" data-i18n-key="srv_employee_loan">قرض موظف</option>
 				</select>
 			</div>
@@ -250,6 +253,11 @@
 			<div class="saudi-field" id="hr-service-amount-field" style="display:none;">
 				<label data-i18n-key="amount">المبلغ</label>
 				<input type="number" id="hr-service-amount" min="0">
+			</div>
+			<div id="hr-service-letter-fields" style="display:none;">
+				<div class="saudi-field"><label data-i18n-key="doc_addressed_to">اسم الجهة</label><input type="text" id="hr-service-addressed-to"></div>
+				<div class="saudi-field"><label data-i18n-key="doc_letter_subject">موضوع الخطاب</label><input type="text" id="hr-service-letter-subject"></div>
+				<div class="saudi-field"><label data-i18n-key="doc_letter_purpose">الغرض من الخطاب</label><input type="text" id="hr-service-letter-purpose"></div>
 			</div>
 			<div class="saudi-field" id="hr-service-new-value-field" style="display:none;">
 				<label data-i18n-key="new_value">القيمة الجديدة</label>
@@ -575,7 +583,7 @@
 	<div class="saudi-toast" id="saudi-toast"></div>
 </div>
 
-<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261101e"></script>
+<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261105b"></script>
 <script>
 /* Page-specific behaviour, handed to the shared portal runtime. */
 SAUDI_PANEL_LOADERS["requests"] = loadMyRequests;
@@ -851,7 +859,10 @@ function finishSubmit(btn, r, btnKey) {
 			try { if (typeof sm === "string") sm = JSON.parse(sm); } catch (e) { sm = null; }
 		}
 		if (sm && sm.length) {
-			var raw = (sm[0] + "").replace(/\?"/g, "").replace(/<[^>]+>/g, "").trim();
+			var first = sm[0];
+			// each server message arrives as a JSON string holding the text in .message
+			try { first = JSON.parse(first).message || first; } catch (e) {}
+			var raw = (first + "").replace(/\?"/g, "").replace(/<[^>]+>/g, "").trim();
 			if (raw) msg = raw;
 		}
 		showToast(msg, "error");
@@ -967,6 +978,7 @@ function onHrServiceTypeChange() {
 	dateField.style.display = val === "exit_and_return" ? "block" : "none";
 	amountField.style.display = ["advance_salary", "employee_loan"].indexOf(val) !== -1 ? "block" : "none";
 	newValueField.style.display = ["employee_data_update", "profession_modification"].indexOf(val) !== -1 ? "block" : "none";
+	document.getElementById("hr-service-letter-fields").style.display = val === "addressed_letter" ? "block" : "none";
 }
 
 /* Submit HR Service Request */
@@ -981,6 +993,9 @@ function submitHrServiceRequest() {
 		to_date: document.getElementById("hr-service-to").value || null,
 		amount: document.getElementById("hr-service-amount").value || null,
 		new_value: document.getElementById("hr-service-new-value").value || null,
+		addressed_to: document.getElementById("hr-service-addressed-to").value || null,
+		letter_subject: document.getElementById("hr-service-letter-subject").value || null,
+		letter_purpose: document.getElementById("hr-service-letter-purpose").value || null,
 	};
 	frappe.call({
 		method: "saudi_hr.saudi_hr.api.submit_hr_service_request",
@@ -988,13 +1003,19 @@ function submitHrServiceRequest() {
 		callback: function(r) {
 			btn.disabled = false;
 			btn.textContent = t("submit_request");
-			showToast(t("submitted_ok"), "success");
+			var ready = r.message && r.message.document_ready;
+			showToast(t(ready ? "doc_issued_ok" : "submitted_ok"), "success");
 			document.getElementById("hr-service-type-select").selectedIndex = 0;
 			document.getElementById("hr-service-desc").value = "";
 			document.getElementById("hr-service-from").value = "";
 			document.getElementById("hr-service-to").value = "";
 			document.getElementById("hr-service-amount").value = "";
 			document.getElementById("hr-service-new-value").value = "";
+			["hr-service-addressed-to", "hr-service-letter-subject", "hr-service-letter-purpose"].forEach(function(id) {
+				document.getElementById(id).value = "";
+			});
+			onHrServiceTypeChange();
+			if (ready) navigate("requests");
 		},
 		always: function(r) {
 			finishSubmit(btn, r);
@@ -1046,6 +1067,7 @@ function loadMyRequests(filter) {
 					'<div class="saudi-request-card__date">' + (category ? category + " · " : "") + (usesRequestDate ? (item.from_date || "") : (item.creation || "").slice(0, 10)) + '</div></div>' +
 					'<span class="saudi-badge ' + badgeClass + '">' + t(item.status_code === "approved" ? "approved" : (item.status_code === "rejected" ? "rejected" : "pending")) + '</span></div>' +
 					(item.description ? '<div class="saudi-request-card__desc">' + item.description + '</div>' : '') +
+					(item.document_ready ? '<div style="margin-top:10px;"><a class="saudi-btn saudi-btn--primary" target="_blank" rel="noopener" href="/api/method/saudi_hr.saudi_hr.hr_documents.download_hr_document?name=' + encodeURIComponent(item.name) + '">📄 ' + t("doc_download") + '</a></div>' : '') +
 					(item.can_submit ? '<div style="margin-top:10px;"><button type="button" class="saudi-btn saudi-btn--primary" data-doctype="' + item.doctype + '" data-name="' + item.name + '" onclick="sendForApproval(this.dataset.doctype, this.dataset.name, this)">' + t("send_for_approval") + '</button></div>' : '') +
 					'</div>';
 			});

@@ -33,6 +33,11 @@ from saudi_hr.saudi_hr.attendance_policy import (
 )
 from saudi_hr.saudi_hr.doctype.maternity_paternity_leave.maternity_paternity_leave import LEAVE_DAYS
 from saudi_hr.saudi_hr.location_utils import resolve_location_reference
+from saudi_hr.saudi_hr.hr_documents import (
+	HR_DOCUMENTS,
+	assert_document_can_be_requested,
+	employee_can_download,
+)
 from saudi_hr.saudi_hr.utils import (
 	assert_doctype_permissions,
 	get_annual_leave_balance,
@@ -1792,6 +1797,8 @@ HR_SERVICE_REQUEST_TYPES = {
 	"salary_transfer_letter": "Salary Transfer Letter / خطاب تحويل راتب",
 	"clearance": "Financial Clearance / المخالصة المالية",
 	"end_of_service_cert": "End of Service Certificate / شهادة نهاية خدمة",
+	"employment_letter": "Employment Letter / خطاب مشهد وظيفي",
+	"employee_clearance": "Clearance Certificate / إخلاء طرف",
 }
 
 
@@ -1805,6 +1812,9 @@ def submit_hr_service_request(
 	new_value=None,
 	documentation_attached=0,
 	attachments_json=None,
+	addressed_to=None,
+	letter_subject=None,
+	letter_purpose=None,
 ):
 	employee, profile = _require_employee_context()
 	attachments = _load_json_param(attachments_json, default=[])
@@ -1812,6 +1822,8 @@ def submit_hr_service_request(
 
 	if request_type not in HR_SERVICE_REQUEST_TYPES:
 		frappe.throw(_("نوع طلب الخدمة غير مدعوم."))
+	if request_type in HR_DOCUMENTS:
+		assert_document_can_be_requested(employee, request_type, addressed_to, letter_subject, letter_purpose)
 
 	doc = frappe.get_doc(
 		{
@@ -1827,6 +1839,9 @@ def submit_hr_service_request(
 			"amount": amount,
 			"new_value": new_value,
 			"documentation_attached": int(documentation_attached or 0),
+			"addressed_to": addressed_to,
+			"letter_subject": letter_subject,
+			"letter_purpose": letter_purpose,
 		}
 	)
 	assert_doctype_permissions(doc.doctype, "create", doc=doc)
@@ -1839,6 +1854,7 @@ def submit_hr_service_request(
 		"doctype": doc.doctype,
 		"name": doc.name,
 		"workflow_state": doc.get("workflow_state"),
+		"document_ready": employee_can_download(doc.request_type, doc.get("workflow_state")),
 		"attached_files": attached_files,
 		"message": _("تم حفظ طلب الخدمة بنجاح وهو الآن بانتظار المراجعة."),
 	}
@@ -1981,6 +1997,7 @@ def get_my_requests(limit=30, status=None):
 			"request_type_label": HR_SERVICE_REQUEST_TYPES.get(row.request_type, row.request_type),
 			"workflow_state": row.workflow_state,
 			"can_submit": _can_submit_draft("HR Service Request", row.workflow_state),
+			"document_ready": employee_can_download(row.request_type, row.workflow_state),
 			"status_code": _workflow_state_to_status_code(row.workflow_state),
 			"creation": str(row.creation),
 			"description": row.description,

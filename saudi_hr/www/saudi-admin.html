@@ -452,14 +452,14 @@
 						<select id="doc-type-filter" class="saudi-select">
 							<option value="">نوع المستند: الكل</option>
 							<option value="salary_certificate">تعريف بالراتب</option>
-							<option value="job_confirmation">مشهد وظيفي</option>
+							<option value="employment_letter">مشهد وظيفي</option>
 							<option value="experience_certificate">شهادة خبرة</option>
 							<option value="addressed_letter">خطاب موجه لجهة</option>
 							<option value="contract_copy">نسخة من عقد العمل</option>
 							<option value="payslip">مسير راتب</option>
 							<option value="salary_benefits_statement">بيان الراتب والمزايا</option>
 							<option value="salary_transfer_letter">خطاب تحويل راتب</option>
-							<option value="clearance">إخلاء طرف</option>
+							<option value="employee_clearance">إخلاء طرف</option>
 							<option value="end_of_service_cert">شهادة نهاية الخدمة</option>
 						</select>
 					</div>
@@ -505,122 +505,62 @@
 				<div class="saudi-doc-grid">
 					<div class="saudi-doc-card">
 						<div class="saudi-doc-card__header">
-							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_auto">إصدار تلقائي</span>
+							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_manual_sign">توقيع يدوي</span>
 							<span class="saudi-doc-card__icon">📄</span>
 						</div>
 						<div class="saudi-doc-card__title">تعريف بالراتب</div>
 						<div class="saudi-doc-card__desc">يوضح الراتب الشامل والمسمى وتاريخ المباشرة</div>
 						<div class="saudi-doc-card__footer">
-							<span>مدة الإصدار: فوري</span>
+							<span data-i18n-key="admin_doc_no_approval">بدون موافقات</span>
 							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="salary_certificate" data-i18n-key="admin_doc_issue">إصدار</button>
 						</div>
 					</div>
 					<div class="saudi-doc-card">
 						<div class="saudi-doc-card__header">
-							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_auto">إصدار تلقائي</span>
+							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_manual_sign">توقيع يدوي</span>
 							<span class="saudi-doc-card__icon">📑</span>
 						</div>
 						<div class="saudi-doc-card__title">مشهد وظيفي</div>
 						<div class="saudi-doc-card__desc">يثبت أن الموظف على رأس العمل، دون ذكر الراتب</div>
 						<div class="saudi-doc-card__footer">
-							<span>مدة الإصدار: فوري</span>
-							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="job_confirmation" data-i18n-key="admin_doc_issue">إصدار</button>
+							<span data-i18n-key="admin_doc_no_approval">بدون موافقات</span>
+							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="employment_letter" data-i18n-key="admin_doc_issue">إصدار</button>
 						</div>
 					</div>
 					<div class="saudi-doc-card">
 						<div class="saudi-doc-card__header">
-							<span class="saudi-chip saudi-chip--pending" data-i18n-key="admin_doc_approval">يتطلب اعتماد</span>
-							<span class="saudi-doc-card__icon">🎓</span>
-						</div>
-						<div class="saudi-doc-card__title">شهادة خبرة</div>
-						<div class="saudi-doc-card__desc">المسمى الوظيفي ومدة الخدمة</div>
-						<div class="saudi-doc-card__footer">
-							<span>مدة الإصدار: يوم عمل</span>
-							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="experience_certificate" data-i18n-key="admin_doc_issue">إصدار</button>
-						</div>
-					</div>
-					<div class="saudi-doc-card">
-						<div class="saudi-doc-card__header">
-							<span class="saudi-chip saudi-chip--pending" data-i18n-key="admin_doc_approval">يتطلب اعتماد</span>
+							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_manual_sign">توقيع يدوي</span>
 							<span class="saudi-doc-card__icon">🏛️</span>
 						</div>
 						<div class="saudi-doc-card__title">خطاب موجه لجهة</div>
 						<div class="saudi-doc-card__desc">بنك، سفارة، جهة حكومية - يُحدد اسم الجهة</div>
 						<div class="saudi-doc-card__footer">
-							<span>مدة الإصدار: يوم عمل</span>
+							<span data-i18n-key="admin_doc_no_approval">بدون موافقات</span>
 							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="addressed_letter" data-i18n-key="admin_doc_issue">إصدار</button>
 						</div>
 					</div>
 					<div class="saudi-doc-card">
 						<div class="saudi-doc-card__header">
-							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_auto">إصدار تلقائي</span>
-							<span class="saudi-doc-card__icon">📜</span>
+							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_manual_sign">توقيع يدوي</span>
+							<span class="saudi-doc-card__icon">🎓</span>
 						</div>
-						<div class="saudi-doc-card__title">نسخة من عقد العمل</div>
-						<div class="saudi-doc-card__desc">نسخة مختومة من العقد الموقع</div>
+						<div class="saudi-doc-card__title">شهادة خبرة</div>
+						<div class="saudi-doc-card__desc">المسمى الوظيفي ومدة الخدمة</div>
 						<div class="saudi-doc-card__footer">
-							<span>مدة الإصدار: فوري</span>
-							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="contract_copy" data-i18n-key="admin_doc_issue">إصدار</button>
+							<span data-i18n-key="admin_doc_no_approval">بدون موافقات</span>
+							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="experience_certificate" data-i18n-key="admin_doc_issue">إصدار</button>
 						</div>
 					</div>
 					<div class="saudi-doc-card">
 						<div class="saudi-doc-card__header">
-							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_auto">إصدار تلقائي</span>
-							<span class="saudi-doc-card__icon">📊</span>
-						</div>
-						<div class="saudi-doc-card__title">مسير راتب</div>
-						<div class="saudi-doc-card__desc">كشف رواتب لشهر أو عدة أشهر</div>
-						<div class="saudi-doc-card__footer">
-							<span>مدة الإصدار: فوري</span>
-							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="payslip" data-i18n-key="admin_doc_issue">إصدار</button>
-						</div>
-					</div>
-					<div class="saudi-doc-card">
-						<div class="saudi-doc-card__header">
-							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_auto">إصدار تلقائي</span>
-							<span class="saudi-doc-card__icon">💰</span>
-						</div>
-						<div class="saudi-doc-card__title">بيان الراتب والمزايا</div>
-						<div class="saudi-doc-card__desc">تفصيل الأساسي والبدلات والتأمين</div>
-						<div class="saudi-doc-card__footer">
-							<span>مدة الإصدار: فوري</span>
-							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="salary_benefits_statement" data-i18n-key="admin_doc_issue">إصدار</button>
-						</div>
-					</div>
-					<div class="saudi-doc-card">
-						<div class="saudi-doc-card__header">
-							<span class="saudi-chip saudi-chip--pending" data-i18n-key="admin_doc_approval">يتطلب اعتماد</span>
-							<span class="saudi-doc-card__icon">🏦</span>
-						</div>
-						<div class="saudi-doc-card__title">خطاب تحويل راتب</div>
-						<div class="saudi-doc-card__desc">موجه للبنك لتحويل الراتب لحساب جديد</div>
-						<div class="saudi-doc-card__footer">
-							<span>مدة الإصدار: يوم عمل</span>
-							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="salary_transfer_letter" data-i18n-key="admin_doc_issue">إصدار</button>
-						</div>
-					</div>
-					<div class="saudi-doc-card">
-						<div class="saudi-doc-card__header">
-							<span class="saudi-chip saudi-chip--draft" data-i18n-key="admin_doc_termination">عند انتهاء الخدمة</span>
+							<span class="saudi-chip saudi-chip--approved" data-i18n-key="admin_doc_manual_sign">توقيع يدوي</span>
 							<span class="saudi-doc-card__icon">🚪</span>
 						</div>
 						<div class="saudi-doc-card__title">إخلاء طرف</div>
-						<div class="saudi-doc-card__desc">استلام العهد من الأقسام قبل المخالصة</div>
+						<div class="saudi-doc-card__desc">يثبت انتهاء علاقة الموظف بالشركة وتسليم عهده</div>
 						<div class="saudi-doc-card__footer">
-							<span>مدة الإصدار: 3 أيام</span>
-							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="clearance" data-i18n-key="admin_doc_issue">إصدار</button>
-						</div>
-					</div>
-					<div class="saudi-doc-card">
-						<div class="saudi-doc-card__header">
-							<span class="saudi-chip saudi-chip--draft" data-i18n-key="admin_doc_termination">عند انتهاء الخدمة</span>
-							<span class="saudi-doc-card__icon">🏁</span>
-						</div>
-						<div class="saudi-doc-card__title">شهادة نهاية الخدمة</div>
-						<div class="saudi-doc-card__desc">تثبت انتهاء العلاقة الوظيفية وتاريخها</div>
-						<div class="saudi-doc-card__footer">
-							<span>مدة الإصدار: يوم عمل</span>
-							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="end_of_service_cert" data-i18n-key="admin_doc_issue">إصدار</button>
+							<span data-i18n-key="admin_doc_no_approval">بدون موافقات</span>
+							<button class="saudi-btn saudi-btn--primary saudi-btn--tiny" type="button" data-action="issue-document" data-doc-type="employee_clearance" data-i18n-key="admin_doc_issue">إصدار</button>
 						</div>
 					</div>
 				</div>
@@ -855,11 +795,65 @@
 	</div>
 </div>
 
+<div class="saudi-modal saudi-modal--center" id="doc-request-modal" style="display:none;" role="dialog"
+	aria-modal="true" aria-labelledby="doc-request-title">
+	<div class="saudi-modal__dialog">
+		<div class="saudi-modal__header">
+			<div class="saudi-modal__title" id="doc-request-title" data-i18n-key="admin_doc_issue_title">إصدار مستند</div>
+			<button class="saudi-btn saudi-btn--ghost" type="button" data-action="close-doc-request-modal"
+				data-i18n-key="cancel">إلغاء</button>
+		</div>
+
+		<div class="saudi-modal__body">
+			<div class="saudi-field">
+				<label for="doc-modal-employee" data-i18n-key="admin_attendance_employee">الموظف</label>
+				<div class="saudi-picker">
+					<input type="text" id="doc-modal-employee" class="saudi-input"
+						data-i18n-placeholder="admin_attendance_search_employee" placeholder="رقم الموظف أو الاسم"
+						autocomplete="off" role="combobox" aria-expanded="false"
+						aria-controls="doc-modal-employee-results" aria-autocomplete="list">
+					<ul class="saudi-picker__list" id="doc-modal-employee-results" role="listbox" style="position:static;margin-top:4px;" hidden></ul>
+				</div>
+			</div>
+			<div class="saudi-field" style="margin-top:8px;">
+				<label for="doc-modal-type" data-i18n-key="admin_doc_type">نوع المستند</label>
+				<select id="doc-modal-type">
+					<option value="salary_certificate" data-i18n-key="srv_salary_certificate">شهادة راتب</option>
+					<option value="employment_letter" data-i18n-key="srv_employment_letter">خطاب مشهد وظيفي</option>
+					<option value="addressed_letter" data-i18n-key="srv_addressed_letter">خطاب موجه لجهة</option>
+					<option value="experience_certificate" data-i18n-key="srv_experience_certificate">شهادة خبرة</option>
+					<option value="employee_clearance" data-i18n-key="srv_employee_clearance">إخلاء طرف</option>
+				</select>
+			</div>
+			<div id="doc-modal-letter-fields" hidden>
+				<div class="saudi-field" style="margin-top:8px;">
+					<label for="doc-modal-addressed" data-i18n-key="doc_addressed_to">اسم الجهة</label>
+					<input type="text" id="doc-modal-addressed">
+				</div>
+				<div class="saudi-field" style="margin-top:8px;">
+					<label for="doc-modal-subject" data-i18n-key="doc_letter_subject">موضوع الخطاب</label>
+					<input type="text" id="doc-modal-subject">
+				</div>
+				<div class="saudi-field" style="margin-top:8px;">
+					<label for="doc-modal-purpose" data-i18n-key="doc_letter_purpose">الغرض من الخطاب</label>
+					<textarea id="doc-modal-purpose" rows="2"></textarea>
+				</div>
+			</div>
+		</div>
+
+		<div class="saudi-modal__footer">
+			<button class="saudi-btn" type="button" data-action="close-doc-request-modal" data-i18n-key="cancel">إلغاء</button>
+			<button class="saudi-btn saudi-btn--primary" type="button" data-action="save-doc-request"
+				data-i18n-key="admin_doc_issue_print">إصدار وطباعة</button>
+		</div>
+	</div>
+</div>
+
 <div class="saudi-toast" id="saudi-toast" role="status" aria-live="polite"></div>
 {% endblock %}
 
 {% block script %}
-<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261028c"></script>
+<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261105b"></script>
 <script>
 /* ═══ Page state ═══════════════════════════════════════════════════════════ */
 /* Rendered into a JavaScript literal, so the booleans are written as JS */
@@ -940,7 +934,9 @@ document.addEventListener("DOMContentLoaded", function () {
 			case "open-doc-request-modal": openDocRequestModal(); break;
 			case "close-doc-request-modal": closeDocRequestModal(); break;
 			case "save-doc-request": saveDocRequest(); break;
-			case "issue-document": triggerIssueDocument(trigger.getAttribute("data-doc-type")); break;
+			case "issue-document": openDocRequestModal(trigger.getAttribute("data-doc-type")); break;
+			case "issue-requested-document": issueRequestedDocument(trigger.getAttribute("data-name")); break;
+			case "upload-signed-document": uploadSignedDocument(trigger.getAttribute("data-name")); break;
 		}
 	});
 
@@ -1023,6 +1019,8 @@ var ADMIN_WRITES = {
 	register_absence_case: 1,
 	create_eosb_settlement: 1,
 	issue_hr_document: 1,
+	issue_requested_hr_document: 1,
+	save_signed_hr_document: 1,
 	create_termination_notice: 1,
 	create_exit_clearance: 1,
 	apply_offboarding_action: 1,
@@ -1432,7 +1430,8 @@ var ADMIN_WORKFLOW_ACTIONS = {
 	"hr manager reject": "admin_action_hr_manager_reject",
 	"gm approve": "admin_action_gm_approve",
 	"gm reject": "admin_action_gm_reject",
-	"mark completed": "admin_action_mark_completed"
+	"mark completed": "admin_action_mark_completed",
+	"issue document": "admin_action_issue_document"
 };
 
 var ADMIN_ACTION_KEYS = {
@@ -3099,15 +3098,15 @@ function printClearance() {
 
 /* ═══ Documents Panel ═════════════════════════════════════════════════════ */
 function loadDocumentsPanel() {
-	var empSelect = document.getElementById("doc-modal-employee");
-	if (empSelect && !empSelect.children.length) {
+	if (!ADMIN_STATE.doc_employees) {
+		ADMIN_STATE.doc_employees = [];
 		callAdmin("list_employees", { limit: 200 }).then(function (r) {
-			var emps = r.rows || [];
-			empSelect.innerHTML = emps.map(function (e) {
-				return "<option value='" + esc(e.name) + "'>" + esc(e.employee_number + " - " + e.full_name) + "</option>";
-			}).join("");
+			ADMIN_STATE.doc_employees = (r.rows || []).map(function (e) {
+				return { name: e.name, label: e.employee_number + " - " + e.full_name };
+			});
 		});
 	}
+	bindDocEmployeePicker();
 
 	fetchDocumentsData();
 
@@ -3122,6 +3121,8 @@ function loadDocumentsPanel() {
 			ADMIN_STATE.docSearchTimer = setTimeout(fetchDocumentsData, 280);
 		});
 		if (typeFilter) typeFilter.addEventListener("change", fetchDocumentsData);
+		var modalType = document.getElementById("doc-modal-type");
+		if (modalType) modalType.addEventListener("change", toggleDocLetterFields);
 		if (statusFilter) statusFilter.addEventListener("change", fetchDocumentsData);
 	}
 }
@@ -3147,6 +3148,24 @@ function fetchDocumentsData() {
 	});
 }
 
+function documentFileUrl(method, name) {
+	return "/api/method/saudi_hr.saudi_hr.hr_documents." + method + "?name=" + encodeURIComponent(name);
+}
+
+function renderDocumentActions(r) {
+	var view = "<a class='saudi-btn saudi-btn--ghost saudi-btn--tiny' href='" + esc(r.desk_url) + "' target='_blank' rel='noopener'>" + esc(t("admin_doc_view")) + "</a>";
+	if (r.can_issue) {
+		return "<button class='saudi-btn saudi-btn--primary saudi-btn--tiny' type='button' data-action='issue-requested-document' data-name='" + esc(r.name) + "'>" + esc(t("admin_doc_issue_print")) + "</button> " + view;
+	}
+	if (!r.can_print) return view;
+	var html = "<a class='saudi-btn saudi-btn--tiny' href='" + esc(documentFileUrl("download_hr_document", r.name)) + "' target='_blank' rel='noopener'>" + esc(t("admin_doc_print")) + "</a> "
+		+ "<button class='saudi-btn saudi-btn--ghost saudi-btn--tiny' type='button' data-action='upload-signed-document' data-name='" + esc(r.name) + "'>" + esc(t("admin_doc_upload_signed")) + "</button> ";
+	if (r.has_signed_copy) {
+		html += "<a class='saudi-btn saudi-btn--ghost saudi-btn--tiny' href='" + esc(documentFileUrl("download_signed_document", r.name)) + "' target='_blank' rel='noopener'>" + esc(t("admin_doc_signed_copy")) + "</a> ";
+	}
+	return html + view;
+}
+
 function renderDocumentsTable(rows) {
 	var tbody = document.getElementById("documents-requests-rows");
 	if (!tbody) return;
@@ -3157,9 +3176,6 @@ function renderDocumentsTable(rows) {
 
 	tbody.innerHTML = rows.map(function (r) {
 		var docLabel = requestKind(r.document_type) || r.document_type;
-		var actionBtn = r.state === "approved"
-			? "<a class='saudi-btn saudi-btn--tiny' href='" + esc(r.desk_url) + "' target='_blank' rel='noopener'>تحميل PDF</a>"
-			: "<a class='saudi-btn saudi-btn--ghost saudi-btn--tiny' href='" + esc(r.desk_url) + "' target='_blank' rel='noopener'>عرض</a>";
 
 		return "<tr>"
 			+ "<td><span class='saudi-chip saudi-chip--muted'>" + esc(r.name) + "</span></td>"
@@ -3168,13 +3184,100 @@ function renderDocumentsTable(rows) {
 			+ "<td>" + esc(r.addressed_to || "—") + "</td>"
 			+ "<td>" + esc(r.creation) + "</td>"
 			+ "<td>" + stateChip(r.state) + "</td>"
-			+ "<td style='text-align:center;'>" + actionBtn + "</td>"
+			+ "<td style='text-align:center;'>" + renderDocumentActions(r) + "</td>"
 			+ "</tr>";
 	}).join("");
 }
 
-function openDocRequestModal() {
+/* Spellings people type interchangeably in Arabic names, so "امانت" finds "أمانت". */
+function normalizeSearchText(text) {
+	return String(text || "").toLowerCase()
+		.replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه").trim();
+}
+
+function closeDocEmployeeResults() {
+	var input = document.getElementById("doc-modal-employee");
+	var list = document.getElementById("doc-modal-employee-results");
+	list.hidden = true;
+	list.innerHTML = "";
+	input.setAttribute("aria-expanded", "false");
+}
+
+function renderDocEmployeeResults() {
+	var input = document.getElementById("doc-modal-employee");
+	var list = document.getElementById("doc-modal-employee-results");
+	var term = ADMIN_STATE.doc_employee ? "" : normalizeSearchText(input.value);
+	var matches = (ADMIN_STATE.doc_employees || []).filter(function (e) {
+		return normalizeSearchText(e.label).indexOf(term) !== -1;
+	});
+	list.innerHTML = matches.map(function (e) {
+		return "<li class='saudi-picker__item' role='option' data-name='" + esc(e.name) + "'>" + esc(e.label) + "</li>";
+	}).join("") || "<li class='saudi-picker__empty'>" + esc(t("admin_doc_no_employee_match")) + "</li>";
+	list.hidden = false;
+	input.setAttribute("aria-expanded", "true");
+}
+
+function chooseDocEmployee(name) {
+	var chosen = (ADMIN_STATE.doc_employees || []).filter(function (e) { return e.name === name; })[0];
+	ADMIN_STATE.doc_employee = chosen ? chosen.name : null;
+	document.getElementById("doc-modal-employee").value = chosen ? chosen.label : "";
+	closeDocEmployeeResults();
+}
+
+/* Only a pick from the list counts: typing after a pick drops it, so a letter can
+   never go out for an employee other than the one the box shows. */
+function bindDocEmployeePicker() {
+	var input = document.getElementById("doc-modal-employee");
+	var list = document.getElementById("doc-modal-employee-results");
+	if (!input || input._bound) return;
+	input._bound = true;
+
+	input.addEventListener("focus", renderDocEmployeeResults);
+	input.addEventListener("input", function () {
+		ADMIN_STATE.doc_employee = null;
+		renderDocEmployeeResults();
+	});
+	input.addEventListener("keydown", function (e) {
+		if (list.hidden) return;
+		var items = list.querySelectorAll(".saudi-picker__item");
+		var active = list.querySelector(".saudi-picker__item--active");
+		var index = Array.prototype.indexOf.call(items, active);
+		if (e.key === "Escape") {
+			// the first Escape closes this list, not the whole dialog behind it
+			e.stopPropagation();
+			closeDocEmployeeResults();
+		} else if (e.key === "Enter") {
+			e.preventDefault();
+			var pick = active || (items.length === 1 ? items[0] : null);
+			if (pick) chooseDocEmployee(pick.getAttribute("data-name"));
+		} else if ((e.key === "ArrowDown" || e.key === "ArrowUp") && items.length) {
+			e.preventDefault();
+			if (active) active.classList.remove("saudi-picker__item--active");
+			index = e.key === "ArrowDown" ? Math.min(index + 1, items.length - 1) : Math.max(index - 1, 0);
+			items[index].classList.add("saudi-picker__item--active");
+			items[index].scrollIntoView({ block: "nearest" });
+		}
+	});
+	// mousedown, because the box losing focus on click would close the list first
+	list.addEventListener("mousedown", function (e) {
+		var item = e.target.closest(".saudi-picker__item");
+		e.preventDefault();
+		if (item) chooseDocEmployee(item.getAttribute("data-name"));
+	});
+	input.addEventListener("blur", closeDocEmployeeResults);
+}
+
+function toggleDocLetterFields() {
+	var fields = document.getElementById("doc-modal-letter-fields");
+	var typeSelect = document.getElementById("doc-modal-type");
+	if (fields && typeSelect) fields.hidden = typeSelect.value !== "addressed_letter";
+}
+
+function openDocRequestModal(docType) {
 	var modal = document.getElementById("doc-request-modal");
+	var typeSelect = document.getElementById("doc-modal-type");
+	if (typeSelect && docType) typeSelect.value = docType;
+	toggleDocLetterFields();
 	if (modal) modal.style.display = "flex";
 }
 
@@ -3183,50 +3286,81 @@ function closeDocRequestModal() {
 	if (modal) modal.style.display = "none";
 }
 
-function saveDocRequest() {
-	var empSelect = document.getElementById("doc-modal-employee");
-	var typeSelect = document.getElementById("doc-modal-type");
-	var addressedInput = document.getElementById("doc-modal-addressed");
-
-	if (!empSelect || !empSelect.value) {
-		showToast(t("admin_no_employees"), "error");
-		return;
-	}
-
-	callAdmin("issue_hr_document", {
-		employee: empSelect.value,
-		document_type: typeSelect.value,
-		addressed_to: addressedInput ? addressedInput.value : ""
-	}).then(function () {
+/* The print tab is opened before the request: a browser only allows a new tab
+   during the click itself, not after the server has answered. */
+function issueThenPrint(issue) {
+	var tab = window.open("", "_blank");
+	return issue().then(function (r) {
 		showToast(t("admin_action_done"), "success");
-		closeDocRequestModal();
 		fetchDocumentsData();
+		if (tab) tab.location.href = documentFileUrl("download_hr_document", r.name);
 	}).catch(function (err) {
+		if (tab) tab.close();
 		onApiError(err, t("admin_action_failed"));
+		throw err;
 	});
 }
 
-function triggerIssueDocument(docType) {
-	var searchInput = document.getElementById("doc-employee-search");
-	var empSelect = document.getElementById("doc-modal-employee");
-	var emp = (empSelect && empSelect.value) || (searchInput && searchInput.value);
+function saveDocRequest() {
+	var typeSelect = document.getElementById("doc-modal-type");
+	var isLetter = typeSelect.value === "addressed_letter";
 
-	if (!emp) {
-		openDocRequestModal();
-		var typeSelect = document.getElementById("doc-modal-type");
-		if (typeSelect && docType) typeSelect.value = docType;
+	if (!ADMIN_STATE.doc_employee) {
+		showToast(t("admin_doc_choose_employee"), "error");
+		document.getElementById("doc-modal-employee").focus();
 		return;
 	}
 
-	callAdmin("issue_hr_document", {
-		employee: emp,
-		document_type: docType
+	issueThenPrint(function () {
+		return callAdmin("issue_hr_document", {
+			employee: ADMIN_STATE.doc_employee,
+			document_type: typeSelect.value,
+			addressed_to: isLetter ? document.getElementById("doc-modal-addressed").value : "",
+			letter_subject: isLetter ? document.getElementById("doc-modal-subject").value : "",
+			letter_purpose: isLetter ? document.getElementById("doc-modal-purpose").value : ""
+		});
 	}).then(function () {
-		showToast(t("admin_action_done"), "success");
-		fetchDocumentsData();
-	}).catch(function (err) {
-		onApiError(err, t("admin_action_failed"));
+		// a finished letter's employee and wording must not carry over to the next one
+		chooseDocEmployee(null);
+		["doc-modal-addressed", "doc-modal-subject", "doc-modal-purpose"].forEach(function (id) {
+			document.getElementById(id).value = "";
+		});
+		closeDocRequestModal();
+	}).catch(function () {});
+}
+
+function issueRequestedDocument(name) {
+	issueThenPrint(function () {
+		return callAdmin("issue_requested_hr_document", { name: name });
+	}).catch(function () {});
+}
+
+function uploadSignedDocument(name) {
+	var input = document.createElement("input");
+	input.type = "file";
+	input.accept = ".pdf,.jpg,.jpeg,.png";
+	input.addEventListener("change", function () {
+		if (!input.files.length) return;
+		var upload = new FormData();
+		upload.append("file", input.files[0]);
+		upload.append("is_private", "1");
+		fetch("/api/method/upload_file", {
+			method: "POST",
+			headers: { "X-Frappe-CSRF-Token": frappe.csrf_token },
+			body: upload
+		}).then(function (res) {
+			if (!res.ok) throw new Error("upload failed");
+			return res.json();
+		}).then(function (res) {
+			return callAdmin("save_signed_hr_document", { name: name, file_url: res.message.file_url });
+		}).then(function () {
+			showToast(t("admin_action_done"), "success");
+			fetchDocumentsData();
+		}).catch(function (err) {
+			onApiError(err, t("admin_action_failed"));
+		});
 	});
+	input.click();
 }
 
 /* ═══ Per-panel loaders ═════════════════════════════════════════════════════ */

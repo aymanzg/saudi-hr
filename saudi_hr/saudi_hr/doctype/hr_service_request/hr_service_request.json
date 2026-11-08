@@ -14,6 +14,9 @@
   "request_details_section",
   "request_type",
   "description",
+  "addressed_to",
+  "letter_subject",
+  "letter_purpose",
   "dates_section",
   "from_date",
   "column_break_2",
@@ -23,6 +26,8 @@
   "new_value",
   "column_break_3",
   "documentation_attached",
+  "issued_on",
+  "signed_document",
   "workflow_state",
   "amended_from"
  ],
@@ -81,13 +86,31 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Request Type / نوع الطلب",
-   "options": "work_permit_issuance\nwork_permit_renewal\nresidency_issuance\nresidency_renewal\nservice_transfer\nexit_and_return\nfinal_exit\nprofession_modification\nemployee_data_update\nvisa_issuance\nadvance_salary\nsalary_certificate\nexperience_certificate\nemployee_loan\njob_confirmation\ncontract_copy\npayslip\nsalary_benefits_statement\naddressed_letter\nsalary_transfer_letter\nclearance\nend_of_service_cert",
+   "options": "work_permit_issuance\nwork_permit_renewal\nresidency_issuance\nresidency_renewal\nservice_transfer\nexit_and_return\nfinal_exit\nprofession_modification\nemployee_data_update\nvisa_issuance\nadvance_salary\nsalary_certificate\nexperience_certificate\nemployee_loan\njob_confirmation\ncontract_copy\npayslip\nsalary_benefits_statement\naddressed_letter\nsalary_transfer_letter\nclearance\nend_of_service_cert\nemployment_letter\nemployee_clearance",
    "reqd": 1
   },
   {
    "fieldname": "description",
    "fieldtype": "Small Text",
    "label": "Reason / مبرر الطلب"
+  },
+  {
+   "fieldname": "addressed_to",
+   "fieldtype": "Data",
+   "label": "Addressed To / اسم الجهة",
+   "depends_on": "eval:doc.request_type==\"addressed_letter\""
+  },
+  {
+   "fieldname": "letter_subject",
+   "fieldtype": "Data",
+   "label": "Letter Subject / موضوع الخطاب",
+   "depends_on": "eval:doc.request_type==\"addressed_letter\""
+  },
+  {
+   "fieldname": "letter_purpose",
+   "fieldtype": "Small Text",
+   "label": "Letter Purpose / الغرض من الخطاب",
+   "depends_on": "eval:doc.request_type==\"addressed_letter\""
   },
   {
    "fieldname": "dates_section",
@@ -142,6 +165,21 @@
    "label": "Documentation Attached / تم إرفاق المستندات"
   },
   {
+   "fieldname": "issued_on",
+   "fieldtype": "Date",
+   "label": "Issued On / تاريخ الإصدار",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "signed_document",
+   "fieldtype": "Data",
+   "label": "Signed Document / النسخة الموقعة",
+   "hidden": 1,
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
    "fieldname": "workflow_state",
    "fieldtype": "Link",
    "label": "Status",
@@ -160,7 +198,7 @@
  ],
  "is_submittable": 1,
  "links": [],
- "modified": "2026-09-15 00:00:00.000000",
+ "modified": "2026-11-01 23:00:00.000000",
  "modified_by": "Administrator",
  "module": "Saudi HR",
  "name": "HR Service Request",

@@ -171,7 +171,8 @@
   {
    "role": "General Manager",
    "read": 1,
-   "write": 1
+   "write": 1,
+   "submit": 1
   },
   {
    "role": "Department Approver",

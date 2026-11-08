@@ -13,7 +13,7 @@ chain is:
                           -> GM Approved        (Mark Completed)
                                -> Completed
 
-Doctypes in ``AUTO_COMPLETE_ON_GM_APPROVAL`` (currently the punch correction)
+Doctypes in ``AUTO_COMPLETE_ON_GM_APPROVAL`` (the leaves and the punch correction)
 short-circuit the last hop: GM approval goes straight to ``Completed`` and the
 document is applied there, so there is no ``GM Approved`` state and no
 ``Mark Completed`` step for them.
@@ -23,6 +23,10 @@ resubmits from that state back into the same level.  ``Completed`` is the only
 state that can carry a submitted ``doc_status``; whether it does depends on the
 doctype — a doctype that is not submittable ends on ``doc_status 0`` so the
 chain works identically for case-tracker doctypes and approval doctypes alike.
+
+The HR Service Request types in ``HR_ISSUED_REQUEST_TYPES`` leave the chain: they
+go straight to ``Pending HR Review`` and HR issues them from there, because the
+sign-off happens by hand on the printed letter.
 
 The installer reconciles this catalogue on every ``bench migrate``, so editing
 here is how workflows change; the old per-doctype JSON fixtures are gone.
@@ -76,7 +80,27 @@ HR_INITIATED_CHAIN = ("Termination Notice",)
 # Doctypes where GM approval is the terminal action: the document is applied
 # the moment the GM approves, so the chain ends on Completed. There is no
 # intermediate "GM Approved" holding state and no "Mark Completed" step.
-AUTO_COMPLETE_ON_GM_APPROVAL = ("Saudi Punch Correction", "Saudi Hourly Leave Request")
+AUTO_COMPLETE_ON_GM_APPROVAL = (
+	"Mobile Leave Request",
+	"Saudi Annual Leave",
+	"Saudi Emergency Leave",
+	"Saudi Hourly Leave Request",
+	"Saudi Punch Correction",
+	"Saudi Sick Leave",
+)
+
+# Letters HR prints and has signed by hand, so no approval chain runs for them.
+HR_ISSUED_DOCTYPE = "HR Service Request"
+HR_ISSUED_REQUEST_TYPES = (
+	"salary_certificate",
+	"employment_letter",
+	"addressed_letter",
+	"experience_certificate",
+	"employee_clearance",
+)
+IS_HR_ISSUED = f"doc.request_type in {HR_ISSUED_REQUEST_TYPES!r}"
+IS_NOT_HR_ISSUED = f"doc.request_type not in {HR_ISSUED_REQUEST_TYPES!r}"
+ISSUE_ACTION = "Issue Document"
 
 # The one workflow vocabulary the rest of the app speaks.  Arabic on the desk
 # comes from the label layer, never from these names.
@@ -193,7 +217,7 @@ def _state_specs(is_submittable: bool, doctype: str):
 	return specs
 
 
-def _transition(specs, action, state, next_state, roles, self_approval):
+def _transition(specs, action, state, next_state, roles, self_approval, condition=None):
 	for role in roles:
 		specs.append(
 			{
@@ -202,8 +226,21 @@ def _transition(specs, action, state, next_state, roles, self_approval):
 				"next_state": next_state,
 				"allowed": role,
 				"allow_self_approval": self_approval,
+				"condition": condition,
 			}
 		)
+
+
+def _route_hr_issued_requests(specs):
+	"""Send HR-issued letters past the chain, leaving every other request type on it."""
+	for spec in specs:
+		if (spec["action"], spec["next_state"]) in (
+			("Submit Request", "Pending Supervisor Review"),
+			("HR Approve", "Pending HR Manager Review"),
+		):
+			spec["condition"] = IS_NOT_HR_ISSUED
+	_transition(specs, "Submit Request", FIRST_STATE, "Pending HR Review", SUBMIT_ROLES, 1, IS_HR_ISSUED)
+	_transition(specs, ISSUE_ACTION, "Pending HR Review", TERMINAL_STATE, EXECUTOR_ROLES, 0, IS_HR_ISSUED)
 
 
 def _hr_initiated_transition_specs(doctype: str):
@@ -262,6 +299,8 @@ def _transition_specs(doctype: str | None = None):
 	_add("GM Reject", "Pending GM Review", "Rejected by GM", (GM_ROLE,), 0)
 	if doctype not in AUTO_COMPLETE_ON_GM_APPROVAL:
 		_add("Mark Completed", "GM Approved", TERMINAL_STATE, EXECUTOR_ROLES, 0)
+	if doctype == HR_ISSUED_DOCTYPE:
+		_route_hr_issued_requests(specs)
 	return specs
 
 
@@ -448,7 +487,7 @@ def ensure_workflow_actions():
 	action name already has a master row.
 	"""
 	missing = 0
-	actions = {transition["action"] for transition in _transition_specs()}
+	actions = {transition["action"] for transition in _transition_specs(HR_ISSUED_DOCTYPE)}
 	for action in sorted(actions):
 		if frappe.db.exists("Workflow Action Master", action):
 			continue
@@ -492,8 +531,11 @@ def complete_gm_approved_documents():
 	``GM Approved`` was already approved but never followed by the (now gone)
 	``Mark Completed`` action, so its effect was never applied. Submitting it
 	here runs the same ``on_submit`` a fresh GM approval runs now, and the
-	workflow moves it to ``Completed``. Must run before ``reconcile_workflows``
-	removes the ``GM Approved`` state, otherwise the state is no longer valid.
+	workflow moves it to ``Completed``. A document that is already submitted
+	cannot be submitted again, so it moves to ``Completed`` directly and its
+	controller applies whatever was waiting on that state. Must run before
+	``reconcile_workflows`` removes the ``GM Approved`` state, otherwise the
+	state is no longer valid.
 	"""
 	completed = 0
 	for doctype in AUTO_COMPLETE_ON_GM_APPROVAL:
@@ -502,13 +544,21 @@ def complete_gm_approved_documents():
 		meta = frappe.get_meta(doctype)
 		if not meta.has_field("workflow_state"):
 			continue
-		for name in frappe.get_all(doctype, filters={"workflow_state": "GM Approved"}, pluck="name"):
+		parked = frappe.get_all(
+			doctype, filters={"workflow_state": "GM Approved", "docstatus": ["<", 2]}, pluck="name"
+		)
+		for name in parked:
+			frappe.db.savepoint("complete_gm_approved")
 			try:
 				doc = frappe.get_doc(doctype, name)
 				doc.flags.ignore_permissions = True
-				doc.submit()
+				if doc.docstatus == 1:
+					_complete_submitted_document(doc)
+				else:
+					doc.submit()
 				completed += 1
 			except Exception:
+				frappe.db.rollback(save_point="complete_gm_approved")
 				frappe.log_error(
 					frappe.get_traceback(),
 					f"Saudi HR workflow: could not complete {doctype} {name}",
@@ -519,6 +569,14 @@ def complete_gm_approved_documents():
 			"Saudi HR Workflow GM Completion",
 		)
 	return completed
+
+
+def _complete_submitted_document(doc):
+	doc.db_set("workflow_state", "Completed")
+	doc.add_comment("Workflow", "Completed")
+	finish = getattr(doc, "finish_parked_approval", None)
+	if finish:
+		finish()
 
 
 # ─── Backfill ────────────────────────────────────────────────────────────────
