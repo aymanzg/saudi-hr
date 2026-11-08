@@ -341,6 +341,31 @@ class TestSaudiPunchCorrection(FrappeTestCase):
 		self.assertEqual(self._punch_time(), "08:05:00")
 		self.assertEqual(self._punch_time(self.punch_out), "17:45:00")
 
+	def test_superseding_one_side_keeps_the_other_side_of_a_full_correction(self):
+		# both filed before either took effect, the way supersession happens
+		full = self._insert(corrected_out_time="17:45:00")
+		later = self._insert(corrected_in_time="08:30:00", corrected_out_time=None)
+		self._approve(full)
+
+		self._approve(later)
+
+		self.assertEqual(self._punch_time(), "08:30:00")
+		self.assertEqual(self._punch_time(self.punch_out), "17:45:00")
+		self.assertEqual(
+			_hhmm(frappe.db.get_value(later.doctype, later.name, "corrected_out_time")), "17:45:00"
+		)
+
+	def test_a_registered_punch_is_linked_to_the_existing_day(self):
+		frappe.delete_doc("Saudi Employee Checkin", self.punch, force=True, ignore_permissions=True)
+		day = self._approve(self._insert(corrected_in_time=None, corrected_out_time="17:45:00"))
+		row = frappe.db.get_value(day.doctype, day.name, "daily_attendance")
+
+		doc = self._approve(self._insert())
+
+		punch = frappe.db.get_value(doc.doctype, doc.name, "punch")
+		self.assertTrue(row)
+		self.assertEqual(frappe.db.get_value("Saudi Employee Checkin", punch, "attendance"), row)
+
 	def test_a_later_approval_supersedes_an_applied_correction(self):
 		"""A request filed before an older one took effect must still be
 		approvable: approving it cancels the older correction and takes over, so

@@ -273,6 +273,12 @@ class SaudiPunchCorrection(Document):
 			self.daily_attendance = None
 
 		for prior in priors:
+			# a side the older request corrected and this one leaves alone is
+			# taken over, so cancelling the older request does not undo it
+			for field in ("corrected_in_time", "corrected_out_time"):
+				if prior._real_corrected_time(field) and not self._real_corrected_time(field):
+					self.set(field, prior._real_corrected_time(field))
+					frappe.db.set_value("Saudi Punch Correction", self.name, field, self.get(field))
 			prior.flags.ignore_permissions = True
 			prior.cancel()
 		return True
@@ -350,6 +356,10 @@ class SaudiPunchCorrection(Document):
 				frappe.db.set_value("Saudi Punch Correction", self.name, "punch_out", punch)
 
 		self._ensure_daily_attendance(in_time, out_time)
+		# a punch registered on a day that already had its row belongs to it too
+		for punch in (self.punch, self.punch_out):
+			if punch and self.daily_attendance:
+				frappe.db.set_value("Saudi Employee Checkin", punch, "attendance", self.daily_attendance)
 		self.db_set({"applied": 1, "applied_on": now_datetime()})
 
 	def _corrected_datetime(self, field):
@@ -442,9 +452,6 @@ class SaudiPunchCorrection(Document):
 			self.name,
 			{"daily_attendance": attendance.name, "created_daily_attendance": 1},
 		)
-		for punch in (self.punch, self.punch_out):
-			if punch:
-				frappe.db.set_value("Saudi Employee Checkin", punch, "attendance", attendance.name)
 
 	def _clear_daily_time(self, field):
 		"""Revert a loaded day's time that only existed because this request wrote a
