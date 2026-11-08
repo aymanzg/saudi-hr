@@ -220,19 +220,23 @@ class SaudiPunchCorrection(Document):
 			)
 
 	def _cancel_prior_corrections(self):
-		"""Cancel any other applied correction for the day: the newest one wins.
+		"""Cancel any other applied correction of the same punch: the newest one wins.
 
 		Approving a correction for a day that is already corrected used to be
 		refused outright, which left a request filed before the first one took
 		effect stuck forever. Instead the older request is cancelled here — which
 		puts its punches and the day back the way it found them — and the current
-		request is then applied on top, so the day ends with a single correction
+		request is then applied on top, so the punch ends with a single correction
 		in force and both requests remain as the audit trail.
+
+		An older request that only fixed the other side of the day is not replaced
+		by this one: employees file the check-in and the check-out separately, and
+		cancelling it would delete the punch it registered.
 		"""
 		if not (self.employee and self.attendance_date):
 			return False
 
-		priors = frappe.get_all(
+		names = frappe.get_all(
 			"Saudi Punch Correction",
 			filters={
 				"employee": self.employee,
@@ -243,6 +247,11 @@ class SaudiPunchCorrection(Document):
 			},
 			pluck="name",
 		)
+		priors = [
+			prior
+			for prior in (frappe.get_doc("Saudi Punch Correction", name) for name in names)
+			if self._corrects_same_punch(prior)
+		]
 		if not priors:
 			return False
 
@@ -253,11 +262,35 @@ class SaudiPunchCorrection(Document):
 			frappe.db.set_value("Saudi Punch Correction", self.name, "daily_attendance", None)
 			self.daily_attendance = None
 
-		for name in priors:
-			prior = frappe.get_doc("Saudi Punch Correction", name)
+		for prior in priors:
 			prior.flags.ignore_permissions = True
 			prior.cancel()
 		return True
+
+	def _corrects_same_punch(self, other):
+		return any(
+			self._real_corrected_time(field) and other._real_corrected_time(field)
+			for field in ("corrected_in_time", "corrected_out_time")
+		)
+
+	def finish_parked_approval(self):
+		"""Apply a request that was submitted before approval became the final step.
+
+		Update-after-submit does not run ``validate``, so the punches and the day are
+		resolved here and stored, the same way a fresh approval would have read them.
+		"""
+		self._resolve_punches()
+		self._resolve_daily_attendance()
+		self.db_set(
+			{
+				"punch": self.punch,
+				"punch_out": self.punch_out,
+				"original_in_time": self.original_in_time,
+				"original_out_time": self.original_out_time,
+				"daily_attendance": self.daily_attendance,
+			}
+		)
+		self._apply_correction_if_approved()
 
 	def _apply_correction_if_approved(self):
 		"""Idempotent: the ``applied`` flag means this runs exactly once."""
@@ -461,6 +494,8 @@ class SaudiPunchCorrection(Document):
 		attendance = frappe.get_doc("Saudi Daily Attendance", self.daily_attendance)
 		attendance.flags.ignore_permissions = True
 		attendance.flags.ignore_validate_update_after_submit = True
+		# saving a submitted row does not run validate, which derives the hours
+		attendance.validate()
 		attendance.save()
 
 

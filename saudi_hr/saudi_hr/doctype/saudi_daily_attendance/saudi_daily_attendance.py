@@ -19,6 +19,8 @@ class SaudiDailyAttendance(Document):
 			self.working_hours = round(
 				time_diff_in_hours(get_datetime(self.out_time), get_datetime(self.in_time)), 2
 			)
+		else:
+			self.working_hours = 0
 
 	def _calculate_schedule_flags(self):
 		if not self.in_time:

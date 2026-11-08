@@ -11,6 +11,7 @@ from saudi_hr.saudi_hr.doctype.saudi_punch_correction.saudi_punch_correction imp
 	get_punch_correction_context,
 )
 from saudi_hr.saudi_hr.test_support import make_qa_employee
+from saudi_hr.saudi_hr.workflow_catalogue import complete_gm_approved_documents
 
 
 def _hhmm(value):
@@ -368,6 +369,42 @@ class TestSaudiPunchCorrection(FrappeTestCase):
 			_hhmm(frappe.db.get_value("Saudi Punch Correction", second.name, "original_in_time")),
 			"09:40:00",
 		)
+
+	def test_correcting_the_other_punch_keeps_the_earlier_correction(self):
+		"""Check-in and check-out are often filed separately: the second request
+		adds to the first instead of replacing it."""
+		first = self._insert()
+		second = self._insert(corrected_in_time=None, corrected_out_time="17:45:00")
+
+		self._approve(first)
+		self._approve(second)
+
+		self.assertEqual(self._punch_time(), "08:05:00")
+		self.assertEqual(self._punch_time(self.punch_out), "17:45:00")
+		self.assertEqual(
+			frappe.db.get_value(
+				"Saudi Daily Attendance",
+				{"employee": self.employee, "attendance_date": self.day},
+				"working_hours",
+			),
+			9.67,
+		)
+		for doc in (first, second):
+			self.assertEqual(
+				frappe.db.get_value(doc.doctype, doc.name, ["docstatus", "applied"]), (1, 1)
+			)
+
+	def test_a_submitted_request_parked_at_gm_approved_is_completed(self):
+		doc = self._insert()
+		frappe.db.set_value(
+			doc.doctype, doc.name, {"workflow_state": "GM Approved", "docstatus": 1}
+		)
+
+		self.assertGreaterEqual(complete_gm_approved_documents(), 1)
+
+		state = frappe.db.get_value(doc.doctype, doc.name, ["workflow_state", "docstatus", "applied"])
+		self.assertEqual(state, ("Completed", 1, 1))
+		self.assertEqual(self._punch_time(), "08:05:00")
 
 	def test_a_future_day_cannot_be_corrected(self):
 		with self.assertRaises(frappe.exceptions.ValidationError):
