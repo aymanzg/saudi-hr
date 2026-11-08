@@ -2644,10 +2644,21 @@ def correct_attendance_day(attendance=None, employee=None, date=None, time=None,
 		# same request, not by refusing: the once-per-day guard only blocks a
 		# *second* request, and the original times this one captured stay the
 		# audit trail. Re-applying it moves the punches to the new times.
-		existing = frappe.db.get_value(
+		# Check-in and check-out may each have their own request in force; the
+		# one that already corrected the punch being changed is the one updated.
+		applied = frappe.get_all(
 			PUNCH_CORRECTION_DOCTYPE,
-			{"employee": employee, "attendance_date": date_value, "applied": 1, "docstatus": 1},
-			"name",
+			filters={"employee": employee, "attendance_date": date_value, "applied": 1, "docstatus": 1},
+			fields=["name", "corrected_in_time", "corrected_out_time"],
+			order_by="creation asc",
+		)
+		existing = next(
+			(
+				row.name
+				for row in applied
+				if (time and row.corrected_in_time) or (out_time and row.corrected_out_time)
+			),
+			applied[0].name if applied else None,
 		)
 		if existing:
 			correction = frappe.get_doc(PUNCH_CORRECTION_DOCTYPE, existing)

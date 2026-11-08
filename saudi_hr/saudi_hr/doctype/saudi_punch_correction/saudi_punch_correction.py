@@ -195,25 +195,35 @@ class SaudiPunchCorrection(Document):
 
 		# A request already in the chain is allowed to reach approval: at that
 		# point it supersedes the older correction instead of being refused (see
-		# _cancel_prior_corrections). The once-per-day guard only stops a *new*
-		# request from being filed while one is already in force.
+		# _cancel_prior_corrections). The once-per-punch guard only stops a *new*
+		# request from being filed while one is already in force for that punch;
+		# the other punch of the day can still be corrected.
 		if not self.is_new():
 			return
 
-		existing = frappe.db.exists(
+		names = frappe.get_all(
 			"Saudi Punch Correction",
-			{
+			filters={
 				"employee": self.employee,
 				"attendance_date": self.attendance_date,
 				"applied": 1,
 				"docstatus": 1,
 				"name": ["!=", self.name],
 			},
+			pluck="name",
+		)
+		existing = next(
+			(
+				name
+				for name in names
+				if self._corrects_same_punch(frappe.get_doc("Saudi Punch Correction", name))
+			),
+			None,
 		)
 		if existing:
 			frappe.throw(
-				_("The attendance on {0} was already corrected by {1}. A day can only be corrected once.<br>"
-				  "تم تصحيح سجل الحضور في {0} مسبقاً عبر {1}. لا يمكن تصحيح اليوم نفسه أكثر من مرة.").format(
+				_("The attendance on {0} was already corrected by {1}. A punch can only be corrected once.<br>"
+				  "تم تصحيح هذه البصمة في {0} مسبقاً عبر {1}. لا يمكن تصحيح البصمة نفسها أكثر من مرة.").format(
 					frappe.bold(self.attendance_date), frappe.bold(existing)
 				),
 				title=_("Already Corrected / تم التصحيح مسبقاً"),

@@ -332,6 +332,15 @@ class TestSaudiPunchCorrection(FrappeTestCase):
 		self.assertIn("already corrected", str(error.exception))
 		self.assertEqual(self._punch_time(), "08:05:00")
 
+	def test_the_other_punch_can_be_corrected_after_one_is_applied(self):
+		self._approve(self._insert(corrected_in_time=None, corrected_out_time="17:45:00"))
+
+		second = self._approve(self._insert())
+
+		self.assertEqual(frappe.db.get_value(second.doctype, second.name, "applied"), 1)
+		self.assertEqual(self._punch_time(), "08:05:00")
+		self.assertEqual(self._punch_time(self.punch_out), "17:45:00")
+
 	def test_a_later_approval_supersedes_an_applied_correction(self):
 		"""A request filed before an older one took effect must still be
 		approvable: approving it cancels the older correction and takes over, so
