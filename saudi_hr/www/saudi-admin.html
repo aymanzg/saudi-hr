@@ -281,7 +281,7 @@
 				<div class="saudi-section-header" style="margin-top:22px;">
 					<div class="saudi-section-header__title" data-i18n-key="admin_attendance_daily_board">حضور اليوم</div>
 					<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-						<button type="button" class="saudi-btn" onclick="openMissingCheckoutViolationsModal()">تنبيهات عدم تسجيل الخروج</button>
+						<button type="button" class="saudi-btn" data-action="open-missing-checkout-violations">تنبيهات عدم تسجيل الخروج</button>
 						<div class="saudi-field" style="display:flex;gap:8px;align-items:center;margin:0;">
 							<label for="attendance-roster-day" data-i18n-key="admin_attendance_day">التاريخ</label>
 							<input type="date" id="attendance-roster-day" class="saudi-input" dir="ltr">
@@ -319,10 +319,10 @@
 						<div class="saudi-card__title">تقارير الحضور</div>
 					</div>
 					<div class="saudi-card__body" style="display:flex;flex-wrap:wrap;gap:10px;">
-						<button type="button" class="saudi-btn saudi-btn--primary" onclick="showInlineAttendanceReport()">
+						<button type="button" class="saudi-btn saudi-btn--primary" data-action="show-inline-attendance-report">
 							تقرير الحضور الشهري للموظف (ملخص + تفاصيل)
 						</button>
-						<button type="button" class="saudi-btn" onclick="openMonthlyEmployeeAttendanceReport()">
+						<button type="button" class="saudi-btn" data-action="open-monthly-attendance-report">
 							مراجعة حضور الفريق (يومي)
 						</button>
 					</div>
@@ -330,7 +330,7 @@
 				<div class="saudi-card" id="inline-attendance-report-card" style="display:none;">
 					<div class="saudi-card__header">
 						<div class="saudi-card__title">تقرير الحضور الشهري للموظف (ملخص + تفاصيل)</div>
-						<button type="button" class="saudi-btn" onclick="hideInlineAttendanceReport()">إغلاق</button>
+						<button type="button" class="saudi-btn" data-action="hide-inline-attendance-report">إغلاق</button>
 					</div>
 					<div class="saudi-card__body">
 						<form id="inline-att-report-form" class="saudi-toolbar" style="flex-wrap:wrap;align-items:flex-end;" onsubmit="return false;">
@@ -347,8 +347,8 @@
 								<input type="date" id="inline-att-to" class="saudi-input">
 							</div>
 							<div style="display:flex;gap:8px;align-self:flex-end;margin-bottom:16px;">
-								<button type="button" class="saudi-btn saudi-btn--primary" onclick="runInlineAttendanceReport()">عرض التقرير</button>
-								<button type="button" class="saudi-btn" onclick="exportInlineAttendanceReportPdf()">طباعة / PDF</button>
+								<button type="button" class="saudi-btn saudi-btn--primary" data-action="run-inline-attendance-report">عرض التقرير</button>
+								<button type="button" class="saudi-btn" data-action="export-inline-attendance-report">طباعة / PDF</button>
 							</div>
 						</form>
 						<div id="inline-att-summary" class="saudi-stats" style="flex-wrap:wrap;"></div>
@@ -849,6 +849,44 @@
 	</div>
 </div>
 
+<div class="saudi-modal saudi-modal--center" id="missing-checkout-modal" style="display:none;" role="dialog"
+	aria-modal="true" aria-labelledby="missing-checkout-title">
+	<div class="saudi-modal__dialog" style="max-width:900px;">
+		<div class="saudi-modal__header">
+			<div class="saudi-modal__title" id="missing-checkout-title">تنبيهات عدم تسجيل الخروج</div>
+			<button class="saudi-btn saudi-btn--ghost" type="button" data-action="close-missing-checkout-violations">إغلاق</button>
+		</div>
+		<div class="saudi-modal__body">
+			<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+				<div class="saudi-field" style="margin:0;">
+					<label for="missing-checkout-from">من تاريخ</label>
+					<input type="date" id="missing-checkout-from" class="saudi-input" dir="ltr">
+				</div>
+				<div class="saudi-field" style="margin:0;">
+					<label for="missing-checkout-to">إلى تاريخ</label>
+					<input type="date" id="missing-checkout-to" class="saudi-input" dir="ltr">
+				</div>
+				<button class="saudi-btn saudi-btn--primary" type="button" data-action="search-missing-checkout-violations">بحث</button>
+			</div>
+			<div class="saudi-table-wrap" style="margin-top:12px;">
+				<table class="saudi-table">
+					<thead>
+						<tr>
+							<th>الموظف</th>
+							<th>التاريخ</th>
+							<th>دخول</th>
+							<th>الوردية</th>
+							<th>القسم</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody id="missing-checkout-rows"></tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+</div>
+
 <div class="saudi-toast" id="saudi-toast" role="status" aria-live="polite"></div>
 {% endblock %}
 
@@ -937,6 +975,15 @@ document.addEventListener("DOMContentLoaded", function () {
 			case "issue-document": openDocRequestModal(trigger.getAttribute("data-doc-type")); break;
 			case "issue-requested-document": issueRequestedDocument(trigger.getAttribute("data-name")); break;
 			case "upload-signed-document": uploadSignedDocument(trigger.getAttribute("data-name")); break;
+			case "open-missing-checkout-violations": openMissingCheckoutModal(); break;
+			case "close-missing-checkout-violations": closeMissingCheckoutViolationsModal(); break;
+			case "search-missing-checkout-violations": searchMissingCheckoutViolations(); break;
+			case "open-missing-checkout-disciplinary": openMissingCheckoutDisciplinary(Number(trigger.getAttribute("data-idx"))); break;
+			case "show-inline-attendance-report": showInlineAttendanceReport(); break;
+			case "open-monthly-attendance-report": openMonthlyEmployeeAttendanceReport(); break;
+			case "hide-inline-attendance-report": hideInlineAttendanceReport(); break;
+			case "run-inline-attendance-report": runInlineAttendanceReport(); break;
+			case "export-inline-attendance-report": exportInlineAttendanceReportPdf(); break;
 		}
 	});
 
@@ -1230,10 +1277,10 @@ function fmtUnit(count, one, many) {
 }
 
 function fmtDays(days, unit) {
-	if (unit === "hours") {
-		return fmtUnit(days, "admin_unit_hour", "admin_unit_hours");
-	}
-	return fmtUnit(days, "admin_unit_day", "admin_unit_days");
+	var keys = unit === "hours"
+		? ["admin_unit_hour", "admin_unit_hours"]
+		: ["admin_unit_day", "admin_unit_days"];
+	return fmtUnit(days, keys[0], keys[1]);
 }
 
 /* Registry labels arrive as "English / العربية" so the same string reads right
@@ -3377,6 +3424,56 @@ SAUDI_PANEL_LOADERS["attendance"] = function () {
 };
 SAUDI_PANEL_LOADERS["clearance"] = function () { loadOffboardingPanel(); };
 SAUDI_PANEL_LOADERS["documents"] = function () { loadDocumentsPanel(); };
+
+/* ═══ Missing check-out violations ═════════════════════════════════════════ */
+/* The page's own modal: Frappe's Dialog needs the Desk form controls, which a
+   portal page does not load. */
+var MISSING_CHECKOUT_ROWS = [];
+
+function openMissingCheckoutModal() {
+	var today = new Date().toISOString().slice(0, 10);
+	var from = document.getElementById("missing-checkout-from");
+	var to = document.getElementById("missing-checkout-to");
+	if (!from.value) from.value = today;
+	if (!to.value) to.value = today;
+	document.getElementById("missing-checkout-modal").style.display = "flex";
+	searchMissingCheckoutViolations();
+}
+
+function closeMissingCheckoutViolationsModal() {
+	document.getElementById("missing-checkout-modal").style.display = "none";
+}
+
+function searchMissingCheckoutViolations() {
+	var body = document.getElementById("missing-checkout-rows");
+	body.innerHTML = '<tr><td colspan="6">جاري التحميل...</td></tr>';
+	callAdmin("get_missing_checkout_violations", {
+		from_date: document.getElementById("missing-checkout-from").value,
+		to_date: document.getElementById("missing-checkout-to").value
+	}).then(function (rows) {
+		MISSING_CHECKOUT_ROWS = rows || [];
+		if (!MISSING_CHECKOUT_ROWS.length) {
+			body.innerHTML = '<tr><td colspan="6">لا يوجد موظفون بدون تسجيل خروج</td></tr>';
+			return;
+		}
+		body.innerHTML = MISSING_CHECKOUT_ROWS.map(function (row, idx) {
+			return "<tr><td>" + esc(row.employee_name || row.employee) + " (" + esc(row.employee) + ")</td>"
+				+ "<td>" + esc(row.attendance_date) + "</td>"
+				+ "<td>" + esc(row.in_time) + "</td>"
+				+ "<td>" + esc(row.shift_type) + "</td>"
+				+ "<td>" + esc(row.department) + "</td>"
+				+ '<td><button type="button" class="saudi-btn" data-action="open-missing-checkout-disciplinary" data-idx="'
+				+ idx + '">رفع إجراء تأديبي</button></td></tr>';
+		}).join("");
+	}).catch(function (err) {
+		body.innerHTML = '<tr><td colspan="6">' + esc((err && err.message) || err) + "</td></tr>";
+	});
+}
+
+function openMissingCheckoutDisciplinary(idx) {
+	var rec = MISSING_CHECKOUT_ROWS[idx];
+	if (rec) openDisciplinaryFromMissingCheckout(rec);
+}
 
 /* ═══ Utilities ════════════════════════════════════════════════════════════ */
 function esc(value) {

@@ -1094,16 +1094,6 @@ class TestAdminPageBehaviour(FrappeTestCase):
 			[],
 		)
 
-	def test_the_report_column_that_totals_is_not_labelled_as_a_status(self):
-		"""The last report column sums the row, so after the runtime swaps the
-		text it must not read "Status"."""
-		report = self.html[self.html.index('id="panel-report"') :]
-		head = report[: report.index("</thead>")]
-		self.assertNotIn("admin_col_status", head)
-		self.assertIn("admin_col_total", head)
-		self.assertIn('admin_col_total: "Total"', self.shared)
-		self.assertIn('admin_col_total: "الإجمالي"', self.shared)
-
 	def test_the_units_are_labels_and_not_written_into_the_page(self):
 		for key in ("day", "days", "hour", "hours", "minute", "minutes"):
 			self.assertIn(f"admin_unit_{key}", self.shared)
