@@ -47,6 +47,7 @@ from saudi_hr.saudi_hr.admin_api import (
 	get_attendance_report,
 	get_attendance_daily_roster,
 	get_attendance_filter_options,
+	get_monthly_attendance_sheet,
 	get_documents_and_letters,
 	get_employee_detail,
 	get_employee_form_options,
@@ -2005,6 +2006,41 @@ class TestAdminApiAttendanceCompanyAndBoard(_AttendanceTestBase):
 		self.assertIn(self.company, options["companies"])
 		self.assertTrue(all(name for name in options["companies"]))
 
+	# ── the monthly sheet for every employee ────────────────────────────────
+
+	def _sheet_row(self, month="2026-03"):
+		sheet = get_monthly_attendance_sheet(month=month, company=self.company)
+		return sheet, next(row for row in sheet["employees"] if row["employee"] == self.employee)
+
+	def test_the_monthly_sheet_counts_attended_absent_and_rest_days(self):
+		frappe.db.set_value("Employee", self.employee, {"date_of_joining": "2025-01-01", "relieving_date": None})
+		self._make_attendance(on="2026-03-02", late_minutes=10)
+		self._make_attendance(on="2026-03-03", status="Absent / غائب", hours=0)
+		sheet, row = self._sheet_row()
+		self.assertEqual(len(sheet["dates"]), 31)
+		self.assertEqual(len(row["days"]), 31)
+		# Friday and Saturday are the built-in weekend: 8 of them in March 2026
+		self.assertEqual(row["off"], 8)
+		self.assertEqual(row["present"], 1)
+		# every other working day has no record and reads as an absence
+		self.assertEqual(row["absent"], 31 - 8 - 1)
+		self.assertEqual(row["late_days"], 1)
+		first = row["days"][1]
+		self.assertEqual((first["date"], first["in_time"], first["out_time"]), ("2026-03-02", "08:30", "16:00"))
+
+	def test_days_before_joining_are_not_absences(self):
+		frappe.db.set_value("Employee", self.employee, {"date_of_joining": "2026-03-29", "relieving_date": None})
+		_, row = self._sheet_row()
+		self.assertEqual(row["days"][0]["status_key"], "not_employed")
+		# 29 to 31 March: Sunday to Tuesday, three working days with no record
+		self.assertEqual(row["absent"], 3)
+		self.assertEqual(row["off"], 0)
+
+	def test_an_employee_who_joined_after_the_month_is_not_listed(self):
+		frappe.db.set_value("Employee", self.employee, "date_of_joining", "2026-04-01")
+		sheet = get_monthly_attendance_sheet(month="2026-03", company=self.company)
+		self.assertNotIn(self.employee, [row["employee"] for row in sheet["employees"]])
+
 	# ── the daily board ─────────────────────────────────────────────────────
 
 	def _board(self, day=None, company=None):
@@ -2663,6 +2699,20 @@ class TestAdminApiEmployeeEdit(_ApiTestBase):
 	def test_editing_an_employee_writes_the_named_field(self):
 		update_employee(json.dumps({"name": self.employee, "first_name": "Renamed"}))
 		self.assertEqual(self._current("first_name"), "Renamed")
+
+	def test_an_employee_can_be_set_to_left_with_a_relieving_date(self):
+		joined = str(self._current("date_of_joining"))
+		update_employee(json.dumps({"name": self.employee, "status": "Left", "relieving_date": joined}))
+		self.assertEqual(self._current("status"), "Left")
+		self.assertEqual(str(self._current("relieving_date")), joined)
+
+	def test_left_without_a_relieving_date_is_refused(self):
+		self.assertRaises(
+			frappe.ValidationError,
+			update_employee,
+			json.dumps({"name": self.employee, "status": "Left"}),
+		)
+		self.assertNotEqual(self._current("status"), "Left")
 
 	def test_an_edit_never_renames_the_employee(self):
 		number = self._current("employee_number")

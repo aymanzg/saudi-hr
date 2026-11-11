@@ -256,7 +256,7 @@ EMPLOYEE_WRITABLE_FIELDS = (
 	"mobile_no",
 	"nationality",
 	"date_of_joining",
-	"date_of_leaving",
+	"relieving_date",
 	"employment_type",
 	"status",
 	"company",
@@ -1051,7 +1051,7 @@ def get_employee_detail(name):
 		"employment_type",
 		"status",
 		"date_of_joining",
-		"date_of_leaving",
+		"relieving_date",
 		"company_email",
 		"personal_email",
 		"mobile_no",
@@ -1307,7 +1307,7 @@ def _validate_employee_fields(doc):
 			title=_("Missing Information"),
 		)
 
-	for field in ("date_of_birth", "date_of_joining", "date_of_leaving"):
+	for field in ("date_of_birth", "date_of_joining", "relieving_date"):
 		value = doc.get(field)
 		if not value:
 			continue
@@ -1317,6 +1317,19 @@ def _validate_employee_fields(doc):
 				_("{0} cannot be in the future.<br>لا يمكن أن يكون {0} في المستقبل.").format(
 					_(frappe.unscrub(field))
 				),
+				title=_("Invalid Date"),
+			)
+
+	# ERPNext refuses a Left employee without one, in English and without naming the field
+	if doc.get("status") == "Left" and not doc.get("relieving_date"):
+		frappe.throw(
+			_("Please enter the relieving date.<br>يرجى إدخال تاريخ ترك العمل."),
+			title=_("Missing Information"),
+		)
+	if doc.get("relieving_date") and doc.get("date_of_joining"):
+		if getdate(doc.get("relieving_date")) < getdate(doc.get("date_of_joining")):
+			frappe.throw(
+				_("The relieving date cannot be before the date of joining.<br>لا يمكن أن يكون تاريخ ترك العمل قبل تاريخ الالتحاق."),
 				title=_("Invalid Date"),
 			)
 
@@ -1752,7 +1765,7 @@ def get_attendance_filter_options():
 	Approver pinned by a User Permission only sees their own.
 	"""
 	assert_portal_access()
-	assert_panel_access("attendance")
+	assert_panel_access("attendance", "report")
 	if not frappe.has_permission("Employee", "read", throw=False):
 		return {"companies": []}
 	companies = {
@@ -1761,6 +1774,101 @@ def get_attendance_filter_options():
 	}
 	companies.discard("")
 	return {"companies": sorted(companies)}
+
+
+# Day keys a monthly sheet counts as attended. A half day was still a day at work.
+SHEET_PRESENT_KEYS = ("present", "half_day", "in_progress")
+
+
+@frappe.whitelist(methods=["GET"])
+def get_monthly_attendance_sheet(month=None, company=None):
+	"""Every employee's month: a summary line each, and every day's punches.
+
+	Each day is read through _attendance_days, the same calendar the
+	one-employee report shows, so the counts here and there cannot disagree.
+	A working day before joining or after leaving is not an absence, and a day
+	still ahead of today is not counted at all.
+	"""
+	assert_panel_access("report", "attendance")
+	window = _attendance_window(month=month or nowdate()[:7])
+	if not frappe.has_permission(ATTENDANCE_DOCTYPE, "read", throw=False):
+		return {"month": window["month"], "dates": [], "employees": [], "readable": False}
+
+	filters = [
+		["date_of_joining", "<=", window["to_date"]],
+		["ifnull(relieving_date, '2199-12-31')", ">=", window["from_date"]],
+	]
+	if cstr(company or "").strip():
+		filters.append(["company", "=", cstr(company).strip()])
+	employees = frappe.get_list(
+		"Employee",
+		filters=filters,
+		or_filters=[["status", "!=", "Left"], ["relieving_date", ">=", window["from_date"]]],
+		fields=["name", "employee_name", "employee_number", "department", "company", "date_of_joining", "relieving_date"],
+		order_by="employee_name asc",
+		limit_page_length=0,
+	)
+
+	sheet = []
+	for employee in employees:
+		joined = str(employee.date_of_joining) if employee.date_of_joining else None
+		left = str(employee.relieving_date) if employee.relieving_date else None
+		counts = {"present": 0, "absent": 0, "on_leave": 0, "off": 0, "late_days": 0, "late_minutes": 0.0, "hours": 0.0}
+		days = []
+		for day in _attendance_days(window, employee.name):
+			key = day["status_key"]
+			if (joined and day["date"] < joined) or (left and day["date"] > left):
+				key = "not_employed"
+			elif day.get("future"):
+				key = "future"
+			elif key in SHEET_PRESENT_KEYS:
+				counts["present"] += 1
+			elif key in ABSENCE_REGISTERABLE_KEYS:
+				key = "absent"
+				counts["absent"] += 1
+			elif key == "on_leave":
+				counts["on_leave"] += 1
+			elif key in ("weekly_off", "holiday"):
+				counts["off"] += 1
+			if key not in ("not_employed", "future"):
+				counts["late_minutes"] += flt(day.get("late_minutes"))
+				counts["hours"] += flt(day.get("hours"))
+				if flt(day.get("late_minutes")) > 0:
+					counts["late_days"] += 1
+			days.append(
+				{
+					"date": day["date"],
+					"status_key": key,
+					"status": day.get("status"),
+					"in_time": day.get("in_time"),
+					"out_time": day.get("out_time"),
+					"hours": day.get("hours"),
+					"late_minutes": day.get("late_minutes"),
+				}
+			)
+		counts["late_minutes"] = round(counts["late_minutes"], 1)
+		counts["hours"] = round(counts["hours"], 2)
+		sheet.append(
+			{
+				"employee": employee.name,
+				"employee_name": employee.employee_name or employee.name,
+				"employee_number": employee.employee_number or employee.name,
+				"department": employee.department,
+				"company": employee.company,
+				**counts,
+				"days": days,
+			}
+		)
+
+	return {
+		"readable": True,
+		"month": window["month"],
+		"from_date": window["from_date"],
+		"to_date": window["to_date"],
+		"company": company or None,
+		"dates": list(_each_date(window["from_date"], window["to_date"])),
+		"employees": sheet,
+	}
 
 
 def _attendance_window_rows(window, employees):

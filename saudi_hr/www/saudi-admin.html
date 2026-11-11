@@ -378,6 +378,29 @@
 						</div>
 					</div>
 				</div>
+				<div class="saudi-card" id="monthly-sheet-card">
+					<div class="saudi-card__header">
+						<div class="saudi-card__title">التقارير الشهرية لجميع الموظفين</div>
+					</div>
+					<div class="saudi-card__body">
+						<form class="saudi-toolbar" style="flex-wrap:wrap;align-items:flex-end;" onsubmit="return false;">
+							<div class="saudi-field">
+								<label for="monthly-sheet-month">الشهر</label>
+								<input type="month" id="monthly-sheet-month" class="saudi-input">
+							</div>
+							<div class="saudi-field">
+								<label for="monthly-sheet-company">الشركة</label>
+								<select id="monthly-sheet-company" class="saudi-select" style="min-width:220px;"></select>
+							</div>
+							<div style="display:flex;gap:8px;flex-wrap:wrap;align-self:flex-end;margin-bottom:16px;">
+								<button type="button" class="saudi-btn saudi-btn--primary" data-action="run-monthly-sheet" data-view="summary">التقرير الملخص</button>
+								<button type="button" class="saudi-btn saudi-btn--primary" data-action="run-monthly-sheet" data-view="daily">التقرير اليومي التفصيلي</button>
+								<button type="button" class="saudi-btn" data-action="print-monthly-sheet" id="monthly-sheet-print" disabled>طباعة / PDF</button>
+							</div>
+						</form>
+						<div id="monthly-sheet-output"></div>
+					</div>
+				</div>
 			</section>
 			{% endif %}
 
@@ -665,6 +688,10 @@
 					<label for="emp-doj" data-i18n-key="admin_field_doj">تاريخ الالتحاق</label>
 					<input type="date" id="emp-doj" name="date_of_joining">
 				</div>
+				<div class="saudi-field" id="emp-relieving-field" hidden>
+					<label for="emp-relieving" data-i18n-key="admin_field_relieving_date">تاريخ ترك العمل</label>
+					<input type="date" id="emp-relieving" name="relieving_date" disabled>
+				</div>
 
 				<div class="saudi-form-section" data-i18n-key="admin_section_national">البيانات الوطنية</div>
 				<div class="saudi-field">
@@ -891,7 +918,7 @@
 {% endblock %}
 
 {% block script %}
-<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261105b"></script>
+<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261111"></script>
 <script>
 /* ═══ Page state ═══════════════════════════════════════════════════════════ */
 /* Rendered into a JavaScript literal, so the booleans are written as JS */
@@ -984,11 +1011,16 @@ document.addEventListener("DOMContentLoaded", function () {
 			case "hide-inline-attendance-report": hideInlineAttendanceReport(); break;
 			case "run-inline-attendance-report": runInlineAttendanceReport(); break;
 			case "export-inline-attendance-report": exportInlineAttendanceReportPdf(); break;
+			case "run-monthly-sheet": runMonthlySheet(trigger.getAttribute("data-view")); break;
+			case "print-monthly-sheet": printMonthlySheet(); break;
 		}
 	});
 
 	var addBtn = document.getElementById("employee-add-btn");
 	if (addBtn) addBtn.hidden = !ADMIN_CFG.can_manage_employees;
+
+	var empStatus = document.getElementById("emp-status");
+	if (empStatus) empStatus.addEventListener("change", toggleRelievingDate);
 
 	["approvals-search", "employees-search"].forEach(function (id) {
 		var el = document.getElementById(id);
@@ -1640,7 +1672,7 @@ function renderEmployeeDetail(payload) {
 			[t("admin_field_reports_to"), p.reports_to],
 			[t("admin_field_employment_type"), p.employment_type],
 			[t("admin_field_joining_date"), p.date_of_joining],
-			[t("admin_field_leaving_date"), p.date_of_leaving],
+			[t("admin_field_leaving_date"), p.relieving_date],
 			[t("admin_field_email"), p.company_email],
 			[t("admin_field_personal_email"), p.personal_email],
 			[t("admin_field_mobile"), p.mobile_no],
@@ -2667,6 +2699,7 @@ function openEmployeeForm(name) {
 	var numberField = document.getElementById("emp-number");
 	if (numberField) numberField.readOnly = !!name;
 	setEmployeeFormMode(!!name);
+	toggleRelievingDate();
 	var modal = document.getElementById("employee-modal");
 	// remember the trigger so focus can go back where it came from on close
 	ADMIN_STATE.lastFocus = document.activeElement;
@@ -2679,6 +2712,19 @@ function openEmployeeForm(name) {
 		var first = document.getElementById("emp-number");
 		if (first) first.focus();
 	}
+}
+
+/* The leaving date belongs to a Left employee only: hidden and not sent otherwise,
+   so a status set back to Active does not carry a stale date with it. */
+function toggleRelievingDate() {
+	var status = document.getElementById("emp-status");
+	var field = document.getElementById("emp-relieving-field");
+	var input = document.getElementById("emp-relieving");
+	if (!status || !field || !input) return;
+	var left = status.value === "Left";
+	field.hidden = !left;
+	input.disabled = !left;
+	input.required = left;
 }
 
 function setEmployeeFormMode(editing) {
@@ -2704,6 +2750,7 @@ function fillEmployeeForm(name) {
 		// the form shows the custom field, which may be empty on older records
 		var nationality = document.getElementById("emp-nationality");
 		if (nationality && !nationality.value) nationality.value = profile.nationality || "";
+		toggleRelievingDate();
 		var first = document.getElementById("emp-first-name");
 		if (first) first.focus();
 	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
@@ -2752,9 +2799,15 @@ function saveEmployee() {
 	var payload = {};
 	// read only the named controls, so a stray field cannot reach the API
 	form.querySelectorAll("[name]").forEach(function (el) {
+		if (el.disabled) return;
 		var value = (el.value || "").trim();
 		if (value) payload[el.getAttribute("name")] = value;
 	});
+	if (payload.status === "Left" && !payload.relieving_date) {
+		showToast(t("admin_field_relieving_date"), "error");
+		document.getElementById("emp-relieving").focus();
+		return;
+	}
 	var editing = ADMIN_STATE.editing || null;
 	if (!payload.first_name || (!payload.employee_number && !editing)) {
 		showToast(t("admin_field_number") + " / " + t("admin_field_full_name"), "error");
@@ -3143,6 +3196,121 @@ function printClearance() {
 	window.print();
 }
 
+/* ═══ Monthly attendance sheet ═══════════════════════════════════════════
+   Every employee's month from one request: the summary is a line each, the
+   daily report is every day's punches, so switching views costs no reload. */
+var MONTHLY_SHEET_LABELS = { not_employed: "خارج فترة الخدمة", future: "—" };
+
+function initMonthlySheet() {
+	var month = document.getElementById("monthly-sheet-month");
+	if (!month) return;
+	if (!month.value) month.value = new Date().toISOString().slice(0, 7);
+	var select = document.getElementById("monthly-sheet-company");
+	if (select.options.length) return;
+	select.innerHTML = "<option value=''>" + esc(t("admin_attendance_all_companies")) + "</option>";
+	callAdmin("get_attendance_filter_options", {}).then(function (data) {
+		(data.companies || []).forEach(function (name) {
+			select.insertAdjacentHTML("beforeend", "<option value='" + esc(name) + "'>" + esc(name) + "</option>");
+		});
+	}).catch(function (err) { onApiError(err, t("admin_action_failed")); });
+}
+
+function runMonthlySheet(view) {
+	var month = document.getElementById("monthly-sheet-month").value;
+	var company = document.getElementById("monthly-sheet-company").value;
+	var out = document.getElementById("monthly-sheet-output");
+	if (!month) { out.innerHTML = "<p class='saudi-table__note'>اختر الشهر</p>"; return; }
+	var key = month + ":" + company;
+	var cached = ADMIN_STATE.monthly_sheet;
+	if (cached && cached.key === key) { renderMonthlySheet(cached.data, view); return; }
+	out.innerHTML = "<p class='saudi-table__note'>...</p>";
+	document.getElementById("monthly-sheet-print").disabled = true;
+	callAdmin("get_monthly_attendance_sheet", { month: month, company: company || null }).then(function (data) {
+		ADMIN_STATE.monthly_sheet = { key: key, data: data };
+		renderMonthlySheet(data, view);
+	}).catch(function (err) {
+		out.innerHTML = "";
+		onApiError(err, t("admin_action_failed"));
+	});
+}
+
+function monthlySheetStatus(key) {
+	if (MONTHLY_SHEET_LABELS[key]) return MONTHLY_SHEET_LABELS[key];
+	var labelKey = "admin_attendance_status_" + key;
+	return t(labelKey) === labelKey ? key : t(labelKey);
+}
+
+function renderMonthlySheet(data, view) {
+	var out = document.getElementById("monthly-sheet-output");
+	var rows = data.employees || [];
+	var title = (view === "daily" ? "التقرير اليومي التفصيلي" : "التقرير الملخص") + " — " + (data.month || "")
+		+ (data.company ? " — " + data.company : "");
+	var html = "<h3 class='monthly-sheet__title' style='margin:8px 0 12px;font-size:16px;'>" + esc(title) + "</h3>";
+	if (!data.readable) html += "<p class='saudi-table__note'>" + esc(t("admin_action_failed")) + "</p>";
+	else if (!rows.length) html += "<p class='saudi-table__note'>لا يوجد موظفون لهذه الفترة</p>";
+	else html += view === "daily" ? monthlySheetDaily(rows) : monthlySheetSummary(rows);
+	out.innerHTML = html;
+	ADMIN_STATE.monthly_sheet_view = view;
+	document.getElementById("monthly-sheet-print").disabled = !rows.length;
+}
+
+function monthlySheetSummary(rows) {
+	var head = ["#", "الرقم الوظيفي", "اسم الموظف", "القسم", "أيام الحضور", "أيام الغياب", "أيام الإجازة",
+		"الراحة والعطل", "أيام التأخر", "دقائق التأخر", "ساعات العمل"];
+	var body = rows.map(function (row, index) {
+		return "<tr><td>" + (index + 1) + "</td><td>" + esc(row.employee_number) + "</td><td>" + esc(row.employee_name)
+			+ "</td><td>" + esc(row.department || "—") + "</td><td>" + row.present + "</td><td>" + row.absent
+			+ "</td><td>" + row.on_leave + "</td><td>" + row.off + "</td><td>" + row.late_days
+			+ "</td><td>" + row.late_minutes + "</td><td>" + row.hours + "</td></tr>";
+	}).join("");
+	return monthlySheetTable(head, body);
+}
+
+function monthlySheetDaily(rows) {
+	var head = ["التاريخ", "اليوم", "الحالة", "الحضور", "الانصراف", "ساعات العمل", "دقائق التأخر"];
+	var locale = CURRENT_LANG === "en" ? "en-US" : "ar-SA-u-ca-gregory";
+	var body = rows.map(function (row) {
+		var group = "<tr class='monthly-sheet__employee'><td colspan='7' style='background:var(--saudi-surface-2,#f3f4f6);font-weight:600;'>"
+			+ esc(row.employee_name) + " — " + esc(row.employee_number) + (row.department ? " — " + esc(row.department) : "")
+			+ " &nbsp; (حضور " + row.present + "، غياب " + row.absent + "، إجازة " + row.on_leave + ")</td></tr>";
+		return group + row.days.map(function (day) {
+			var weekday = new Date(day.date + "T00:00:00").toLocaleDateString(locale, { weekday: "long" });
+			var label = monthlySheetStatus(day.status_key);
+			return "<tr><td style='direction:ltr;text-align:right;white-space:nowrap;'>" + esc(day.date) + "</td><td>" + esc(weekday)
+				+ "</td><td>" + esc(label) + "</td><td style='direction:ltr;text-align:right;'>" + esc(day.in_time || "—")
+				+ "</td><td style='direction:ltr;text-align:right;'>" + esc(day.out_time || "—") + "</td><td>"
+				+ esc(day.hours || "") + "</td><td>" + esc(day.late_minutes || "") + "</td></tr>";
+		}).join("");
+	}).join("");
+	return monthlySheetTable(head, body);
+}
+
+function monthlySheetTable(head, body) {
+	return "<div class='saudi-table-wrap'><table class='saudi-table'><thead><tr>"
+		+ head.map(function (label) { return "<th>" + esc(label) + "</th>"; }).join("")
+		+ "</tr></thead><tbody>" + body + "</tbody></table></div>";
+}
+
+/* Printed from its own window, so the page's rail and panels never reach the paper. */
+function printMonthlySheet() {
+	var out = document.getElementById("monthly-sheet-output");
+	var win = window.open("", "_blank");
+	if (!win) return;
+	var css = "body{font-family:Tahoma,Arial,sans-serif;margin:16px;color:#111;}"
+		+ "table{border-collapse:collapse;width:100%;font-size:12px;}th,td{border:1px solid #999;padding:4px 6px;text-align:right;}"
+		+ "th{background:#eee;}tr{page-break-inside:avoid;}.monthly-sheet__employee td{background:#f3f4f6;font-weight:bold;}"
+		+ "@page{size:A4 " + (ADMIN_STATE.monthly_sheet_view === "daily" ? "portrait" : "landscape") + ";margin:12mm;}";
+	win.document.write("<!doctype html><html dir='rtl' lang='ar'><head><meta charset='utf-8'><title>"
+		+ esc(out.querySelector("h3").textContent) + "</title></head><body>" + out.innerHTML + "</body></html>");
+	// a stylesheet element built here rather than written as markup, so the page keeps no inline styles
+	var sheet = win.document.createElement("style");
+	sheet.textContent = css;
+	win.document.head.appendChild(sheet);
+	win.document.close();
+	win.focus();
+	win.print();
+}
+
 /* ═══ Documents Panel ═════════════════════════════════════════════════════ */
 function loadDocumentsPanel() {
 	if (!ADMIN_STATE.doc_employees) {
@@ -3414,7 +3582,7 @@ function uploadSignedDocument(name) {
 SAUDI_PANEL_LOADERS["dashboard"] = function () { loadDashboard(); };
 SAUDI_PANEL_LOADERS["employees"] = function () { loadEmployees(); };
 SAUDI_PANEL_LOADERS["approvals"] = function () { loadLeave(); };
-SAUDI_PANEL_LOADERS["report"] = function () { loadDashboard(); };
+SAUDI_PANEL_LOADERS["report"] = function () { loadDashboard(); initMonthlySheet(); };
 SAUDI_PANEL_LOADERS["attendance"] = function () {
 	attendanceBind();
 	loadAttendanceCompanies()
