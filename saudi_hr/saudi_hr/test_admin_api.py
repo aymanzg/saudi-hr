@@ -495,6 +495,30 @@ class TestAdminApiLeaveInbox(_ApiTestBase):
 		for row, expected in cases:
 			self.assertEqual(_row_state(row), expected, row)
 
+	def test_the_row_cap_never_drops_a_request_waiting_on_the_user(self):
+		"""Hundreds of newer rows from a busy doctype must not push it out."""
+		request = self._make_leave_request("Saudi Sick Leave")
+		frappe.db.set_value("Saudi Sick Leave", request, "creation", "2020-01-01 08:00:00", update_modified=False)
+		frappe.get_doc(
+			{"doctype": "Saudi Sick Leave", "employee": self.employee, "company": self.company,
+			 "from_date": "2026-11-05", "to_date": "2026-11-05", "reason": "newer row"}
+		).insert(ignore_permissions=True)
+		rows = list_leave_requests(limit=1)["rows"]
+		row = next((r for r in rows if r["name"] == request), None)
+		self.assertIsNotNone(row)
+		self.assertTrue(row["actionable"])
+
+	def test_an_approver_gets_no_buttons_on_their_own_request(self):
+		request = self._make_leave_request("Saudi Sick Leave")
+		email = self._make_user(["HR Manager"])
+		frappe.db.set_value(
+			"Saudi Sick Leave", request, {"owner": email, "workflow_state": "Pending HR Manager Review"},
+			update_modified=False,
+		)
+		frappe.set_user(email)
+		row = next(r for r in list_leave_requests(doctype="Saudi Sick Leave")["rows"] if r["name"] == request)
+		self.assertEqual(row["actions"], [])
+
 	def test_filtering_by_state_narrows_the_inbox(self):
 		all_rows = list_leave_requests()["rows"]
 		if not all_rows:

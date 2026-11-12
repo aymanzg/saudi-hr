@@ -1383,8 +1383,9 @@ def list_leave_requests(state=None, doctype=None, limit=None):
 		if not frappe.has_permission(leave_doctype, "read", throw=False):
 			continue
 
+		# owner feeds the self-approval check in _row_actions
 		fields = _existing_fields(
-			leave_doctype, ["name", "employee", "creation", "modified", "workflow_state", "status", "docstatus"]
+			leave_doctype, ["name", "employee", "owner", "creation", "modified", "workflow_state", "status", "docstatus"]
 		)
 		for field in (entry[2], entry[3], entry[4], entry[5]):
 			fields += _existing_fields(leave_doctype, [field])
@@ -1394,12 +1395,7 @@ def list_leave_requests(state=None, doctype=None, limit=None):
 		# get_list, not get_all: the app's permission_query_conditions already
 		# scope most roles, and bypassing it here would widen every approver's
 		# inbox to the whole site.
-		for record in frappe.get_list(
-			leave_doctype,
-			fields=list(dict.fromkeys(fields)),
-			order_by="creation desc",
-			limit_page_length=limit,
-		):
+		for record in _inbox_records(leave_doctype, list(dict.fromkeys(fields)), states, limit):
 			record_state = _row_state(record)
 			if wanted_state and record_state != wanted_state:
 				continue
@@ -1437,8 +1433,37 @@ def list_leave_requests(state=None, doctype=None, limit=None):
 				}
 			)
 
+	# the cap only trims history: a busy doctype (punch corrections run to hundreds
+	# a week) must not push a request still waiting on this user out of the inbox
 	rows.sort(key=lambda row: row.get("created_at") or "", reverse=True)
-	return {"rows": rows[:limit], "limit": limit, "total": len(rows)}
+	actionable = [row for row in rows if row["actionable"]]
+	history = [row for row in rows if not row["actionable"]][: max(limit - len(actionable), 0)]
+	kept = sorted(actionable + history, key=lambda row: row.get("created_at") or "", reverse=True)
+	return {"rows": kept, "limit": limit, "total": len(rows)}
+
+
+def _inbox_records(doctype, fields, states, limit):
+	"""The newest `limit` rows, plus every row still in a state this user acts in.
+
+	The second query is what keeps an old request that is still waiting from
+	falling past the cap; it is bounded by how many requests are open, not by
+	the doctype's history.
+	"""
+	records = frappe.get_list(doctype, fields=fields, order_by="creation desc", limit_page_length=limit)
+	if get_workflow_name(doctype):
+		open_filter = {"workflow_state": ["in", list(states)]} if states else None
+	else:
+		open_filter = {"docstatus": 0}
+	if open_filter:
+		seen = {record.get("name") for record in records}
+		records += [
+			record
+			for record in frappe.get_list(
+				doctype, fields=fields, filters=open_filter, order_by="creation desc", limit_page_length=0
+			)
+			if record.get("name") not in seen
+		]
+	return records
 
 
 def _load_row(doctype, record):
