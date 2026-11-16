@@ -186,6 +186,10 @@ function _add_buttons(frm) {
         frm.add_custom_button(__('Download Bank Transfer Sheet / تنزيل ملف الحوالات البنكية'), function() {
             _download_bank_transfer_sheet(frm);
         }, __('Actions / إجراءات'));
+
+        frm.add_custom_button(__('Download Salary & Deductions Detail / تنزيل كشف الرواتب والخصومات'), function() {
+            _download_payroll_detail_sheet(frm);
+        }, __('Actions / إجراءات'));
     }
 }
 
@@ -1097,6 +1101,36 @@ function _download_bank_transfer_sheet(frm) {
     };
 
     if (frm.is_new()) {
+        frm.save().then(do_download);
+    } else {
+        do_download();
+    }
+}
+
+
+function _download_payroll_detail_sheet(frm) {
+    const do_download = function() {
+        frappe.call({
+            method: 'saudi_hr.saudi_hr.doctype.saudi_monthly_payroll.saudi_monthly_payroll.download_payroll_detail_sheet',
+            args: {
+                doc_name: frm.doc.name
+            },
+            freeze: true,
+            freeze_message: __('Generating salary and deductions detail...<br>جاري إنشاء كشف الرواتب والخصومات...'),
+            callback(r) {
+                if (!r.message || !r.message.file_url) {
+                    return;
+                }
+                window.open(r.message.file_url, '_blank');
+                frappe.show_alert({
+                    message: __(`Salary and deductions detail generated with ${r.message.row_count} rows.`),
+                    indicator: 'green'
+                }, 5);
+            }
+        });
+    };
+
+    if (frm.is_dirty()) {
         frm.save().then(do_download);
     } else {
         do_download();

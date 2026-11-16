@@ -2116,6 +2116,62 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 		with self.assertRaises(frappe.ValidationError):
 			payroll_module._build_bank_transfer_sheet_workbook(doc)
 
+	def test_build_payroll_detail_sheet_itemizes_each_deduction_with_totals(self):
+		row1 = {
+			"employee": "EMP-1",
+			"payroll_employee_id": "101",
+			"employee_name": "أحمد محمد",
+			"department": "Sales",
+			"basic_salary": 3000,
+			"housing_allowance": 750,
+			"transport_allowance": 300,
+			"gross_salary": 4050,
+			"absence_days": 1,
+			"gosi_employee_deduction": 365.63,
+			"absence_deduction": 110,
+			"violation_deduction": 55,
+			"total_deductions": 630.63,
+			"net_salary": 3419.37,
+			"attendance_flags": "fine",
+		}
+		row2 = {"employee": "EMP-2", "employee_name": "Sara Ali", "workbook_department": "HR", "basic_salary": 2000,
+			"gross_salary": 2000, "total_deductions": 0, "net_salary": 2000}
+		doc = SimpleNamespace(
+			name="SAU-PAY-2026-0001",
+			company="amd",
+			period_label="November / نوفمبر 2026",
+			period_from="2026-10-22",
+			period_to="2026-11-21",
+			employees=[row1, row2],
+			adjustment_items=[SimpleNamespace(employee="EMP-1", item_type="Deduction / خصم", amount=100)],
+		)
+
+		sheet = load_workbook(payroll_module._build_payroll_detail_sheet_workbook(doc)).active
+		columns = payroll_module.PAYROLL_DETAIL_SHEET_COLUMNS
+		col = {header: index for index, (header, _key, _numeric) in enumerate(columns, start=1)}
+		self.assertEqual([sheet.cell(row=3, column=i).value for i in range(1, len(columns) + 1)], [c[0] for c in columns])
+		self.assertTrue(sheet.sheet_view.rightToLeft)
+		self.assertIn("amd", sheet.cell(row=1, column=1).value)
+
+		self.assertEqual(sheet.cell(row=4, column=col["م"]).value, 1)
+		self.assertEqual(sheet.cell(row=4, column=col["القسم"]).value, "Sales")
+		self.assertEqual(sheet.cell(row=4, column=col["خصم الغياب"]).value, 110)
+		self.assertEqual(sheet.cell(row=4, column=col["خصم المخالفات"]).value, 55)
+		self.assertEqual(sheet.cell(row=4, column=col["تعديلات خصم"]).value, 100)
+		self.assertEqual(sheet.cell(row=4, column=col["صافي الراتب"]).value, 3419.37)
+		self.assertEqual(sheet.cell(row=5, column=col["القسم"]).value, "HR")
+		self.assertEqual(sheet.cell(row=5, column=col["خصم الغياب"]).value, 0)
+
+		self.assertIn("2", sheet.cell(row=6, column=col["اسم الموظف"]).value)
+		self.assertEqual(sheet.cell(row=6, column=col["الراتب الأساسي"]).value, 5000)
+		self.assertEqual(sheet.cell(row=6, column=col["صافي الراتب"]).value, 5419.37)
+		self.assertIsNone(sheet.cell(row=6, column=col["م"]).value)
+
+	def test_build_payroll_detail_sheet_throws_when_empty(self):
+		doc = SimpleNamespace(name="SAU-PAY-2026-0002", employees=[])
+		with self.assertRaises(frappe.ValidationError):
+			payroll_module._build_payroll_detail_sheet_workbook(doc)
+
 	def test_bank_transfer_employee_lookup_falls_back_to_contract_iqama(self):
 		employee_rows = [
 			frappe._dict(name="EMP-1", custom_id_number="", custom_id_type="", iban="SA0001", bank_name="Bank A")

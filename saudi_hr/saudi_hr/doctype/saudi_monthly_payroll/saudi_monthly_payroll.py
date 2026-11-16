@@ -114,6 +114,36 @@ BANK_TRANSFER_SHEET_HEADERS = [
 	"خصومات",
 ]
 
+# كشف تفصيل الرواتب والخصومات: (العنوان، الحقل أو المفتاح، رقمي؟)
+PAYROLL_DETAIL_SHEET_COLUMNS = [
+	("م", "_index", False),
+	("الرقم الوظيفي", "payroll_employee_id", False),
+	("اسم الموظف", "employee_name", False),
+	("القسم", "_department", False),
+	("المسمى الوظيفي", "designation", False),
+	("الراتب الأساسي", "basic_salary", True),
+	("بدل سكن", "housing_allowance", True),
+	("بدل مواصلات", "transport_allowance", True),
+	("بدلات أخرى", "other_allowances", True),
+	("إجمالي الراتب", "gross_salary", True),
+	("العمل الإضافي", "overtime_addition", True),
+	("إضافات أخرى", "_adjustment_additions", True),
+	("أيام الغياب", "absence_days", True),
+	("خصم التأمينات", "gosi_employee_deduction", True),
+	("خصم الإجازة المرضية", "sick_leave_deduction", True),
+	("خصم القرض", "loan_deduction", True),
+	("خصم الغياب", "absence_deduction", True),
+	("خصم التأخير", "late_deduction", True),
+	("خصم الجزاءات", "penalty_deduction", True),
+	("خصم المخالفات", "violation_deduction", True),
+	("خصم السلف", "advance_deduction", True),
+	("خصومات أخرى", "other_deductions", True),
+	("تعديلات خصم", "_adjustment_deductions", True),
+	("إجمالي الخصومات", "total_deductions", True),
+	("صافي الراتب", "net_salary", True),
+	("ملاحظات الحضور", "attendance_flags", False),
+]
+
 
 def _required_workbook_field_labels() -> dict[str, str]:
 	return {
@@ -1327,6 +1357,127 @@ def download_bank_transfer_sheet(doc_name: str):
 		"file_name": file_doc.file_name,
 		"row_count": len(doc.employees or []),
 	}
+
+
+@frappe.whitelist()
+def download_payroll_detail_sheet(doc_name: str):
+	"""ملف Excel لكل موظفي المسير: مكونات الراتب وتفصيل كل خصم والصافي."""
+	doc = frappe.get_doc("Saudi Monthly Payroll", doc_name)
+	frappe.has_permission("Saudi Monthly Payroll", "read", doc=doc, throw=True)
+
+	file_name = f"payroll-detail-{doc.name}-{frappe.generate_hash(length=6)}.xlsx"
+	file_doc = save_file(
+		file_name,
+		_build_payroll_detail_sheet_workbook(doc).getvalue(),
+		doc.doctype,
+		doc.name,
+		is_private=1,
+	)
+	return {
+		"file_url": file_doc.file_url,
+		"file_name": file_doc.file_name,
+		"row_count": len(doc.employees or []),
+	}
+
+
+def _payroll_adjustments_by_employee(doc) -> dict[str, dict]:
+	"""مجموع بنود التعديل لكل موظف، بنفس منطق إعادة احتساب الصفوف."""
+	adjustments = {}
+	for item in getattr(doc, "adjustment_items", []) or []:
+		employee = getattr(item, "employee", None)
+		if not employee:
+			continue
+		bucket = adjustments.setdefault(employee, {"additions": 0.0, "deductions": 0.0})
+		item_type = item.item_type or ""
+		if "Addition" in item_type or "إضافة" in item_type:
+			bucket["additions"] += flt(item.amount)
+		else:
+			bucket["deductions"] += flt(item.amount)
+	return adjustments
+
+
+def _build_payroll_detail_sheet_workbook(doc) -> BytesIO:
+	rows = doc.employees or []
+	if not rows:
+		frappe.throw(
+			_("No payroll rows were found on this document.<br>لا توجد صفوف موظفين في هذا المسير."),
+			title=_("Empty Payroll / مسير فارغ"),
+		)
+
+	adjustments = _payroll_adjustments_by_employee(doc)
+	column_count = len(PAYROLL_DETAIL_SHEET_COLUMNS)
+	header_row = 3
+	first_data_row = header_row + 1
+
+	workbook = Workbook()
+	sheet = workbook.active
+	sheet.title = "Payroll Detail"
+	sheet.sheet_view.rightToLeft = True
+
+	bold_font = Font(bold=True)
+	header_fill = PatternFill(fill_type="solid", fgColor="EAF2E3")
+	total_fill = PatternFill(fill_type="solid", fgColor="F2F2F2")
+	center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+	money_format = "#,##0.00"
+
+	title = sheet.cell(row=1, column=1, value=f"كشف تفصيل الرواتب والخصومات - {doc.company or ''} - {doc.period_label or ''}")
+	title.font = Font(bold=True, size=14)
+	sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=column_count)
+	if doc.period_from and doc.period_to:
+		sheet.cell(row=2, column=1, value=f"فترة الحضور: {doc.period_from} إلى {doc.period_to}")
+
+	for column_index, (header, _key, numeric) in enumerate(PAYROLL_DETAIL_SHEET_COLUMNS, start=1):
+		cell = sheet.cell(row=header_row, column=column_index, value=header)
+		cell.font = bold_font
+		cell.fill = header_fill
+		cell.alignment = center
+		width = 14 if numeric else 18
+		if _key in ("employee_name", "attendance_flags"):
+			width = 30 if _key == "employee_name" else 60
+		sheet.column_dimensions[cell.column_letter].width = width
+	sheet.row_dimensions[header_row].height = 32
+
+	totals = [0.0] * column_count
+	for offset, row in enumerate(rows):
+		row_index = first_data_row + offset
+		adj = adjustments.get(row.get("employee") or "", {})
+		for column_index, (_header, key, numeric) in enumerate(PAYROLL_DETAIL_SHEET_COLUMNS, start=1):
+			if key == "_index":
+				value = offset + 1
+			elif key == "_department":
+				value = cstr(row.get("department") or row.get("workbook_department") or "").strip()
+			elif key == "_adjustment_additions":
+				value = flt(adj.get("additions"), 2)
+			elif key == "_adjustment_deductions":
+				value = flt(adj.get("deductions"), 2)
+			elif numeric:
+				value = flt(row.get(key), 2)
+			else:
+				value = cstr(row.get(key) or "").strip()
+			cell = sheet.cell(row=row_index, column=column_index, value=value)
+			if numeric:
+				cell.number_format = money_format
+				totals[column_index - 1] += flt(value)
+
+	total_row = first_data_row + len(rows)
+	for column_index, (_header, key, numeric) in enumerate(PAYROLL_DETAIL_SHEET_COLUMNS, start=1):
+		cell = sheet.cell(row=total_row, column=column_index)
+		cell.font = bold_font
+		cell.fill = total_fill
+		if key == "employee_name":
+			cell.value = f"الإجمالي ({len(rows)} موظف)"
+		elif numeric:
+			cell.value = round(totals[column_index - 1], 2)
+			cell.number_format = money_format
+
+	sheet.freeze_panes = sheet.cell(row=first_data_row, column=4)
+	last_column = sheet.cell(row=header_row, column=column_count).column_letter
+	sheet.auto_filter.ref = f"A{header_row}:{last_column}{total_row - 1}"
+
+	output = BytesIO()
+	workbook.save(output)
+	output.seek(0)
+	return output
 
 
 def _bank_transfer_sheet_notes(doc) -> str:
