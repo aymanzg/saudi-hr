@@ -65,6 +65,7 @@ frappe.ui.form.on('Saudi Monthly Payroll Employee', {
     absence_deduction(frm, cdt, cdn){ _calc_row(frm, cdt, cdn); },
     late_deduction(frm, cdt, cdn)   { _calc_row(frm, cdt, cdn); },
     penalty_deduction(frm, cdt, cdn){ _calc_row(frm, cdt, cdn); },
+    violation_deduction(frm, cdt, cdn){ _calc_row(frm, cdt, cdn); },
     advance_deduction(frm, cdt, cdn){ _calc_row(frm, cdt, cdn); },
     other_deductions(frm, cdt, cdn) { _calc_row(frm, cdt, cdn); },
 });
@@ -675,7 +676,7 @@ function _bulk_register_absences(frm) {
 
 function _confirm_attendance_deductions(frm, preview) {
     const rows = (preview.rows || []).filter(function(row) {
-        return row.absence_deduction || row.penalty_deduction || row.flags;
+        return row.absence_deduction || row.penalty_deduction || row.violation_deduction || row.flags;
     });
 
     if (!rows.length) {
@@ -695,6 +696,7 @@ function _confirm_attendance_deductions(frm, preview) {
             <td class="text-center">${row.absence_days}</td>
             <td class="text-right">${format_currency(row.absence_deduction)}</td>
             <td class="text-right">${format_currency(row.penalty_deduction)}</td>
+            <td class="text-right">${format_currency(row.violation_deduction)}</td>
             <td>${flags}</td>
         </tr>`;
     }).join('');
@@ -707,11 +709,12 @@ function _confirm_attendance_deductions(frm, preview) {
                 <th>${__('Absent / غياب')}</th>
                 <th>${__('Absence / خصم الغياب')}</th>
                 <th>${__('Penalty / الجزاء')}</th>
+                <th>${__('Absence Violation / مخالفة الغياب')}</th>
                 <th>${__('Flags / ملاحظات')}</th>
             </tr></thead>
             <tbody>${body}</tbody>
         </table>
-        <p>${__('Only absence covered by a closed Absence Case and fines on an approved Disciplinary Procedure are deducted; everything else is only flagged.<br>يُخصم فقط الغياب المغطى بحالة غياب مغلقة والجزاءات الصادرة بإجراء تأديبي معتمد، وما عدا ذلك يُسجَّل كملاحظة فقط.')}</p>`;
+        <p>${__('Only absence covered by a closed Absence Case and fines on an approved Disciplinary Procedure are deducted. Unexcused absence also carries the violations-table fine, escalating with each repeat in the contract year. Fines and late deduction together are capped at five days of wage a month; everything else is only flagged.<br>يُخصم فقط الغياب المغطى بحالة غياب مغلقة والجزاءات الصادرة بإجراء تأديبي معتمد. ويُضاف إلى الغياب بدون عذر جزاء لائحة المخالفات، ويتصاعد مع كل تكرار في السنة العقدية. ولا يتجاوز مجموع الجزاءات وخصم التأخير أجر خمسة أيام في الشهر، وما عدا ذلك يُسجَّل كملاحظة فقط.')}</p>`;
 
     frappe.confirm(message, function() {
         frappe.call({
@@ -1381,6 +1384,7 @@ function _calc_row(frm, cdt, cdn) {
         + flt(row.absence_deduction)
         + flt(row.late_deduction)
         + flt(row.penalty_deduction)
+        + flt(row.violation_deduction)
         + flt(row.advance_deduction)
         + flt(row.other_deductions);
     const net = parseFloat((gross + flt(row.overtime_addition) - total_deductions).toFixed(2));
@@ -1408,6 +1412,7 @@ function _update_totals(frm) {
         total_other += flt(row.absence_deduction)
             + flt(row.late_deduction)
             + flt(row.penalty_deduction)
+            + flt(row.violation_deduction)
             + flt(row.advance_deduction)
             + flt(row.other_deductions);
         total_ot    += flt(row.overtime_addition);

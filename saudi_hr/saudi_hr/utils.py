@@ -108,6 +108,10 @@ def calculate_prorated_sick_leave_deduction(leave_rows: list, month_start, month
 # "50% daily wage", "One day / يوم"), not as a number.  Payroll needs a number
 # of days' wage to multiply by the daily wage, so these phrases are mapped here
 # against the same catalogue the Disciplinary Procedure reads from.
+# Outcomes that are not a wage fine even when the text mentions a number,
+# e.g. "Termination with EOSB if absence total does not exceed 30 days".
+PENALTY_NON_FINE_WORDS = ("terminat", "dismiss", "promotion", "allowance", "legal review", "فصل", "ترقية", "علاوة", "مراجعة قانونية")
+
 PENALTY_DAY_PHRASES = (
 	("half", 0.5),
 	("one", 1.0),
@@ -134,6 +138,8 @@ def parse_penalty_to_days(penalty_text) -> float:
 	"""
 	text = cstr(penalty_text or "").strip().lower()
 	if not text:
+		return 0.0
+	if any(word in text for word in PENALTY_NON_FINE_WORDS):
 		return 0.0
 
 	percent_match = re.search(r"(\d+(?:\.\d+)?)\s*%", text)

@@ -1830,6 +1830,139 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 		row = self._late_deduction(basic=0, late_minutes=120)
 		self.assertEqual(row["late_deduction"], 0.0)
 
+	# ─── جزاء الغياب بدون عذر / Unexcused absence penalty ─────────────────────
+
+	def _run(self, start, end=None, procedure=None):
+		start, end = getdate(start), getdate(end or start)
+		return {"start": start, "end": end, "days": (end - start).days + 1, "procedure": procedure}
+
+	def _absence_penalties(self, runs, anchor="2025-03-01", period=("2026-10-22", "2026-11-21")):
+		with patch.object(payroll_module, "_contract_year_anchor", return_value=getdate(anchor)), patch.object(
+			payroll_module, "_unexcused_absence_runs", return_value=runs
+		), patch.object(payroll_module, "_absence_violation_catalog", return_value=dict(payroll_module.ABSENCE_VIOLATION_FALLBACK)):
+			return payroll_module._absence_violation_penalties("EMP-1", period[0], period[1])
+
+	def test_absence_violation_band_follows_the_table(self):
+		band = payroll_module._absence_violation_band
+		self.assertEqual(band(1), "ATT-011")
+		self.assertEqual(band(2), "ATT-012")
+		self.assertEqual(band(6), "ATT-012")
+		self.assertEqual(band(7), "ATT-013")
+		self.assertEqual(band(14), "ATT-014")
+		self.assertEqual(band(16), "ATT-015")
+
+	def test_contract_year_starts_on_the_last_anniversary(self):
+		start = payroll_module._contract_year_start
+		self.assertEqual(start("2025-03-01", "2026-11-01"), getdate("2026-03-01"))
+		self.assertEqual(start("2025-03-01", "2026-02-28"), getdate("2025-03-01"))
+		self.assertEqual(start("2024-02-29", "2025-06-01"), getdate("2025-02-28"))
+		self.assertEqual(start(None, "2026-06-01"), getdate("2026-01-01"))
+
+	def test_first_unexcused_absence_day_costs_half_a_day(self):
+		result = self._absence_penalties([self._run("2026-11-02")])
+		self.assertEqual(result["days"], 0.5)
+		self.assertIn("ATT-011", result["flags"][0])
+
+	def test_repeated_absence_escalates_within_the_contract_year(self):
+		runs = [self._run("2026-02-10"), self._run("2026-04-05"), self._run("2026-07-14"), self._run("2026-11-02")]
+		# 2026-02-10 falls in the previous contract year (starts 2025-03-01), so
+		# 2026-11-02 is the third occurrence: two days.
+		result = self._absence_penalties(runs)
+		self.assertEqual(result["days"], 2.0)
+		self.assertIn("occurrence 3", result["flags"][0])
+
+	def test_fifth_repeat_keeps_the_fourth_penalty_and_flags_it(self):
+		runs = [self._run(day) for day in ("2026-04-05", "2026-05-05", "2026-06-05", "2026-07-05", "2026-11-02")]
+		result = self._absence_penalties(runs)
+		self.assertEqual(result["days"], 3.0)
+		self.assertTrue(any("more than four times" in flag for flag in result["flags"]))
+
+	def test_consecutive_absence_is_one_violation_by_length(self):
+		result = self._absence_penalties([self._run("2026-11-02", "2026-11-04")])
+		self.assertEqual(result["days"], 2.0)
+		self.assertIn("ATT-012", result["flags"][0])
+
+	def test_absence_linked_to_a_procedure_is_not_fined_twice(self):
+		result = self._absence_penalties([self._run("2026-11-02", procedure="SAU-DIS-2026-0001")])
+		self.assertEqual(result["days"], 0.0)
+		self.assertIn("SAU-DIS-2026-0001", result["flags"][0])
+
+	def test_absence_over_fifteen_days_only_flags_termination(self):
+		result = self._absence_penalties([self._run("2026-10-22", "2026-11-10")])
+		self.assertEqual(result["days"], 0.0)
+		self.assertIn("Article 80", result["flags"][0])
+
+	def test_runs_ending_outside_the_period_are_not_charged(self):
+		result = self._absence_penalties([self._run("2026-11-20", "2026-11-23")])
+		self.assertEqual(result["days"], 0.0)
+		self.assertEqual(result["flags"], [])
+
+	def test_unexcused_absence_runs_join_adjacent_daily_cases(self):
+		cases = [
+			frappe._dict(absence_start_date="2026-11-02", absence_end_date="2026-11-02", disciplinary_procedure=None),
+			frappe._dict(absence_start_date="2026-11-03", absence_end_date=None, disciplinary_procedure=None),
+			frappe._dict(absence_start_date="2026-11-05", absence_end_date="2026-11-05", disciplinary_procedure="SAU-DIS-1"),
+		]
+		with patch.object(payroll_module.frappe.db, "exists", return_value=True), patch.object(
+			payroll_module.frappe, "get_all", return_value=cases
+		):
+			runs = payroll_module._unexcused_absence_runs("EMP-1", "2026-01-01", "2026-11-21")
+		self.assertEqual([(r["start"], r["days"], r["procedure"]) for r in runs], [
+			(getdate("2026-11-02"), 2, None),
+			(getdate("2026-11-05"), 1, "SAU-DIS-1"),
+		])
+
+	def test_absence_deduction_adds_the_violation_fine_on_basic_plus_transport(self):
+		doc = self._build_attendance_doc(basic=3000)
+		doc.employees[0].transport_allowance = 300
+		counts = {"present": 20, "absent": 1, "late_days": 0, "late_minutes": 0, "late_hours": 0.0}
+		with patch.object(payroll_module.frappe, "has_permission", return_value=True), patch.object(
+			payroll_module, "_attendance_window_counts", return_value=counts
+		), patch.object(payroll_module, "_approved_absence_days", return_value=1), patch.object(
+			payroll_module, "_approved_penalty_days", return_value=0.0
+		), patch.object(
+			payroll_module, "_absence_violation_penalties", return_value={"days": 0.5, "flags": ["fine"]}
+		):
+			row = payroll_module._build_attendance_deductions(doc, {"from": getdate("2026-10-01"), "to": getdate("2026-10-25")})[0]
+
+		# (3000 + 300) / 30 = 110: one absent day plus half a day's fine.
+		self.assertEqual(row["daily_wage"], 110.0)
+		self.assertEqual(row["absence_deduction"], 110.0)
+		self.assertEqual(row["violation_deduction"], 55.0)
+		self.assertEqual(row["penalty_deduction"], 0.0)
+		self.assertIn("fine", row["flags"])
+
+	def test_violation_fine_shares_the_five_day_cap_with_procedures(self):
+		doc = self._build_attendance_doc(basic=3000)
+		counts = {"present": 20, "absent": 0, "late_days": 0, "late_minutes": 0, "late_hours": 0.0}
+		with patch.object(payroll_module.frappe, "has_permission", return_value=True), patch.object(
+			payroll_module, "_attendance_window_counts", return_value=counts
+		), patch.object(payroll_module, "_approved_absence_days", return_value=0), patch.object(
+			payroll_module, "_approved_penalty_days", return_value=4.0
+		), patch.object(
+			payroll_module, "_absence_violation_penalties", return_value={"days": 2.0, "flags": []}
+		):
+			row = payroll_module._build_attendance_deductions(doc, {"from": getdate("2026-10-01"), "to": getdate("2026-10-25")})[0]
+
+		self.assertEqual(row["penalty_deduction"], 400.0)
+		self.assertEqual(row["violation_deduction"], 100.0)
+		self.assertIn("capped", row["flags"])
+
+	def test_violation_deduction_reaches_row_net(self):
+		doc = frappe.new_doc("Saudi Monthly Payroll")
+		doc.company = "amd"
+		doc.append("employees", {"employee_name": "A", "basic_salary": 3000, "violation_deduction": 50})
+		doc._recalculate_employee_rows()
+		self.assertEqual(doc.employees[0].total_deductions, 50.0)
+		self.assertEqual(doc.employees[0].net_salary, 2950.0)
+
+	def test_parse_penalty_to_days_ignores_numbers_in_non_fine_outcomes(self):
+		from saudi_hr.saudi_hr.utils import parse_penalty_to_days
+
+		self.assertEqual(parse_penalty_to_days("Termination with EOSB if absence total does not exceed 30 days"), 0.0)
+		self.assertEqual(parse_penalty_to_days("Promotion delay or one allowance denial"), 0.0)
+		self.assertEqual(parse_penalty_to_days("Two days plus late-time deduction / يومان مع حسم التأخير"), 2.0)
+
 	def test_working_hours_fall_back_to_eight(self):
 		with patch.object(payroll_module, "_existing_fields", return_value=["employee", "working_hours_per_day"]), patch.object(
 			payroll_module.frappe, "get_all", return_value=[]

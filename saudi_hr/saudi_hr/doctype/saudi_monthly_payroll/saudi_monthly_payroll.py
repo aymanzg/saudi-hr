@@ -200,6 +200,7 @@ class SaudiMonthlyPayroll(Document):
 				+ flt(getattr(row, "absence_deduction", 0.0))
 				+ flt(getattr(row, "late_deduction", 0.0))
 				+ flt(getattr(row, "penalty_deduction", 0.0))
+				+ flt(getattr(row, "violation_deduction", 0.0))
 				+ flt(getattr(row, "advance_deduction", 0.0))
 				+ flt(getattr(row, "other_deductions", 0.0)),
 				2,
@@ -454,6 +455,21 @@ PENALTY_MONTHLY_CAP_DAYS = 5.0
 DEFAULT_WORKING_HOURS_PER_DAY = 8.0
 DEFAULT_PERIOD_CUTOFF_DAY = 21
 
+# Unexcused absence penalties, MHRSD violations table (attendance items 11-16).
+# A run of consecutive absent days is one violation; its length picks the item
+# and its repeat count inside the contract year picks the column.
+UNEXCUSED_ABSENCE_TYPES = ("Unauthorised Absence / غياب بدون إذن", "No Call No Show / غياب بدون إشعار")
+ABSENCE_VIOLATION_BANDS = ((1, 1, "ATT-011"), (2, 6, "ATT-012"), (7, 10, "ATT-013"), (11, 15, "ATT-014"))
+ABSENCE_TERMINATION_CODE = "ATT-015"
+ABSENCE_INTERMITTENT_LIMIT_DAYS = 30
+ABSENCE_VIOLATION_FALLBACK = {
+	"ATT-011": ("50% daily wage", "One day / يوم", "Two days / يومان", "Three days / ثلاثة أيام"),
+	"ATT-012": ("Two days / يومان", "Three days / ثلاثة أيام", "Four days / أربعة أيام", "Promotion delay or one allowance denial"),
+	"ATT-013": ("Four days / أربعة أيام", "Five days / خمسة أيام", "Promotion delay or one allowance denial", "Termination with EOSB"),
+	"ATT-014": ("Five days / خمسة أيام", "Promotion delay or one allowance denial with termination warning", "Termination under Article 80", ""),
+}
+SINGLE_VIOLATION_CAP_DAYS = 5.0
+
 
 @frappe.whitelist(methods=["POST"])
 def preview_attendance_deductions(doc_name: str):
@@ -499,10 +515,7 @@ def apply_attendance_deductions(doc_name: str):
 		row.absence_deduction = result["absence_deduction"]
 		row.late_deduction = result["late_deduction"]
 		row.penalty_deduction = result["penalty_deduction"]
-		try:
-			row.violation_deduction = flt(result.get("penalty_deduction", 0))
-		except Exception:
-			row.violation_deduction = row.penalty_deduction
+		row.violation_deduction = flt(result.get("violation_deduction"))
 		row.attendance_flags = result["flags"]
 		changed += 1
 
@@ -665,19 +678,24 @@ def _build_attendance_deductions(doc, period):
 		if not row.employee:
 			continue
 		counts = _attendance_window_counts(row.employee, period["from"], period["to"])
-		daily_wage = round(flt(row.basic_salary) / 30, 2) if flt(row.basic_salary) else 0.0
+		daily_wage = _attendance_daily_wage(row)
 
 		approved_absence = _approved_absence_days(row.employee, period["from"], period["to"])
 		payable_absence = min(flt(counts["absent"]), flt(approved_absence))
 		absence_deduction = round(payable_absence * daily_wage, 2)
 
-		penalty_days = _approved_penalty_days(row.employee, period["from"], period["to"])
-		violation_days, violation_refs = _get_violation_deductions(row.employee, period["from"], period["to"])
-		# Separate violation deduction; merge into penalty calculation but tracked separately
-		penalty_days_total = flt(penalty_days) + flt(violation_days)
+		# Fines on approved Disciplinary Procedures, then the automatic unexcused
+		# absence penalty; both share the five-days'-wage monthly cap (م.92).
+		penalty_days = flt(_approved_penalty_days(row.employee, period["from"], period["to"]))
+		absence_violations = _absence_violation_penalties(row.employee, period["from"], period["to"])
+		violation_days = flt(absence_violations["days"])
+		penalty_days_total = penalty_days + violation_days
 		penalty_raw = round(penalty_days_total * daily_wage, 2)
 		penalty_cap = round(PENALTY_MONTHLY_CAP_DAYS * daily_wage, 2)
-		penalty_deduction = round(min(penalty_raw, penalty_cap), 2) if daily_wage else 0.0
+		penalty_deduction = round(min(penalty_days * daily_wage, penalty_cap), 2) if daily_wage else 0.0
+		violation_deduction = (
+			round(min(violation_days * daily_wage, max(0.0, penalty_cap - penalty_deduction)), 2) if daily_wage else 0.0
+		)
 
 		# Late is deducted pro-rata per minute against the shared 5-day cap.
 		# minutes are already grace-adjusted at punch time, so grace is not
@@ -686,7 +704,9 @@ def _build_attendance_deductions(doc, period):
 		per_minute = (daily_wage / hours_per_day / 60.0) if (daily_wage and hours_per_day) else 0.0
 		late_minutes = flt(counts["late_minutes"]) if _employee_shift_is_scheduled(row.employee, period["from"]) else 0.0
 		late_raw = round(late_minutes * per_minute, 2) if per_minute else 0.0
-		late_deduction = round(min(late_raw, max(0.0, penalty_cap - penalty_deduction)), 2) if daily_wage else 0.0
+		late_deduction = (
+			round(min(late_raw, max(0.0, penalty_cap - penalty_deduction - violation_deduction)), 2) if daily_wage else 0.0
+		)
 
 		results.append(
 			{
@@ -701,8 +721,11 @@ def _build_attendance_deductions(doc, period):
 				"late_deduction": late_deduction,
 				"penalty_days": round(penalty_days_total, 2),
 				"penalty_deduction": penalty_deduction,
+				"violation_days": round(violation_days, 2),
+				"violation_deduction": violation_deduction,
 				"flags": "\n".join(
-					_attendance_flags(
+					absence_violations["flags"]
+					+ _attendance_flags(
 						counts, payable_absence, penalty_days_total, penalty_raw, penalty_cap, daily_wage, late_deduction
 					)
 				),
@@ -826,6 +849,185 @@ def _procedure_penalty_days(procedure):
 	if recommended:
 		return parse_penalty_to_days(recommended)
 	return parse_penalty_to_days(penalty_type)
+
+
+def _attendance_daily_wage(row):
+	"""Daily wage for attendance deductions and fines: (basic + transport) / 30."""
+	monthly = flt(getattr(row, "basic_salary", 0.0)) + flt(getattr(row, "transport_allowance", 0.0))
+	return round(monthly / 30, 2) if flt(getattr(row, "basic_salary", 0.0)) else 0.0
+
+
+def _absence_violation_band(days):
+	"""Catalogue code for a run of consecutive unexcused absent days."""
+	for low, high, code in ABSENCE_VIOLATION_BANDS:
+		if low <= days <= high:
+			return code
+	return ABSENCE_TERMINATION_CODE if days > 0 else None
+
+
+def _contract_year_start(anchor, on_date):
+	"""Latest anniversary of ``anchor`` on or before ``on_date``."""
+	on_date = getdate(on_date)
+	if not anchor:
+		return getdate(f"{on_date.year}-01-01")
+	anchor = getdate(anchor)
+
+	def _anniversary(year):
+		try:
+			return anchor.replace(year=year)
+		except ValueError:  # 29 Feb in a non-leap year
+			return anchor.replace(year=year, day=28)
+
+	start = _anniversary(on_date.year)
+	return start if start <= on_date else _anniversary(on_date.year - 1)
+
+
+def _contract_year_anchor(employee):
+	"""Start of the employee's contract, falling back to the joining date."""
+	if frappe.db.exists("DocType", "Saudi Employment Contract"):
+		start = frappe.db.get_value(
+			"Saudi Employment Contract",
+			{"employee": employee, "docstatus": 1},
+			"start_date",
+			order_by="start_date desc",
+		)
+		if start:
+			return start
+	return frappe.db.get_value("Employee", employee, "date_of_joining")
+
+
+def _unexcused_absence_runs(employee, since, until):
+	"""Closed unexcused absence cases merged into runs of consecutive days.
+
+	Bulk registration closes one case per day, so adjacent cases are joined.
+	A run linked to a Disciplinary Procedure keeps that link so its fine is
+	left to the procedure and not charged twice.
+	"""
+	if not frappe.db.exists("DocType", "Absence Case"):
+		return []
+	cases = frappe.get_all(
+		"Absence Case",
+		filters={
+			"employee": employee,
+			"status": APPROVED_ABSENCE_CASE_STATUS,
+			"absence_type": ["in", list(UNEXCUSED_ABSENCE_TYPES)],
+			"absence_start_date": ["<=", until],
+		},
+		fields=["absence_start_date", "absence_end_date", "disciplinary_procedure"],
+	)
+	days = {}
+	for case in cases:
+		start = getdate(case.absence_start_date)
+		end = getdate(case.absence_end_date or case.absence_start_date)
+		day = max(start, getdate(since))
+		while day <= min(end, getdate(until)):
+			days[day] = days.get(day) or case.disciplinary_procedure
+			day = add_days(day, 1)
+
+	runs = []
+	for day in sorted(days):
+		if runs and add_days(runs[-1]["end"], 1) == day:
+			runs[-1]["end"] = day
+			runs[-1]["days"] += 1
+			runs[-1]["procedure"] = runs[-1]["procedure"] or days[day]
+		else:
+			runs.append({"start": day, "end": day, "days": 1, "procedure": days[day]})
+	return runs
+
+
+def _absence_violation_catalog():
+	"""Penalty columns per absence code, from the catalogue or the table itself."""
+	penalties = dict(ABSENCE_VIOLATION_FALLBACK)
+	if frappe.db.exists("DocType", "Disciplinary Violation Catalog"):
+		for entry in frappe.get_all(
+			"Disciplinary Violation Catalog",
+			filters={"violation_code": ["in", list(penalties)], "status": ["!=", "Inactive / غير نشط"]},
+			fields=["violation_code", "penalty_first", "penalty_second", "penalty_third", "penalty_fourth"],
+		):
+			penalties[entry.violation_code] = (
+				entry.penalty_first,
+				entry.penalty_second,
+				entry.penalty_third,
+				entry.penalty_fourth,
+			)
+	return penalties
+
+
+def _absence_violation_penalties(employee, period_from, period_to):
+	"""Days' wage of fines owed for unexcused absence runs ending in the window.
+
+	The fine comes on top of the absent days' wage (deducted separately) and
+	escalates with each repeat of the same item inside the contract year.
+	Non-monetary outcomes (promotion delay, termination) only raise a flag.
+	"""
+	result = {"days": 0.0, "flags": []}
+	if not employee:
+		return result
+	period_from, period_to = getdate(period_from), getdate(period_to)
+	anchor = _contract_year_anchor(employee)
+	history_from = add_days(_contract_year_start(anchor, period_from), -15)
+	runs = _unexcused_absence_runs(employee, history_from, period_to)
+	if not runs:
+		return result
+
+	catalog = _absence_violation_catalog()
+	for run in runs:
+		if not (period_from <= run["end"] <= period_to):
+			continue
+		year_start = _contract_year_start(anchor, run["start"])
+		code = _absence_violation_band(run["days"])
+		label = _("{0} day(s) of unexcused absence from {1} / غياب بدون عذر {0} يوم من {1}").format(
+			_fmt_days(run["days"]), run["start"]
+		)
+		if code == ABSENCE_TERMINATION_CODE:
+			result["flags"].append(
+				_("{0}: over fifteen consecutive days; termination under Article 80 needs an HR decision. / تجاوز خمسة عشر يوماً متصلة؛ الفصل طبقاً للمادة 80 يحتاج قرار الموارد البشرية.").format(label)
+			)
+			continue
+
+		occurrence = 1 + sum(
+			1
+			for prior in runs
+			if prior["end"] < run["start"] and prior["start"] >= year_start and _absence_violation_band(prior["days"]) == code
+		)
+		column = min(occurrence, 4)
+		penalty_text = cstr((catalog.get(code) or ("", "", "", ""))[column - 1] or "")
+		days = min(parse_penalty_to_days(penalty_text), SINGLE_VIOLATION_CAP_DAYS)
+		occurrence_label = _("{0}, occurrence {1} in the contract year / المرة {1} في السنة العقدية").format(code, occurrence)
+
+		if run["procedure"]:
+			result["flags"].append(
+				_("{0} ({1}): fine left to Disciplinary Procedure {2}. / الجزاء متروك للإجراء التأديبي {2}.").format(
+					label, occurrence_label, run["procedure"]
+				)
+			)
+			continue
+		if days > 0:
+			result["days"] += days
+			result["flags"].append(
+				_("{0} ({1}): fine {2} day(s) wage on top of the absent days. / جزاء {2} يوم أجر إضافة إلى أجر أيام الغياب.").format(
+					label, occurrence_label, _fmt_days(days)
+				)
+			)
+		else:
+			result["flags"].append(
+				_("{0} ({1}): penalty \"{2}\" is not a wage fine and needs an HR decision. / الجزاء ليس خصماً من الأجر ويحتاج قرار الموارد البشرية.").format(
+					label, occurrence_label, penalty_text or "-"
+				)
+			)
+		if occurrence > 4:
+			result["flags"].append(
+				_("{0}: repeated more than four times; review the employee's file. / تكررت أكثر من أربع مرات؛ راجع ملف الموظف.").format(label)
+			)
+
+	year_start = _contract_year_start(anchor, period_to)
+	year_days = sum(run["days"] for run in runs if run["start"] >= year_start)
+	if year_days > ABSENCE_INTERMITTENT_LIMIT_DAYS:
+		result["flags"].append(
+			_("Unexcused absence totals {0} days in the contract year (over 30); termination under Article 80 needs an HR decision. / مجموع الغياب بدون عذر {0} يوماً في السنة العقدية (أكثر من 30)؛ الفصل طبقاً للمادة 80 يحتاج قرار الموارد البشرية.").format(year_days)
+		)
+	result["days"] = round(result["days"], 4)
+	return result
 
 
 def _attendance_flags(counts, payable_absence, penalty_days, penalty_raw, penalty_cap, daily_wage, late_deduction=0.0):
