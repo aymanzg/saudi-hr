@@ -1903,14 +1903,67 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 			frappe._dict(absence_start_date="2026-11-03", absence_end_date=None, disciplinary_procedure=None),
 			frappe._dict(absence_start_date="2026-11-05", absence_end_date="2026-11-05", disciplinary_procedure="SAU-DIS-1"),
 		]
-		with patch.object(payroll_module.frappe.db, "exists", return_value=True), patch.object(
-			payroll_module.frappe, "get_all", return_value=cases
-		):
-			runs = payroll_module._unexcused_absence_runs("EMP-1", "2026-01-01", "2026-11-21")
+		runs = self._absence_runs(cases)
 		self.assertEqual([(r["start"], r["days"], r["procedure"]) for r in runs], [
 			(getdate("2026-11-02"), 2, None),
 			(getdate("2026-11-05"), 1, "SAU-DIS-1"),
 		])
+
+	def _absence_runs(self, cases, off_days=("2026-11-06", "2026-11-07")):
+		from saudi_hr.saudi_hr import admin_api
+
+		with patch.object(payroll_module.frappe.db, "exists", return_value=True), patch.object(
+			payroll_module.frappe, "get_all", return_value=cases
+		), patch.object(admin_api, "_holiday_dates", return_value={day: {"weekly_off": True} for day in off_days}):
+			return payroll_module._unexcused_absence_runs("EMP-1", "2026-01-01", "2026-11-21")
+
+	def test_absence_runs_join_across_the_weekend(self):
+		# Thursday and Sunday around a Friday/Saturday weekend: one run of two working days.
+		cases = [
+			frappe._dict(absence_start_date="2026-11-05", absence_end_date=None, disciplinary_procedure=None),
+			frappe._dict(absence_start_date="2026-11-08", absence_end_date=None, disciplinary_procedure=None),
+		]
+		runs = self._absence_runs(cases)
+		self.assertEqual([(r["start"], r["end"], r["days"]) for r in runs], [
+			(getdate("2026-11-05"), getdate("2026-11-08"), 2),
+		])
+
+	def test_absence_case_spanning_the_weekend_counts_working_days_only(self):
+		cases = [frappe._dict(absence_start_date="2026-11-04", absence_end_date="2026-11-09", disciplinary_procedure=None)]
+		runs = self._absence_runs(cases)
+		self.assertEqual([(r["start"], r["end"], r["days"]) for r in runs], [
+			(getdate("2026-11-04"), getdate("2026-11-09"), 4),
+		])
+
+	def test_window_counts_keep_unrecorded_days_apart_from_absence(self):
+		from saudi_hr.saudi_hr import admin_api
+
+		days = [
+			{"status_key": "present"},
+			{"status_key": "absent"},
+			{"status_key": "missing", "absence_case": {"name": "SAU-ABS-1"}},
+			{"status_key": "missing"},
+			{"status_key": "missing"},
+			{"status_key": "missing", "future": True},
+		]
+		with patch.object(admin_api, "_attendance_days", return_value=days):
+			counts = payroll_module._attendance_window_counts("EMP-1", "2026-11-01", "2026-11-21")
+		self.assertEqual(counts["present"], 1)
+		self.assertEqual(counts["absent"], 2)
+		self.assertEqual(counts["unrecorded"], 2)
+
+	def test_unrecorded_days_are_flagged_not_deducted(self):
+		doc = self._build_attendance_doc(basic=3000)
+		counts = {"present": 18, "absent": 0, "unrecorded": 3, "late_days": 0, "late_minutes": 0, "late_hours": 0.0}
+		with patch.object(payroll_module.frappe, "has_permission", return_value=True), patch.object(
+			payroll_module, "_attendance_window_counts", return_value=counts
+		), patch.object(payroll_module, "_approved_absence_days", return_value=0), patch.object(
+			payroll_module, "_approved_penalty_days", return_value=0.0
+		):
+			row = payroll_module._build_attendance_deductions(doc, {"from": getdate("2026-10-01"), "to": getdate("2026-10-25")})[0]
+		self.assertEqual(row["absence_days"], 0)
+		self.assertEqual(row["absence_deduction"], 0.0)
+		self.assertIn("3 working day(s) with no attendance record", row["flags"])
 
 	def test_absence_deduction_adds_the_violation_fine_on_basic_plus_transport(self):
 		doc = self._build_attendance_doc(basic=3000)

@@ -803,18 +803,25 @@ def _build_attendance_deductions(doc, period):
 
 
 def _attendance_window_counts(employee, period_from, period_to):
-	"""Present/absent/late tallies for one employee inside the window."""
+	"""Present/absent/late tallies for one employee inside the window.
+
+	A working day with no attendance row is absence only once an Absence
+	Case is registered for it; until then it is counted apart as unrecorded,
+	since it usually means punches were not imported yet.
+	"""
 	from saudi_hr.saudi_hr.admin_api import _attendance_days
 
 	days = _attendance_days({"from_date": period_from, "to_date": period_to}, employee)
-	present = absent = late_days = early_exit_days = 0
+	present = absent = unrecorded = late_days = early_exit_days = 0
 	late_minutes = early_exit_minutes = 0.0
 	for day in days:
 		if day.get("future"):
 			continue
 		status_key = day.get("status_key")
-		if status_key in ("absent", "missing"):
+		if status_key == "absent" or (status_key == "missing" and day.get("absence_case")):
 			absent += 1
+		elif status_key == "missing":
+			unrecorded += 1
 		elif status_key in ("present", "in_progress", "half_day", "other"):
 			present += 1
 		minutes = flt(day.get("late_minutes"))
@@ -826,6 +833,7 @@ def _attendance_window_counts(employee, period_from, period_to):
 			early_exit_days += 1
 			early_exit_minutes += minutes
 	return {
+		"unrecorded": unrecorded,
 		"early_exit_days": early_exit_days,
 		"early_exit_minutes": round(early_exit_minutes, 1),
 		"present": present,
@@ -973,7 +981,10 @@ def _contract_year_anchor(employee):
 def _unexcused_absence_runs(employee, since, until):
 	"""Closed unexcused absence cases merged into runs of consecutive days.
 
-	Bulk registration closes one case per day, so adjacent cases are joined.
+	Bulk registration closes one case per day, so adjacent cases are joined,
+	also across a weekend or holiday that falls between them (absent on
+	Thursday and Sunday is one continuous absence).  Only working days count
+	towards the run's length.
 	A run linked to a Disciplinary Procedure keeps that link so its fine is
 	left to the procedure and not charged twice.
 	"""
@@ -989,24 +1000,38 @@ def _unexcused_absence_runs(employee, since, until):
 		},
 		fields=["absence_start_date", "absence_end_date", "disciplinary_procedure"],
 	)
+	from saudi_hr.saudi_hr.admin_api import _holiday_dates
+
+	off_days = {getdate(day) for day in _holiday_dates(employee, since, until)}
 	days = {}
 	for case in cases:
 		start = getdate(case.absence_start_date)
 		end = getdate(case.absence_end_date or case.absence_start_date)
 		day = max(start, getdate(since))
 		while day <= min(end, getdate(until)):
-			days[day] = days.get(day) or case.disciplinary_procedure
+			if day not in off_days:
+				days[day] = days.get(day) or case.disciplinary_procedure
 			day = add_days(day, 1)
 
 	runs = []
 	for day in sorted(days):
-		if runs and add_days(runs[-1]["end"], 1) == day:
+		if runs and _only_off_days_between(runs[-1]["end"], day, off_days):
 			runs[-1]["end"] = day
 			runs[-1]["days"] += 1
 			runs[-1]["procedure"] = runs[-1]["procedure"] or days[day]
 		else:
 			runs.append({"start": day, "end": day, "days": 1, "procedure": days[day]})
 	return runs
+
+
+def _only_off_days_between(previous, day, off_days):
+	"""True when every day strictly between the two dates is a rest day."""
+	gap_day = add_days(previous, 1)
+	while gap_day < day:
+		if gap_day not in off_days:
+			return False
+		gap_day = add_days(gap_day, 1)
+	return True
 
 
 def _absence_violation_catalog():
@@ -1208,6 +1233,13 @@ def _attendance_flags(counts, payable_absence, penalty_days, penalty_raw, penalt
 				"{0} absent day(s) with no closed Absence Case; not deducted. / "
 				"{0} يوم غياب بدون حالة غياب مغلقة؛ لم يُخصم."
 			).format(_fmt_days(uncovered))
+		)
+	if counts.get("unrecorded"):
+		flags.append(
+			_(
+				"{0} working day(s) with no attendance record (punches not imported?); not counted as absence. / "
+				"{0} يوم عمل بدون سجل حضور (لم تُستورد البصمات؟)؛ لم يُحتسب غياباً."
+			).format(counts["unrecorded"])
 		)
 	if counts["late_days"]:
 		if flt(late_deduction) > 0:
