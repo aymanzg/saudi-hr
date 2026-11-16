@@ -718,7 +718,7 @@ function _confirm_attendance_deductions(frm, preview) {
             </tr></thead>
             <tbody>${body}</tbody>
         </table>
-        <p>${__('Only absence covered by a closed Absence Case and fines on an approved Disciplinary Procedure are deducted. Unexcused absence also carries the violations-table fine, escalating with each repeat in the contract year. Fines and late deduction together are capped at five days of wage a month; everything else is only flagged.<br>يُخصم فقط الغياب المغطى بحالة غياب مغلقة والجزاءات الصادرة بإجراء تأديبي معتمد. ويُضاف إلى الغياب بدون عذر جزاء لائحة المخالفات، ويتصاعد مع كل تكرار في السنة العقدية. ولا يتجاوز مجموع الجزاءات وخصم التأخير أجر خمسة أيام في الشهر، وما عدا ذلك يُسجَّل كملاحظة فقط.')}</p>`;
+        <p>${__('Only absence covered by a closed Absence Case and fines on an approved Disciplinary Procedure are deducted. Unexcused absence, late arrival and early leave also carry the violations-table fine, escalating with each repeat (absence within the contract year, late and early leave within 180 days). Fines and late deduction together are capped at five days of wage a month; everything else is only flagged.<br>يُخصم فقط الغياب المغطى بحالة غياب مغلقة والجزاءات الصادرة بإجراء تأديبي معتمد. ويُضاف إلى الغياب بدون عذر والتأخير والانصراف المبكر جزاء لائحة المخالفات، ويتصاعد مع كل تكرار (الغياب خلال السنة العقدية، والتأخير والانصراف خلال 180 يوماً). ولا يتجاوز مجموع الجزاءات وخصم التأخير أجر خمسة أيام في الشهر، وما عدا ذلك يُسجَّل كملاحظة فقط.')}</p>`;
 
     frappe.confirm(message, function() {
         frappe.call({

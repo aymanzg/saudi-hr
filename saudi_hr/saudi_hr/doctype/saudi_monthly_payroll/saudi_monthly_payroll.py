@@ -133,7 +133,7 @@ PAYROLL_DETAIL_SHEET_COLUMNS = [
 	("خصم الإجازة المرضية", "sick_leave_deduction", True),
 	("خصم القرض", "loan_deduction", True),
 	("خصم الغياب", "absence_deduction", True),
-	("خصم التأخير", "late_deduction", True),
+	("خصم التأخير والانصراف المبكر", "late_deduction", True),
 	("خصم الجزاءات", "penalty_deduction", True),
 	("خصم المخالفات", "violation_deduction", True),
 	("خصم السلف", "advance_deduction", True),
@@ -500,6 +500,34 @@ ABSENCE_VIOLATION_FALLBACK = {
 }
 SINGLE_VIOLATION_CAP_DAYS = 5.0
 
+# Late arrival and early leave, same table (items 1-9), charged without a
+# Disciplinary Procedure.  Disruption to other workers cannot be read from
+# punches, so the "without disruption" items apply; HR raises a procedure
+# for the heavier ones.  A repeat counts while it falls within 180 days of
+# the previous violation of the same item.
+LATE_VIOLATION_BANDS = ((1, 15, "ATT-001"), (16, 30, "ATT-003"), (31, 60, "ATT-005"))
+LATE_OVER_HOUR_CODE = "ATT-007"
+EARLY_EXIT_BANDS = ((1, 15, "ATT-008"),)
+EARLY_EXIT_OVER_CODE = "ATT-009"
+VIOLATION_REPEAT_WINDOW_DAYS = 180
+VIOLATION_HISTORY_DAYS = 720
+LATE_EARLY_VIOLATION_FALLBACK = {
+	"ATT-001": ("Written warning / إنذار كتابي", "5% daily wage", "10% daily wage", "20% daily wage"),
+	"ATT-003": ("10% daily wage", "15% daily wage", "25% daily wage", "50% daily wage"),
+	"ATT-005": ("25% daily wage", "50% daily wage", "75% daily wage", "One day / يوم"),
+	"ATT-007": ("Written warning / إنذار كتابي", "One day / يوم", "Two days / يومان", "Three days / ثلاثة أيام"),
+	"ATT-008": ("Written warning / إنذار كتابي", "10% daily wage", "25% daily wage", "One day / يوم"),
+	"ATT-009": ("10% daily wage", "25% daily wage", "50% daily wage", "One day / يوم"),
+}
+LATE_EARLY_VIOLATION_LABELS = {
+	"ATT-001": "Late up to 15 minutes / التأخر حتى 15 دقيقة",
+	"ATT-003": "Late 16-30 minutes / التأخر من 16 إلى 30 دقيقة",
+	"ATT-005": "Late 31-60 minutes / التأخر من 31 إلى 60 دقيقة",
+	"ATT-007": "Late over an hour / التأخر أكثر من ساعة",
+	"ATT-008": "Early leave up to 15 minutes / الانصراف المبكر حتى 15 دقيقة",
+	"ATT-009": "Early leave over 15 minutes / الانصراف المبكر أكثر من 15 دقيقة",
+}
+
 
 @frappe.whitelist(methods=["POST"])
 def preview_attendance_deductions(doc_name: str):
@@ -718,7 +746,13 @@ def _build_attendance_deductions(doc, period):
 		# absence penalty; both share the five-days'-wage monthly cap (م.92).
 		penalty_days = flt(_approved_penalty_days(row.employee, period["from"], period["to"]))
 		absence_violations = _absence_violation_penalties(row.employee, period["from"], period["to"])
-		violation_days = flt(absence_violations["days"])
+		scheduled = _employee_shift_is_scheduled(row.employee, period["from"])
+		late_early_violations = (
+			_late_early_violation_penalties(row.employee, period["from"], period["to"])
+			if scheduled
+			else {"days": 0.0, "flags": []}
+		)
+		violation_days = flt(absence_violations["days"]) + flt(late_early_violations["days"])
 		penalty_days_total = penalty_days + violation_days
 		penalty_raw = round(penalty_days_total * daily_wage, 2)
 		penalty_cap = round(PENALTY_MONTHLY_CAP_DAYS * daily_wage, 2)
@@ -727,12 +761,15 @@ def _build_attendance_deductions(doc, period):
 			round(min(violation_days * daily_wage, max(0.0, penalty_cap - penalty_deduction)), 2) if daily_wage else 0.0
 		)
 
-		# Late is deducted pro-rata per minute against the shared 5-day cap.
-		# minutes are already grace-adjusted at punch time, so grace is not
-		# applied again here. An open/whole-day shift never deducts late.
+		# Late and early-leave minutes are deducted pro-rata per minute against
+		# the shared 5-day cap. minutes are already grace-adjusted at punch
+		# time, so grace is not applied again here. An open/whole-day shift
+		# never deducts them.
 		hours_per_day = _employee_working_hours_per_day(row.employee)
 		per_minute = (daily_wage / hours_per_day / 60.0) if (daily_wage and hours_per_day) else 0.0
-		late_minutes = flt(counts["late_minutes"]) if _employee_shift_is_scheduled(row.employee, period["from"]) else 0.0
+		late_minutes = (
+			flt(counts["late_minutes"]) + flt(counts.get("early_exit_minutes")) if scheduled else 0.0
+		)
 		late_raw = round(late_minutes * per_minute, 2) if per_minute else 0.0
 		late_deduction = (
 			round(min(late_raw, max(0.0, penalty_cap - penalty_deduction - violation_deduction)), 2) if daily_wage else 0.0
@@ -755,6 +792,7 @@ def _build_attendance_deductions(doc, period):
 				"violation_deduction": violation_deduction,
 				"flags": "\n".join(
 					absence_violations["flags"]
+					+ late_early_violations["flags"]
 					+ _attendance_flags(
 						counts, payable_absence, penalty_days_total, penalty_raw, penalty_cap, daily_wage, late_deduction
 					)
@@ -769,8 +807,8 @@ def _attendance_window_counts(employee, period_from, period_to):
 	from saudi_hr.saudi_hr.admin_api import _attendance_days
 
 	days = _attendance_days({"from_date": period_from, "to_date": period_to}, employee)
-	present = absent = late_days = 0
-	late_minutes = 0.0
+	present = absent = late_days = early_exit_days = 0
+	late_minutes = early_exit_minutes = 0.0
 	for day in days:
 		if day.get("future"):
 			continue
@@ -783,7 +821,13 @@ def _attendance_window_counts(employee, period_from, period_to):
 		if minutes > 0:
 			late_days += 1
 			late_minutes += minutes
+		minutes = flt(day.get("early_exit_minutes"))
+		if minutes > 0:
+			early_exit_days += 1
+			early_exit_minutes += minutes
 	return {
+		"early_exit_days": early_exit_days,
+		"early_exit_minutes": round(early_exit_minutes, 1),
 		"present": present,
 		"absent": absent,
 		"late_days": late_days,
@@ -966,8 +1010,16 @@ def _unexcused_absence_runs(employee, since, until):
 
 
 def _absence_violation_catalog():
-	"""Penalty columns per absence code, from the catalogue or the table itself."""
-	penalties = dict(ABSENCE_VIOLATION_FALLBACK)
+	return _violation_catalog(ABSENCE_VIOLATION_FALLBACK)
+
+
+def _late_early_violation_catalog():
+	return _violation_catalog(LATE_EARLY_VIOLATION_FALLBACK)
+
+
+def _violation_catalog(fallback):
+	"""Penalty columns per code, from the catalogue or the table itself."""
+	penalties = dict(fallback)
 	if frappe.db.exists("DocType", "Disciplinary Violation Catalog"):
 		for entry in frappe.get_all(
 			"Disciplinary Violation Catalog",
@@ -1060,6 +1112,93 @@ def _absence_violation_penalties(employee, period_from, period_to):
 	return result
 
 
+def _minutes_violation_code(minutes, bands, over_code):
+	"""Catalogue code for late or early-leave minutes on one day."""
+	if minutes <= 0:
+		return None
+	for low, high, code in bands:
+		if low <= minutes <= high:
+			return code
+	return over_code
+
+
+def _attendance_violation_days(employee, since, until):
+	"""Late and early-leave minutes per attendance day, oldest first."""
+	if not frappe.db.exists("DocType", "Saudi Daily Attendance"):
+		return []
+	return frappe.get_all(
+		"Saudi Daily Attendance",
+		filters={
+			"employee": employee,
+			"docstatus": ["<", 2],
+			"attendance_date": ["between", [since, until]],
+		},
+		or_filters={"late_minutes": [">", 0], "early_exit_minutes": [">", 0]},
+		fields=["attendance_date", "late_minutes", "early_exit_minutes"],
+		order_by="attendance_date asc",
+		limit_page_length=0,
+	)
+
+
+def _late_early_violation_penalties(employee, period_from, period_to):
+	"""Days' wage of fines owed for late arrivals and early leaves in the window.
+
+	Every late or early day is one violation of the item its minutes fall in.
+	The repeat count climbs while each one comes within 180 days of the
+	previous violation of the same item and restarts at the first column
+	after a longer gap.  Written warnings cost nothing and are only flagged.
+	"""
+	result = {"days": 0.0, "flags": []}
+	if not employee:
+		return result
+	period_from, period_to = getdate(period_from), getdate(period_to)
+	days = _attendance_violation_days(employee, add_days(period_from, -VIOLATION_HISTORY_DAYS), period_to)
+	if not days:
+		return result
+
+	catalog = _late_early_violation_catalog()
+	last_seen = {}
+	charged = {}
+	for day in days:
+		on_date = getdate(day.attendance_date)
+		for code in (
+			_minutes_violation_code(flt(day.late_minutes), LATE_VIOLATION_BANDS, LATE_OVER_HOUR_CODE),
+			_minutes_violation_code(flt(day.early_exit_minutes), EARLY_EXIT_BANDS, EARLY_EXIT_OVER_CODE),
+		):
+			if not code:
+				continue
+			previous = last_seen.get(code)
+			occurrence = (
+				previous[1] + 1
+				if previous and (on_date - previous[0]).days <= VIOLATION_REPEAT_WINDOW_DAYS
+				else 1
+			)
+			last_seen[code] = (on_date, occurrence)
+			if not (period_from <= on_date <= period_to):
+				continue
+			penalty_text = cstr((catalog.get(code) or ("", "", "", ""))[min(occurrence, 4) - 1] or "")
+			fine = min(parse_penalty_to_days(penalty_text), SINGLE_VIOLATION_CAP_DAYS)
+			bucket = charged.setdefault(code, {"occurrences": [], "days": 0.0, "warnings": 0, "over_four": False})
+			bucket["occurrences"].append(occurrence)
+			bucket["days"] += fine
+			bucket["warnings"] += 0 if fine else 1
+			bucket["over_four"] = bucket["over_four"] or occurrence > 4
+
+	for code, bucket in charged.items():
+		result["days"] += bucket["days"]
+		occurrences = ", ".join(str(number) for number in bucket["occurrences"])
+		line = _("{0} ({1}): {2} time(s), occurrence {3} within 180 days; fine {4} day(s) wage. / {2} مرة، تكرار رقم {3} خلال 180 يوماً؛ جزاء {4} يوم أجر.").format(
+			LATE_EARLY_VIOLATION_LABELS.get(code, code), code, len(bucket["occurrences"]), occurrences, _fmt_days(bucket["days"])
+		)
+		if bucket["warnings"]:
+			line += " " + _("{0} written warning(s) to issue, not a wage fine. / {0} إنذار كتابي يجب توجيهه، دون خصم.").format(bucket["warnings"])
+		if bucket["over_four"]:
+			line += " " + _("Repeated more than four times; review the employee's file. / تكرر أكثر من أربع مرات؛ راجع ملف الموظف.")
+		result["flags"].append(line)
+	result["days"] = round(result["days"], 4)
+	return result
+
+
 def _attendance_flags(counts, payable_absence, penalty_days, penalty_raw, penalty_cap, daily_wage, late_deduction=0.0):
 	flags = []
 	uncovered = flt(counts["absent"]) - flt(payable_absence)
@@ -1085,6 +1224,13 @@ def _attendance_flags(counts, payable_absence, penalty_days, penalty_raw, penalt
 					"{0} يوم تأخير، {1} ساعة. لم يُخصم (وردية مفتوحة، أو ضمن حد خمسة أيام أجر)."
 				).format(counts["late_days"], counts["late_hours"])
 			)
+	if counts.get("early_exit_days"):
+		flags.append(
+			_(
+				"{0} early-leave day(s), {1} minute(s). Deducted with late time where the cap allows. / "
+				"{0} يوم انصراف مبكر، {1} دقيقة. مُخصم مع وقت التأخير ضمن حد خمسة أيام أجر."
+			).format(counts["early_exit_days"], _fmt_days(counts.get("early_exit_minutes")))
+		)
 	if penalty_days and daily_wage and flt(penalty_raw) > flt(penalty_cap):
 		flags.append(
 			_(

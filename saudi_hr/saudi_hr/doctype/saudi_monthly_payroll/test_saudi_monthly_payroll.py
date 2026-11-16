@@ -1956,6 +1956,103 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 		self.assertEqual(doc.employees[0].total_deductions, 50.0)
 		self.assertEqual(doc.employees[0].net_salary, 2950.0)
 
+	# ─── جزاء التأخير والانصراف المبكر / Late and early-leave penalty ─────────
+
+	def _late_early_penalties(self, days, period=("2026-10-22", "2026-11-21")):
+		rows = [frappe._dict(attendance_date=getdate(d), late_minutes=late, early_exit_minutes=early) for d, late, early in days]
+		with patch.object(payroll_module, "_attendance_violation_days", return_value=rows), patch.object(
+			payroll_module, "_late_early_violation_catalog", return_value=dict(payroll_module.LATE_EARLY_VIOLATION_FALLBACK)
+		):
+			return payroll_module._late_early_violation_penalties("EMP-1", period[0], period[1])
+
+	def test_minutes_pick_the_late_and_early_items(self):
+		code = payroll_module._minutes_violation_code
+		late = (payroll_module.LATE_VIOLATION_BANDS, payroll_module.LATE_OVER_HOUR_CODE)
+		early = (payroll_module.EARLY_EXIT_BANDS, payroll_module.EARLY_EXIT_OVER_CODE)
+		self.assertIsNone(code(0, *late))
+		self.assertEqual(code(15, *late), "ATT-001")
+		self.assertEqual(code(16, *late), "ATT-003")
+		self.assertEqual(code(45, *late), "ATT-005")
+		self.assertEqual(code(61, *late), "ATT-007")
+		self.assertEqual(code(10, *early), "ATT-008")
+		self.assertEqual(code(40, *early), "ATT-009")
+
+	def test_late_fine_escalates_within_the_period(self):
+		result = self._late_early_penalties([("2026-11-01", 20, 0), ("2026-11-02", 25, 0), ("2026-11-03", 18, 0)])
+		# ATT-003: 10% + 15% + 25%
+		self.assertAlmostEqual(result["days"], 0.5)
+		self.assertIn("ATT-003", result["flags"][0])
+		self.assertIn("1, 2, 3", result["flags"][0])
+
+	def test_late_repeat_carries_over_from_earlier_months(self):
+		result = self._late_early_penalties([("2026-08-10", 40, 0), ("2026-11-01", 40, 0)])
+		# ATT-005 second time: 50%
+		self.assertAlmostEqual(result["days"], 0.5)
+
+	def test_late_repeat_resets_after_180_days(self):
+		result = self._late_early_penalties([("2026-03-01", 40, 0), ("2026-11-01", 40, 0)])
+		# more than 180 days apart: first time again, 25%
+		self.assertAlmostEqual(result["days"], 0.25)
+
+	def test_first_late_under_an_hour_band_is_only_a_warning(self):
+		result = self._late_early_penalties([("2026-11-01", 90, 0)])
+		self.assertEqual(result["days"], 0.0)
+		self.assertIn("written warning", result["flags"][0])
+
+	def test_early_leave_is_fined_separately_from_late(self):
+		result = self._late_early_penalties([("2026-11-01", 20, 30)])
+		# ATT-003 first 10% + ATT-009 first 10%
+		self.assertAlmostEqual(result["days"], 0.2)
+		self.assertEqual(len(result["flags"]), 2)
+
+	def test_fine_beyond_fourth_time_keeps_fourth_column(self):
+		days = [(f"2026-11-0{i}", 20, 0) for i in range(1, 6)]
+		result = self._late_early_penalties(days)
+		# 10 + 15 + 25 + 50 + 50 = 150%
+		self.assertAlmostEqual(result["days"], 1.5)
+		self.assertIn("more than four times", result["flags"][0])
+
+	def test_attendance_deductions_add_late_fines_and_early_minutes(self):
+		doc = self._build_attendance_doc(basic=3000)
+		counts = {"present": 20, "absent": 0, "late_days": 1, "late_minutes": 20, "late_hours": 0.33,
+			"early_exit_days": 1, "early_exit_minutes": 28}
+		with patch.object(payroll_module.frappe, "has_permission", return_value=True), patch.object(
+			payroll_module, "_attendance_window_counts", return_value=counts
+		), patch.object(payroll_module, "_approved_absence_days", return_value=0), patch.object(
+			payroll_module, "_approved_penalty_days", return_value=0.0
+		), patch.object(
+			payroll_module, "_absence_violation_penalties", return_value={"days": 0.0, "flags": []}
+		), patch.object(
+			payroll_module, "_late_early_violation_penalties", return_value={"days": 0.2, "flags": ["late fine"]}
+		), patch.object(payroll_module, "_employee_working_hours_per_day", return_value=8.0), patch.object(
+			payroll_module, "_employee_shift_is_scheduled", return_value=True
+		):
+			row = payroll_module._build_attendance_deductions(doc, {"from": getdate("2026-10-01"), "to": getdate("2026-10-25")})[0]
+
+		# daily 100: fine 0.2 day = 20; (20 + 28) minutes at 100/8/60 = 10
+		self.assertEqual(row["violation_deduction"], 20.0)
+		self.assertEqual(row["late_deduction"], 10.0)
+		self.assertIn("late fine", row["flags"])
+		self.assertIn("early-leave", row["flags"])
+
+	def test_open_shift_skips_late_and_early_fines(self):
+		doc = self._build_attendance_doc(basic=3000)
+		counts = {"present": 20, "absent": 0, "late_days": 1, "late_minutes": 300, "late_hours": 5.0}
+		with patch.object(payroll_module.frappe, "has_permission", return_value=True), patch.object(
+			payroll_module, "_attendance_window_counts", return_value=counts
+		), patch.object(payroll_module, "_approved_absence_days", return_value=0), patch.object(
+			payroll_module, "_approved_penalty_days", return_value=0.0
+		), patch.object(
+			payroll_module, "_absence_violation_penalties", return_value={"days": 0.0, "flags": []}
+		), patch.object(payroll_module, "_late_early_violation_penalties") as late_early, patch.object(
+			payroll_module, "_employee_shift_is_scheduled", return_value=False
+		):
+			row = payroll_module._build_attendance_deductions(doc, {"from": getdate("2026-10-01"), "to": getdate("2026-10-25")})[0]
+
+		late_early.assert_not_called()
+		self.assertEqual(row["violation_deduction"], 0.0)
+		self.assertEqual(row["late_deduction"], 0.0)
+
 	def test_parse_penalty_to_days_ignores_numbers_in_non_fine_outcomes(self):
 		from saudi_hr.saudi_hr.utils import parse_penalty_to_days
 
