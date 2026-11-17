@@ -479,6 +479,7 @@
 				<div class="saudi-verify-step" id="punch-step-gps" style="display:none;">
 					<div class="saudi-verify-step__label"><span class="saudi-verify-step__dot"></span><span data-i18n-key="step_gps">التحقق من الموقع (GPS)</span></div>
 					<div class="saudi-verify-step__state" id="punch-gps-state"></div>
+					<button type="button" class="saudi-voice-record-btn" id="punch-gps-retry-btn" onclick="runPunchGps()" style="display:none;">🔄 <span data-i18n-key="gps_retry">إعادة المحاولة</span></button>
 				</div>
 				<div class="saudi-verify-step" id="punch-step-photo" style="display:none;">
 					<div class="saudi-verify-step__label"><span class="saudi-verify-step__dot"></span><span data-i18n-key="step_photo">صورة التحقق (كاميرا)</span></div>
@@ -583,7 +584,8 @@
 	<div class="saudi-toast" id="saudi-toast"></div>
 </div>
 
-<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261111"></script>
+<script src="/assets/saudi_hr/js/saudi_portal.js?v=20261117"></script>
+<script src="/assets/saudi_hr/js/punch_geolocation.js?v=20261117"></script>
 <script>
 /* Page-specific behaviour, handed to the shared portal runtime. */
 SAUDI_PANEL_LOADERS["requests"] = loadMyRequests;
@@ -1297,26 +1299,46 @@ function closePunchModal() {
 function runPunchGps() {
 	var el = document.getElementById("punch-gps-state");
 	var dot = document.querySelector("#punch-step-gps .saudi-verify-step__dot");
+	var retryBtn = document.getElementById("punch-gps-retry-btn");
 	var optional = !punchState.locationRequired;
+	// a stale lookup from an earlier modal opening must not overwrite this one
+	var token = {};
+	punchState.gpsToken = token;
+	punchState.lat = null;
+	punchState.lng = null;
+	punchState.gpsErrorKind = null;
+	if (retryBtn) retryBtn.style.display = "none";
 	if (!optional) {
 		el.textContent = t("locating");
 		el.className = "saudi-verify-step__state";
 		if (dot) { dot.className = "saudi-verify-step__dot"; }
 	}
-	if (!navigator.geolocation) {
-		if (!optional) { el.textContent = t("gps_fail"); if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--err"; }
+	updatePunchReady();
+	window.SaudiPunchGeo.locate({
+		onRetry: function() {
+			if (punchState.gpsToken === token && !optional) el.textContent = t("gps_locating_retry");
+		}
+	}, function(err, res) {
+		if (punchState.gpsToken !== token) return;
+		if (err) {
+			punchState.gpsErrorKind = err.kind;
+			if (!optional) {
+				el.textContent = t(window.SaudiPunchGeo.labelKey(err.kind));
+				el.className = "saudi-verify-step__state err";
+				if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--err";
+				if (retryBtn && err.kind !== "unsupported") retryBtn.style.display = "";
+			}
+		} else {
+			punchState.lat = res.latitude;
+			punchState.lng = res.longitude;
+			if (!optional) { el.textContent = t("gps_ok"); el.className = "saudi-verify-step__state ok"; if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--done"; }
+		}
 		updatePunchReady();
-		return;
-	}
-	navigator.geolocation.getCurrentPosition(function(pos) {
-		punchState.lat = pos.coords.latitude;
-		punchState.lng = pos.coords.longitude;
-		if (!optional) { el.textContent = t("gps_ok"); el.className = "saudi-verify-step__state ok"; if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--done"; }
-		updatePunchReady();
-	}, function() {
-		if (!optional) { el.textContent = t("gps_fail"); if (dot) dot.className = "saudi-verify-step__dot saudi-verify-step__dot--err"; }
-		updatePunchReady();
-	}, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
+	});
+}
+
+function punchGpsErrorText() {
+	return punchState.gpsErrorKind ? t(window.SaudiPunchGeo.labelKey(punchState.gpsErrorKind)) : t("locating");
 }
 
 var punchStream = null;
@@ -1435,7 +1457,7 @@ function recordPunchVoice() {
 function updatePunchReady() {
 	var vf = punchState.vf;
 	var ready = true;
-	if (punchState.locationRequired && !punchState.lat) ready = false;
+	if (punchState.locationRequired && punchState.lat == null) ready = false;
 	if (punchState.isIn && vf.photo_required && !punchState.photo) ready = false;
 	if (vf.voice_policy === "Required / إلزامي" && !punchState.voiceTranscript && !document.getElementById("punch-voice-manual").value.trim()) ready = false;
 	document.getElementById("punch-submit-btn").disabled = !ready;
@@ -1444,7 +1466,7 @@ function updatePunchReady() {
 function submitPunch() {
 	if (punchState.submitting) return;
 	var vf = punchState.vf;
-	if (punchState.locationRequired && (!punchState.lat || !punchState.lng)) { showToast(t("gps_fail"), "error"); return; }
+	if (punchState.locationRequired && (punchState.lat == null || punchState.lng == null)) { showToast(punchGpsErrorText(), "error"); return; }
 	if (punchState.isIn && vf.photo_required && !punchState.photo) { showToast(t("photo_click"), "error"); return; }
 	var voiceTranscript = punchState.voiceTranscript || document.getElementById("punch-voice-manual").value.trim();
 	if (vf.voice_policy === "Required / إلزامي" && !voiceTranscript) { showToast(t("voice_required_warn"), "error"); return; }

@@ -1606,7 +1606,7 @@ def do_mobile_checkin(
 
 	if location:
 		if latitude is None or longitude is None:
-			frappe.throw(_("تعذّر الحصول على إحداثيات GPS. يرجى السماح بإذن الموقع وإعادة المحاولة."))
+			frappe.throw(_("لم تصل إحداثيات الموقع (GPS) من الجهاز. تأكد من تشغيل خدمة الموقع في الجوال والسماح للمتصفح بالوصول إليها، ثم أعد المحاولة."))
 		distance = _distance_meters(latitude, longitude, flt(location.latitude), flt(location.longitude))
 		allowed = location.allowed_radius_meters or 100
 		if distance > allowed:

@@ -163,7 +163,7 @@ source_text,target_text
 "Attendance","الحضور"
 "Employee Checkin","تسجيل حضور الموظف"
 "You are {0} meters from the branch. Allowed radius is {1} meters.","أنت بعيد عن الفرع بمسافة {0} متر. الحد المسموح به هو {1} متر."
-"Could not get GPS coordinates. Please allow location permission and try again.","تعذّر الحصول على إحداثيات GPS. يرجى السماح بإذن الموقع وإعادة المحاولة."
+"Location (GPS) coordinates were not received from the device. Make sure location is turned on and the browser is allowed to use it, then try again.","لم تصل إحداثيات الموقع (GPS) من الجهاز. تأكد من تشغيل خدمة الموقع في الجوال والسماح للمتصفح بالوصول إليها، ثم أعد المحاولة."
 "Check-in recorded successfully at {0}","تم تسجيل الحضور بنجاح في {0}"
 "Check-out recorded. Total working hours: {0}.","تم تسجيل الانصراف. مجموع ساعات العمل: {0} ساعة."
 "Check-out recorded successfully at {0}","تم تسجيل الانصراف بنجاح في {0}"
