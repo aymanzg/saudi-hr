@@ -5,7 +5,7 @@ from pathlib import Path
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.utils import add_days, cint, cstr, flt, getdate, today
+from frappe.utils import add_days, cint, cstr, flt, get_datetime, getdate, today
 from frappe.utils.file_manager import save_file
 from frappe.utils.xlsxutils import make_xlsx
 from openpyxl import Workbook, load_workbook
@@ -500,33 +500,6 @@ ABSENCE_VIOLATION_FALLBACK = {
 }
 SINGLE_VIOLATION_CAP_DAYS = 5.0
 
-# Late arrival and early leave, same table (items 1-9), charged without a
-# Disciplinary Procedure.  Disruption to other workers cannot be read from
-# punches, so the "without disruption" items apply; HR raises a procedure
-# for the heavier ones.  A repeat counts while it falls within 180 days of
-# the previous violation of the same item.
-LATE_VIOLATION_BANDS = ((1, 15, "ATT-001"), (16, 30, "ATT-003"), (31, 60, "ATT-005"))
-LATE_OVER_HOUR_CODE = "ATT-007"
-EARLY_EXIT_BANDS = ((1, 15, "ATT-008"),)
-EARLY_EXIT_OVER_CODE = "ATT-009"
-VIOLATION_REPEAT_WINDOW_DAYS = 180
-VIOLATION_HISTORY_DAYS = 720
-LATE_EARLY_VIOLATION_FALLBACK = {
-	"ATT-001": ("Written warning / إنذار كتابي", "5% daily wage", "10% daily wage", "20% daily wage"),
-	"ATT-003": ("10% daily wage", "15% daily wage", "25% daily wage", "50% daily wage"),
-	"ATT-005": ("25% daily wage", "50% daily wage", "75% daily wage", "One day / يوم"),
-	"ATT-007": ("Written warning / إنذار كتابي", "One day / يوم", "Two days / يومان", "Three days / ثلاثة أيام"),
-	"ATT-008": ("Written warning / إنذار كتابي", "10% daily wage", "25% daily wage", "One day / يوم"),
-	"ATT-009": ("10% daily wage", "25% daily wage", "50% daily wage", "One day / يوم"),
-}
-LATE_EARLY_VIOLATION_LABELS = {
-	"ATT-001": "Late up to 15 minutes / التأخر حتى 15 دقيقة",
-	"ATT-003": "Late 16-30 minutes / التأخر من 16 إلى 30 دقيقة",
-	"ATT-005": "Late 31-60 minutes / التأخر من 31 إلى 60 دقيقة",
-	"ATT-007": "Late over an hour / التأخر أكثر من ساعة",
-	"ATT-008": "Early leave up to 15 minutes / الانصراف المبكر حتى 15 دقيقة",
-	"ATT-009": "Early leave over 15 minutes / الانصراف المبكر أكثر من 15 دقيقة",
-}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -746,13 +719,8 @@ def _build_attendance_deductions(doc, period):
 		# absence penalty; both share the five-days'-wage monthly cap (م.92).
 		penalty_days = flt(_approved_penalty_days(row.employee, period["from"], period["to"]))
 		absence_violations = _absence_violation_penalties(row.employee, period["from"], period["to"])
-		scheduled = _employee_shift_is_scheduled(row.employee, period["from"])
-		late_early_violations = (
-			_late_early_violation_penalties(row.employee, period["from"], period["to"])
-			if scheduled
-			else {"days": 0.0, "flags": []}
-		)
-		violation_days = flt(absence_violations["days"]) + flt(late_early_violations["days"])
+		scheduled = _employee_has_scheduled_shift(row.employee, period["from"], period["to"])
+		violation_days = flt(absence_violations["days"])
 		penalty_days_total = penalty_days + violation_days
 		penalty_raw = round(penalty_days_total * daily_wage, 2)
 		penalty_cap = round(PENALTY_MONTHLY_CAP_DAYS * daily_wage, 2)
@@ -792,7 +760,6 @@ def _build_attendance_deductions(doc, period):
 				"violation_deduction": violation_deduction,
 				"flags": "\n".join(
 					absence_violations["flags"]
-					+ late_early_violations["flags"]
 					+ _attendance_flags(
 						counts, payable_absence, penalty_days_total, penalty_raw, penalty_cap, daily_wage, late_deduction
 					)
@@ -861,6 +828,45 @@ def _employee_working_hours_per_day(employee: str) -> float:
 	)
 	hours = flt(rows[0].get("working_hours_per_day")) if rows else 0.0
 	return hours if hours > 0 else DEFAULT_WORKING_HOURS_PER_DAY
+
+
+def _employee_has_scheduled_shift(employee: str, period_from, period_to) -> bool:
+	"""True when the employee worked a timed shift at some point in the window.
+
+	A Shift Assignment can start or end inside the window, and punches with
+	no assignment are timed against the attendance location's default shift.
+	Either way the attendance row keeps the shift start it was measured
+	against, so a row with a real start time counts too.
+	"""
+	if not employee:
+		return False
+	if _employee_shift_is_scheduled(employee, period_from) or _employee_shift_is_scheduled(employee, period_to):
+		return True
+	return _has_timed_attendance(employee, period_from, period_to)
+
+
+def _has_timed_attendance(employee, period_from, period_to) -> bool:
+	"""An attendance row in the window measured against a real shift start."""
+	if not frappe.db.exists("DocType", "Saudi Daily Attendance"):
+		return False
+	if "expected_start_time" not in _existing_fields("Saudi Daily Attendance", ["expected_start_time"]):
+		return False
+	rows = frappe.get_all(
+		"Saudi Daily Attendance",
+		filters={
+			"employee": employee,
+			"docstatus": ["<", 2],
+			"attendance_date": ["between", [period_from, period_to]],
+			"expected_start_time": ["is", "set"],
+		},
+		fields=["expected_start_time"],
+		limit_page_length=0,
+	)
+	for row in rows:
+		start = get_datetime(row.expected_start_time)
+		if start.hour or start.minute:
+			return True
+	return False
 
 
 def _employee_shift_is_scheduled(employee: str, on_date) -> bool:
@@ -1038,10 +1044,6 @@ def _absence_violation_catalog():
 	return _violation_catalog(ABSENCE_VIOLATION_FALLBACK)
 
 
-def _late_early_violation_catalog():
-	return _violation_catalog(LATE_EARLY_VIOLATION_FALLBACK)
-
-
 def _violation_catalog(fallback):
 	"""Penalty columns per code, from the catalogue or the table itself."""
 	penalties = dict(fallback)
@@ -1133,93 +1135,6 @@ def _absence_violation_penalties(employee, period_from, period_to):
 		result["flags"].append(
 			_("Unexcused absence totals {0} days in the contract year (over 30); termination under Article 80 needs an HR decision. / مجموع الغياب بدون عذر {0} يوماً في السنة العقدية (أكثر من 30)؛ الفصل طبقاً للمادة 80 يحتاج قرار الموارد البشرية.").format(year_days)
 		)
-	result["days"] = round(result["days"], 4)
-	return result
-
-
-def _minutes_violation_code(minutes, bands, over_code):
-	"""Catalogue code for late or early-leave minutes on one day."""
-	if minutes <= 0:
-		return None
-	for low, high, code in bands:
-		if low <= minutes <= high:
-			return code
-	return over_code
-
-
-def _attendance_violation_days(employee, since, until):
-	"""Late and early-leave minutes per attendance day, oldest first."""
-	if not frappe.db.exists("DocType", "Saudi Daily Attendance"):
-		return []
-	return frappe.get_all(
-		"Saudi Daily Attendance",
-		filters={
-			"employee": employee,
-			"docstatus": ["<", 2],
-			"attendance_date": ["between", [since, until]],
-		},
-		or_filters={"late_minutes": [">", 0], "early_exit_minutes": [">", 0]},
-		fields=["attendance_date", "late_minutes", "early_exit_minutes"],
-		order_by="attendance_date asc",
-		limit_page_length=0,
-	)
-
-
-def _late_early_violation_penalties(employee, period_from, period_to):
-	"""Days' wage of fines owed for late arrivals and early leaves in the window.
-
-	Every late or early day is one violation of the item its minutes fall in.
-	The repeat count climbs while each one comes within 180 days of the
-	previous violation of the same item and restarts at the first column
-	after a longer gap.  Written warnings cost nothing and are only flagged.
-	"""
-	result = {"days": 0.0, "flags": []}
-	if not employee:
-		return result
-	period_from, period_to = getdate(period_from), getdate(period_to)
-	days = _attendance_violation_days(employee, add_days(period_from, -VIOLATION_HISTORY_DAYS), period_to)
-	if not days:
-		return result
-
-	catalog = _late_early_violation_catalog()
-	last_seen = {}
-	charged = {}
-	for day in days:
-		on_date = getdate(day.attendance_date)
-		for code in (
-			_minutes_violation_code(flt(day.late_minutes), LATE_VIOLATION_BANDS, LATE_OVER_HOUR_CODE),
-			_minutes_violation_code(flt(day.early_exit_minutes), EARLY_EXIT_BANDS, EARLY_EXIT_OVER_CODE),
-		):
-			if not code:
-				continue
-			previous = last_seen.get(code)
-			occurrence = (
-				previous[1] + 1
-				if previous and (on_date - previous[0]).days <= VIOLATION_REPEAT_WINDOW_DAYS
-				else 1
-			)
-			last_seen[code] = (on_date, occurrence)
-			if not (period_from <= on_date <= period_to):
-				continue
-			penalty_text = cstr((catalog.get(code) or ("", "", "", ""))[min(occurrence, 4) - 1] or "")
-			fine = min(parse_penalty_to_days(penalty_text), SINGLE_VIOLATION_CAP_DAYS)
-			bucket = charged.setdefault(code, {"occurrences": [], "days": 0.0, "warnings": 0, "over_four": False})
-			bucket["occurrences"].append(occurrence)
-			bucket["days"] += fine
-			bucket["warnings"] += 0 if fine else 1
-			bucket["over_four"] = bucket["over_four"] or occurrence > 4
-
-	for code, bucket in charged.items():
-		result["days"] += bucket["days"]
-		occurrences = ", ".join(str(number) for number in bucket["occurrences"])
-		line = _("{0} ({1}): {2} time(s), occurrence {3} within 180 days; fine {4} day(s) wage. / {2} مرة، تكرار رقم {3} خلال 180 يوماً؛ جزاء {4} يوم أجر.").format(
-			LATE_EARLY_VIOLATION_LABELS.get(code, code), code, len(bucket["occurrences"]), occurrences, _fmt_days(bucket["days"])
-		)
-		if bucket["warnings"]:
-			line += " " + _("{0} written warning(s) to issue, not a wage fine. / {0} إنذار كتابي يجب توجيهه، دون خصم.").format(bucket["warnings"])
-		if bucket["over_four"]:
-			line += " " + _("Repeated more than four times; review the employee's file. / تكرر أكثر من أربع مرات؛ راجع ملف الموظف.")
-		result["flags"].append(line)
 	result["days"] = round(result["days"], 4)
 	return result
 
