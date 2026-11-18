@@ -2040,6 +2040,18 @@ class TestSaudiMonthlyPayroll(FrappeTestCase):
 		self.assertEqual(row["late_deduction"], 0.0)
 		self.assertEqual(row["violation_deduction"], 0.0)
 
+	def test_open_shift_flags_short_days_without_deducting(self):
+		counts = {"present": 3, "absent": 0, "late_days": 0, "late_minutes": 0, "late_hours": 0,
+			"worked_hours": [8.5, 6.0, 7.5]}
+		row = self._late_early_row(counts, scheduled=False)
+		self.assertEqual(row["late_deduction"], 0.0)
+		self.assertIn("2 day(s) under 8 working hours, 2.5 hour(s) short", row["flags"])
+
+	def test_timed_shift_does_not_flag_short_days(self):
+		counts = {"present": 1, "absent": 0, "late_days": 0, "late_minutes": 0, "late_hours": 0, "worked_hours": [5.0]}
+		row = self._late_early_row(counts, scheduled=True)
+		self.assertNotIn("Open shift", row["flags"])
+
 	def test_shift_assignment_starting_inside_the_period_counts(self):
 		with patch.object(payroll_module, "_employee_shift_is_scheduled", side_effect=[False, True]), patch.object(
 			payroll_module, "_has_timed_attendance", return_value=False

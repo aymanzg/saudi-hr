@@ -570,6 +570,41 @@ def apply_attendance_deductions(doc_name: str):
 
 
 @frappe.whitelist(methods=["POST"])
+def recalculate_payroll_lateness(doc_name: str):
+	"""Re-measure the period's attendance against each employee's current shift.
+
+	Lateness is stamped when a day is punched.  When HR fixes a shift
+	afterwards (say an open shift replaced by a flexible 8-4), the days
+	already recorded keep the old figures until this runs.  It only touches
+	attendance; press Generate Attendance & Deductions afterwards.
+	"""
+	from saudi_hr.saudi_hr.attendance_policy import recompute_attendance_variance
+
+	doc = frappe.get_doc("Saudi Monthly Payroll", doc_name)
+	frappe.has_permission("Saudi Monthly Payroll", "write", doc=doc, throw=True)
+	frappe.has_permission("Saudi Daily Attendance", "write", throw=True)
+	if doc.docstatus != 0:
+		frappe.throw(
+			_("Lateness can only be recalculated on a draft payroll.<br>يمكن إعادة احتساب التأخير على مسودة مسير الرواتب فقط.")
+		)
+	period = _resolve_attendance_period(doc)
+	days = employees = 0
+	for row in doc.employees:
+		if not row.employee:
+			continue
+		changed = recompute_attendance_variance(row.employee, period["from"], period["to"])
+		days += changed
+		employees += 1 if changed else 0
+	_add_payroll_audit_comment(
+		doc,
+		_("Recalculated lateness against current shifts for {0} to {1}: {2} day(s) of {3} employee(s) changed.").format(
+			period["from"], period["to"], days, employees
+		),
+	)
+	return {"days": days, "employees": employees, "period_from": str(period["from"]), "period_to": str(period["to"])}
+
+
+@frappe.whitelist(methods=["POST"])
 def bulk_register_payroll_absences(doc_name: str, absence_type=None, note=None):
 	"""Register every unregistered absent/missing day in the payroll window.
 
@@ -743,6 +778,8 @@ def _build_attendance_deductions(doc, period):
 			round(min(late_raw, max(0.0, penalty_cap - penalty_deduction - violation_deduction)), 2) if daily_wage else 0.0
 		)
 
+		short_flags = [] if scheduled else _short_hours_flags(counts, hours_per_day)
+
 		results.append(
 			{
 				"employee": row.employee,
@@ -763,6 +800,7 @@ def _build_attendance_deductions(doc, period):
 					+ _attendance_flags(
 						counts, payable_absence, penalty_days_total, penalty_raw, penalty_cap, daily_wage, late_deduction
 					)
+					+ short_flags
 				),
 			}
 		)
@@ -781,6 +819,7 @@ def _attendance_window_counts(employee, period_from, period_to):
 	days = _attendance_days({"from_date": period_from, "to_date": period_to}, employee)
 	present = absent = unrecorded = late_days = early_exit_days = 0
 	late_minutes = early_exit_minutes = 0.0
+	worked_hours = []
 	for day in days:
 		if day.get("future"):
 			continue
@@ -791,6 +830,9 @@ def _attendance_window_counts(employee, period_from, period_to):
 			unrecorded += 1
 		elif status_key in ("present", "in_progress", "half_day", "other"):
 			present += 1
+		hours = flt(day.get("hours"))
+		if hours > 0 and day.get("out_time"):
+			worked_hours.append(hours)
 		minutes = flt(day.get("late_minutes"))
 		if minutes > 0:
 			late_days += 1
@@ -800,6 +842,7 @@ def _attendance_window_counts(employee, period_from, period_to):
 			early_exit_days += 1
 			early_exit_minutes += minutes
 	return {
+		"worked_hours": worked_hours,
 		"unrecorded": unrecorded,
 		"early_exit_days": early_exit_days,
 		"early_exit_minutes": round(early_exit_minutes, 1),
@@ -809,6 +852,28 @@ def _attendance_window_counts(employee, period_from, period_to):
 		"late_minutes": round(late_minutes, 1),
 		"late_hours": round(late_minutes / 60.0, 2),
 	}
+
+
+def _short_hours_flags(counts, hours_per_day):
+	"""Note days an employee without fixed hours worked short of the day.
+
+	Drivers and others on an open shift have no start time to be late
+	against, so their only measure is the hours worked.  Short days are only
+	flagged for HR; nothing is deducted.
+	"""
+	required = flt(hours_per_day)
+	if required <= 0:
+		return []
+	short = [flt(hours) for hours in counts.get("worked_hours") or [] if flt(hours) < required]
+	if not short:
+		return []
+	missing = round(sum(required - hours for hours in short), 2)
+	return [
+		_(
+			"Open shift: {0} day(s) under {1} working hours, {2} hour(s) short in total. Not deducted; for HR review. / "
+			"وردية مفتوحة: {0} يوم أقل من {1} ساعات عمل، بنقص {2} ساعة إجمالاً. لم يُخصم؛ للمراجعة من الموارد البشرية."
+		).format(len(short), _fmt_days(required), _fmt_days(missing))
+	]
 
 
 def _employee_working_hours_per_day(employee: str) -> float:

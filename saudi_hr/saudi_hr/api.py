@@ -1620,7 +1620,10 @@ def do_mobile_checkin(
 
 	now = now_datetime()
 	policy = resolve_mobile_attendance_policy(employee, nowdate(), location)
-	variance = calculate_attendance_variance(log_type, now, policy)
+	day_in_checkin = next((item for item in today_checkins if item.log_type == "IN"), None)
+	variance = calculate_attendance_variance(
+		log_type, now, policy, in_time=day_in_checkin.time if day_in_checkin else None
+	)
 	voice_status = VOICE_VERIFICATION_STATUS_NOT_REQUIRED
 	voice_result = None
 	voice_required = policy.get("voice_policy") == VOICE_POLICY_REQUIRED
@@ -1687,7 +1690,9 @@ def do_mobile_checkin(
 		if in_checkin:
 			in_time = get_datetime(in_checkin.time)
 			out_time = now
-			out_variance = calculate_attendance_variance("OUT", out_time, policy)
+			out_variance = calculate_attendance_variance("OUT", out_time, policy, in_time=in_time)
+			# the day row carries the check-in's lateness, not the check-out's
+			in_variance = calculate_attendance_variance("IN", in_time, policy)
 
 			existing = frappe.db.get_value(
 				"Saudi Daily Attendance",
@@ -1696,7 +1701,7 @@ def do_mobile_checkin(
 			)
 			if not existing:
 				attendance = _build_daily_attendance(
-					employee, nowdate(), in_time, out_time, location, policy, variance, out_variance
+					employee, nowdate(), in_time, out_time, location, policy, in_variance, out_variance
 				)
 
 				all_log_names = [item.name for item in today_checkins] + [checkin.name]

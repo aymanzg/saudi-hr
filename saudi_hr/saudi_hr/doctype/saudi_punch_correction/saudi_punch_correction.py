@@ -423,7 +423,7 @@ class SaudiPunchCorrection(Document):
 
 		policy = resolve_mobile_attendance_policy(self.employee, self.attendance_date)
 		in_variance = calculate_attendance_variance("IN", in_time, policy) if in_time else {}
-		out_variance = calculate_attendance_variance("OUT", out_time, policy) if out_time else {}
+		out_variance = calculate_attendance_variance("OUT", out_time, policy, in_time=in_time) if out_time else {}
 		attendance = frappe.get_doc(
 			{
 				"doctype": "Saudi Daily Attendance",
@@ -466,6 +466,16 @@ class SaudiPunchCorrection(Document):
 		frappe.db.set_value("Saudi Daily Attendance", self.daily_attendance, updates)
 		self._resync_daily_attendance()
 
+	def _day_in_time(self):
+		"""The day's check-in, which a flexible shift needs to place its end."""
+		if self.daily_attendance:
+			in_time = frappe.db.get_value("Saudi Daily Attendance", self.daily_attendance, "in_time")
+			if in_time:
+				return in_time
+		if self.punch:
+			return frappe.db.get_value("Saudi Employee Checkin", self.punch, "time")
+		return None
+
 	def _move_punch(self, log_type, punch_name, punch_time):
 		"""Point a punch, its penalty, and the day at this time.
 
@@ -473,7 +483,10 @@ class SaudiPunchCorrection(Document):
 		written on approval are exactly the penalties that come back on cancel.
 		"""
 		variance = calculate_attendance_variance(
-			log_type, punch_time, resolve_mobile_attendance_policy(self.employee, self.attendance_date)
+			log_type,
+			punch_time,
+			resolve_mobile_attendance_policy(self.employee, self.attendance_date),
+			in_time=self._day_in_time() if log_type == "OUT" else None,
 		)
 
 		punch_updates = {"time": punch_time}

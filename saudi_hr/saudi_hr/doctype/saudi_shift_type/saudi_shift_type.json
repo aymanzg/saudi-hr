@@ -12,6 +12,7 @@
   "schedule_section",
   "start_time",
   "end_time",
+  "flexible_start_minutes",
   "column_break_schedule",
   "begin_check_in_before_shift_start_time",
   "allow_check_out_after_shift_end_time",
@@ -56,6 +57,13 @@
    "in_list_view": 1,
    "label": "End Time / وقت النهاية",
    "reqd": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "flexible_start_minutes",
+   "fieldtype": "Int",
+   "label": "Flexible Start (minutes) / مرونة بداية الدوام بالدقائق",
+   "description": "Employees may start up to this many minutes after the start time and then owe the full shift length from arrival. Lateness counts from the end of this window (plus the grace period). / يمكن للموظف البدء متأخراً حتى هذا العدد من الدقائق ثم يكمل مدة الوردية كاملة من وقت حضوره، ويُحتسب التأخير بعد نهاية هذه المدة (مع فترة السماح)."
   },
   {
    "fieldname": "column_break_schedule",
@@ -114,7 +122,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-05-17 21:10:00.000000",
+ "modified": "2026-11-18 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Saudi HR",
  "name": "Saudi Shift Type",

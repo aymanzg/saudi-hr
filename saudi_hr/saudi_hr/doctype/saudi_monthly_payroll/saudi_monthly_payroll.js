@@ -93,6 +93,13 @@ function _add_buttons(frm) {
             _generate_attendance_deductions(frm);
         }, __('Actions / إجراءات'));
 
+        // زر إعادة احتساب التأخير حسب الوردية الحالية
+        if (!frm.is_new() && frm.doc.docstatus === 0 && frm.doc.employees && frm.doc.employees.length > 0) {
+            frm.add_custom_button(__('Recalculate Lateness by Shift / إعادة احتساب التأخير حسب الوردية'), function() {
+                _recalculate_lateness(frm);
+            }, __('Actions / إجراءات'));
+        }
+
         // زر تسجيل الغياب الجماعي
         if (!frm.is_new() && frm.doc.employees && frm.doc.employees.length > 0) {
             frm.add_custom_button(__('Register Absences / تسجيل الغياب'), function() {
@@ -602,6 +609,34 @@ function _generate_attendance_deductions(frm) {
     } else {
         run_preview();
     }
+}
+
+
+function _recalculate_lateness(frm) {
+    frappe.confirm(
+        __('Measure the attendance days of this period again against each employee\'s current shift? Use this after changing shifts. Then press Generate Attendance & Deductions.<br>'
+            + 'إعادة قياس أيام الحضور في هذه الفترة حسب الوردية الحالية لكل موظف؟ استخدمه بعد تعديل الورديات، ثم اضغط احتساب الحضور والخصومات.'),
+        function() {
+            frappe.call({
+                method: 'saudi_hr.saudi_hr.doctype.saudi_monthly_payroll.saudi_monthly_payroll.recalculate_payroll_lateness',
+                args: { doc_name: frm.doc.name },
+                freeze: true,
+                freeze_message: __('Recalculating lateness...<br>جارٍ إعادة احتساب التأخير...'),
+                callback(r) {
+                    if (!r.message) {
+                        return;
+                    }
+                    frappe.msgprint({
+                        title: __('Lateness Recalculated / تمت إعادة احتساب التأخير'),
+                        indicator: 'green',
+                        message: __('{0} day(s) changed for {1} employee(s), {2} to {3}. Now press Generate Attendance & Deductions.<br>تغيّر {0} يوم لـ {1} موظف، من {2} إلى {3}. اضغط الآن احتساب الحضور والخصومات.',
+                            [r.message.days, r.message.employees, r.message.period_from, r.message.period_to])
+                    });
+                    frm.reload_doc();
+                }
+            });
+        }
+    );
 }
 
 

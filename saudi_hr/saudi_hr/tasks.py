@@ -518,7 +518,7 @@ def sync_missing_daily_attendance(from_date=None, to_date=None, employee=None):
 			location,
 			policy,
 			calculate_attendance_variance("IN", in_time, policy),
-			calculate_attendance_variance("OUT", out_time, policy),
+			calculate_attendance_variance("OUT", out_time, policy, in_time=in_time),
 		)
 		for name in checkin_names:
 			frappe.db.set_value("Saudi Employee Checkin", name, "attendance", attendance.name)
